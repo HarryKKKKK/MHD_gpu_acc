@@ -30,7 +30,10 @@ inline double gamma = 5.0 / 3.0;
 
 // GLM cleaning speed ch (set each timestep from max signal speed, Section 4)
 // Mixed-GLM damping ratio c_r = c_p^2 / c_h (optimal ~0.18, Fig. 2)
-#ifndef __CUDACC__
+#ifdef __CUDACC__
+__device__ static double ch_glm = 0.0;
+__device__ static double cr_glm = 0.18;
+#else
 inline double ch_glm = 0.0;
 inline double cr_glm = 0.18;
 #endif

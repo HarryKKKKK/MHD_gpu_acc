@@ -60,6 +60,91 @@ Conserved kh_state(double x, double y) {
     return make_mhd(rho, ux, uy, uz, Bx, By, Bz, p, gamma);
 }
 
+// ============================================================
+// Mach 1.22 shock–bubble interaction  (Table 1, γ = 1.4)
+//
+// A planar shock (Ms = 1.22) in air impinges on a spherical
+// helium bubble.  Initial shock is at x = 0.005 m; the bubble
+// of radius R = 0.025 m is centred at (0.035, 0.0445) m.
+// No magnetic field (pure hydrodynamics embedded in the MHD solver).
+//
+// Post-shock state derived from Rankine–Hugoniot relations.
+// Domain: [0, 0.225] × [0, 0.089] m, 500 × 197 cells.
+// ============================================================
+Conserved shock_bubble_state(double x, double y) {
+    constexpr double gamma   = 1.4;
+    constexpr double rho_air = 1.29;          // kg/m³
+    constexpr double rho_He  = 0.214;         // kg/m³
+    constexpr double p0      = 1.01325e5;     // Pa
+    constexpr double Ms      = 1.22;
+
+    // Bubble geometry
+    constexpr double xc = 0.035, yc = 0.0445, R = 0.025;
+    // Initial shock location
+    constexpr double xs = 0.005;
+
+    // Post-shock state via Rankine–Hugoniot (shock moves in +x direction)
+    static const double c1   = std::sqrt(gamma * p0 / rho_air);
+    static const double vs   = Ms * c1;
+    static const double rho2 = rho_air * (gamma + 1.0) * Ms * Ms
+                               / ((gamma - 1.0) * Ms * Ms + 2.0);
+    static const double p2   = p0 * (2.0 * gamma * Ms * Ms - (gamma - 1.0))
+                               / (gamma + 1.0);
+    // Piston velocity: lab-frame velocity of post-shock gas
+    static const double u2   = vs * (1.0 - rho_air / rho2);
+
+    if (x < xs) {
+        return make_mhd(rho2, u2, 0.0, 0.0, 0.0, 0.0, 0.0, p2, gamma);
+    }
+    const double r2 = (x - xc)*(x - xc) + (y - yc)*(y - yc);
+    if (r2 < R * R) {
+        return make_mhd(rho_He, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, p0, gamma);
+    }
+    return make_mhd(rho_air, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, p0, gamma);
+}
+
+// ============================================================
+// Brio–Wu 1D MHD shock tube  (Brio & Wu 1988, γ = 2.0)
+//
+// Classic MHD shock-tube test with a compound wave structure.
+// Domain: [0, 1] in x, thin in y (1D).  Discontinuity at x = 0.5.
+//
+//   Left  (x < 0.5): ρ=1,      p=1,   Bx=0.75, By= 1
+//   Right (x ≥ 0.5): ρ=0.125,  p=0.1, Bx=0.75, By=-1
+// ============================================================
+Conserved brio_wu_state(double x, double /*y*/) {
+    constexpr double gamma = 2.0;
+    constexpr double Bx    = 0.75;
+
+    if (x < 0.5) {
+        return make_mhd(1.0,   0.0, 0.0, 0.0,  Bx,  1.0, 0.0, 1.0,  gamma);
+    } else {
+        return make_mhd(0.125, 0.0, 0.0, 0.0,  Bx, -1.0, 0.0, 0.1,  gamma);
+    }
+}
+
+// ============================================================
+// Orszag–Tang 2D MHD vortex  (Orszag & Tang 1979, γ = 5/3)
+//
+// Standard 2D MHD benchmark for transition to MHD turbulence.
+// Domain: [0, 2π] × [0, 2π], fully periodic.
+//
+// Initial conditions (Dahlburg & Picone 1989 normalisation):
+//   ρ = γ²,  p = γ,  cs = 1
+//   u = −sin y,  v = sin x
+//   Bx = −sin y,  By = sin 2x
+// ============================================================
+Conserved orszag_tang_state(double x, double y) {
+    constexpr double gamma = 5.0 / 3.0;
+    const double rho = gamma * gamma;         // = 25/9
+    const double p   = gamma;                 // = 5/3, gives cs = 1
+    const double u   = -std::sin(y);
+    const double v   =  std::sin(x);
+    const double Bx  = -std::sin(y);
+    const double By  =  std::sin(2.0 * x);
+    return make_mhd(rho, u, v, 0.0, Bx, By, 0.0, p, gamma);
+}
+
 } // namespace
 
 // ============================================================
@@ -67,17 +152,23 @@ Conserved kh_state(double x, double y) {
 // ============================================================
 
 CaseId parse_case_id(const std::string& name) {
-    if (name == "kelvin_helmholtz")  return CaseId::KelvinHelmholtz;
+    if (name == "kelvin_helmholtz") return CaseId::KelvinHelmholtz;
+    if (name == "shock_bubble")     return CaseId::ShockBubble;
+    if (name == "brio_wu")          return CaseId::BrioWu;
+    if (name == "orszag_tang")      return CaseId::OrszagTang;
 
     throw std::runtime_error(
         "Unknown MHD test case: '" + name + "'. "
-        "Valid names: kelvin_helmholtz."
+        "Valid names: kelvin_helmholtz, shock_bubble, brio_wu, orszag_tang."
     );
 }
 
 std::string case_id_to_string(CaseId id) {
     switch (id) {
         case CaseId::KelvinHelmholtz: return "kelvin_helmholtz";
+        case CaseId::ShockBubble:     return "shock_bubble";
+        case CaseId::BrioWu:          return "brio_wu";
+        case CaseId::OrszagTang:      return "orszag_tang";
     }
     throw std::runtime_error("Unhandled CaseId in case_id_to_string.");
 }
@@ -92,6 +183,45 @@ CaseConfig get_case_config(CaseId id) {
                 0.0, 1.0, -1.0, 1.0,
                 /*cfl=*/0.3, /*t_end=*/0.5,
                 /*gamma=*/1.4,
+                BoundaryConfig{
+                    BoundaryType::Periodic, BoundaryType::Periodic,
+                    BoundaryType::Periodic, BoundaryType::Periodic
+                }
+            };
+
+        case CaseId::ShockBubble:
+            // Transmissive inflow/outflow; reflecting channel walls (top/bottom)
+            return CaseConfig{
+                500, 197, 2,
+                0.0, 0.225, 0.0, 0.089,
+                /*cfl=*/0.4, /*t_end=*/0.0011741,
+                /*gamma=*/1.4,
+                BoundaryConfig{
+                    BoundaryType::Transmissive, BoundaryType::Transmissive,
+                    BoundaryType::Reflecting,   BoundaryType::Reflecting
+                }
+            };
+
+        case CaseId::BrioWu:
+            // 1D problem: periodic in y, transmissive in x
+            return CaseConfig{
+                800, 4, 2,
+                0.0, 1.0, 0.0, 4.0 / 800.0,
+                /*cfl=*/0.4, /*t_end=*/0.1,
+                /*gamma=*/2.0,
+                BoundaryConfig{
+                    BoundaryType::Transmissive, BoundaryType::Transmissive,
+                    BoundaryType::Periodic,     BoundaryType::Periodic
+                }
+            };
+
+        case CaseId::OrszagTang:
+            // Fully periodic, domain [0, 2π]²
+            return CaseConfig{
+                192, 192, 2,
+                0.0, 2.0 * M_PI, 0.0, 2.0 * M_PI,
+                /*cfl=*/0.4, /*t_end=*/M_PI,
+                /*gamma=*/5.0 / 3.0,
                 BoundaryConfig{
                     BoundaryType::Periodic, BoundaryType::Periodic,
                     BoundaryType::Periodic, BoundaryType::Periodic
@@ -121,6 +251,9 @@ CaseConfig get_n_case_config(const std::string& name, int n) {
 Conserved initial_state_at(CaseId id, double x, double y) {
     switch (id) {
         case CaseId::KelvinHelmholtz: return kh_state(x, y);
+        case CaseId::ShockBubble:     return shock_bubble_state(x, y);
+        case CaseId::BrioWu:          return brio_wu_state(x, y);
+        case CaseId::OrszagTang:      return orszag_tang_state(x, y);
     }
     throw std::runtime_error("Unhandled CaseId in initial_state_at.");
 }

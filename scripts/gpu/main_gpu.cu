@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "gpu/boundary_gpu.cuh"
 #include "gpu/grid_gpu.cuh"
 #include "gpu/solver_gpu.cuh"
 #include "init.hpp"
@@ -19,7 +20,7 @@
 #include "types.hpp"
 
 // ============================================================
-// CSV output
+// CSV output — all 9 MHD fields + derived pressure
 // ============================================================
 
 template<typename FieldFn>
@@ -61,14 +62,30 @@ static void write_all_fields(
         return dir + "/" + prefix + "_" + name + ".csv";
     };
 
+    // Primitive velocity and pressure (derived)
     write_field_csv(host_data, total_nx, nx, ny, ng, path("rho"),
         [](const Conserved& U){ return U.rho; });
     write_field_csv(host_data, total_nx, nx, ny, ng, path("u"),
         [](const Conserved& U){ return U.rhou / U.rho; });
     write_field_csv(host_data, total_nx, nx, ny, ng, path("v"),
         [](const Conserved& U){ return U.rhov / U.rho; });
+    write_field_csv(host_data, total_nx, nx, ny, ng, path("w"),
+        [](const Conserved& U){ return U.rhow / U.rho; });
+    // Magnetic fields
+    write_field_csv(host_data, total_nx, nx, ny, ng, path("Bx"),
+        [](const Conserved& U){ return U.Bx; });
+    write_field_csv(host_data, total_nx, nx, ny, ng, path("By"),
+        [](const Conserved& U){ return U.By; });
+    write_field_csv(host_data, total_nx, nx, ny, ng, path("Bz"),
+        [](const Conserved& U){ return U.Bz; });
+    // Total energy and GLM scalar
     write_field_csv(host_data, total_nx, nx, ny, ng, path("E"),
         [](const Conserved& U){ return U.E; });
+    write_field_csv(host_data, total_nx, nx, ny, ng, path("psi"),
+        [](const Conserved& U){ return U.psi; });
+    // Pressure (derived via cons_to_prim — host-side, uses phys::gamma inline var)
+    write_field_csv(host_data, total_nx, nx, ny, ng, path("p"),
+        [](const Conserved& U){ return phys::cons_to_prim(U).p; });
 
     std::cout << "  Wrote fields to " << dir << "/" << prefix << "_*.csv\n";
 }
@@ -137,18 +154,23 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    // Set the host-side gamma for cons_to_prim calls in write_all_fields.
+    // The device-side gamma is set via set_gpu_physics_gamma below.
+    phys::gamma = cfg.gamma;
+
     std::cout << "=== MHD GLM GPU Solver ===\n";
     std::cout << "  Case   : " << rc.case_name << "\n";
     std::cout << "  n      : " << rc.n_scale << "\n";
     std::cout << "  Order  : " << rc.order << "\n";
+    std::cout << "  Gamma  : " << cfg.gamma << "\n";
     std::cout << "  Solver : "
               << (rc.solver == RiemannSolver::HLL  ? "HLL"  :
                   rc.solver == RiemannSolver::HLLD ? "HLLD" : "FORCE") << "\n";
-    std::cout << "[GPU] nx: "          << cfg.nx             << "\n";
-    std::cout << "[GPU] ny: "          << cfg.ny             << "\n";
-    std::cout << "[GPU] total_cells: " << (cfg.nx * cfg.ny)  << "\n";
+    std::cout << "[GPU] nx: "          << cfg.nx            << "\n";
+    std::cout << "[GPU] ny: "          << cfg.ny            << "\n";
+    std::cout << "[GPU] total_cells: " << (cfg.nx * cfg.ny) << "\n";
 
-    // Build initial CPU grid then upload to GPU
+    // Build initial CPU grid then upload to GPU.
     Grid2D cpu_grid = make_n_grid(rc.case_name, rc.n_scale);
 
     Grid2DGPU Uold(cfg.nx, cfg.ny, cfg.ng,
@@ -166,6 +188,13 @@ int main(int argc, char** argv) {
     GpuWorkspace ws;
     init_gpu_workspace(ws, Uold);
 
+    // Propagate physics constants to device memory.
+    set_gpu_physics_gamma(cfg.gamma);
+    set_gpu_physics_ch(0.0);  // ch_glm starts at 0; updated by compute_dt_gpu
+
+    // Apply BCs on the initial data so ghost cells are consistent.
+    apply_boundary_gpu(Uold, cfg.bc);
+
     if (rc.write_out)
         write_all_fields(Uold, rc.out_dir, rc.case_name + "_gpu_t0");
 
@@ -179,9 +208,9 @@ int main(int argc, char** argv) {
         const double dt     = std::min(dt_raw, cfg.t_end - t);
 
         if (rc.order == 2) {
-            advance_second_order_gpu(Uold, Utmp, Unew, ws, dt, rc.solver);
+            advance_second_order_gpu(Uold, Utmp, Unew, ws, dt, rc.solver, cfg.bc);
         } else {
-            advance_first_order_gpu(Uold, Unew, dt, rc.solver);
+            advance_first_order_gpu(Uold, Unew, dt, rc.solver, cfg.bc);
         }
 
         Uold.swap(Unew);
