@@ -20,13 +20,14 @@ cd "$WORKDIR"
 GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
 GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
+MAKEFILE_CUDA_ARCH=$(awk -F ':=' '/^CUDA_ARCH[ \t]*:=/{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit}' Makefile 2>/dev/null || echo "unknown")
+GPU_COMPUTE_CAP=$(nvidia-smi --query-gpu=name,compute_cap --format=csv,noheader 2>/dev/null || echo "unknown")
+
 mkdir -p logs validation outputs
 
-# Override on the command line like:
-# SCALES_STR="1 2" SOLVERS_STR="hll" sbatch scripts/slurm_gpu.sh
-read -r -a SCALES  <<< "${SCALES_STR:-1 2 4 8}"
+read -r -a SCALES  <<< "${SCALES_STR:-1}"
 read -r -a CASES   <<< "${CASES_STR:-kelvin_helmholtz}"
-read -r -a SOLVERS <<< "${SOLVERS_STR:-hll hlld force}"
+read -r -a SOLVERS <<< "${SOLVERS_STR:-hll}"
 
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
 export OMP_PROC_BIND=close
@@ -48,6 +49,8 @@ echo "OMP_NUM_THREADS     : ${OMP_NUM_THREADS}"
 echo "SCALES              : ${SCALES[*]}"
 echo "CASES               : ${CASES[*]}"
 echo "SOLVERS             : ${SOLVERS[*]}"
+echo "Makefile CUDA_ARCH  : ${MAKEFILE_CUDA_ARCH}"
+echo "GPU compute cap     : ${GPU_COMPUTE_CAP}"
 echo ""
 
 echo "===== CPU TOPOLOGY ====="
@@ -63,15 +66,19 @@ make clean
 make gpu
 
 SUMMARY="validation/gpu_${SLURM_JOB_ID}.csv"
-echo "arch,case,solver,n,nx,ny,total_cells,total_steps,real_seconds,user_seconds,sys_seconds,max_rss_kb,git_branch,git_commit" > "$SUMMARY"
+echo "arch,case,solver,n,nx,ny,total_cells,total_steps,real_seconds,user_seconds,sys_seconds,max_rss_kb,output_dir,git_branch,git_commit,cuda_arch" > "$SUMMARY"
 
 run_and_record() {
     local case_name="$1"
     local solver_name="$2"
     local n_scale="$3"
 
+    local out_dir="outputs/gpu_${case_name}_${solver_name}_n${n_scale}_${SLURM_JOB_ID}"
+    mkdir -p "$out_dir"
+
     echo ""
     echo "===== GPU RUN: case=${case_name}, solver=${solver_name}, n=${n_scale} ====="
+    echo "Output dir: ${out_dir}"
 
     local temp_log temp_time
     temp_log=$(mktemp)
@@ -79,7 +86,7 @@ run_and_record() {
 
     /usr/bin/time -f "real_seconds=%e\nuser_seconds=%U\nsys_seconds=%S\nmax_rss_kb=%M" \
         -o "$temp_time" \
-        ./main_gpu "$n_scale" --case "$case_name" --solver "$solver_name" \
+        ./main_gpu "$n_scale" --case "$case_name" --solver "$solver_name" --out "$out_dir" \
         2>&1 | tee "$temp_log"
 
     local nx ny cells steps real user sys rss
@@ -94,9 +101,10 @@ run_and_record() {
 
     echo "------------------------------------------------------------"
     echo "[TIMING RECORDED] Real: ${real}s | User: ${user}s | Sys: ${sys}s | Max RSS: ${rss} KB"
+    echo "[OUTPUT SAVED] ${out_dir}"
     echo "------------------------------------------------------------"
 
-    echo "gpu,${case_name},${solver_name},${n_scale},${nx},${ny},${cells},${steps},${real},${user},${sys},${rss},${GIT_BRANCH},${GIT_COMMIT}" >> "$SUMMARY"
+    echo "gpu,${case_name},${solver_name},${n_scale},${nx},${ny},${cells},${steps},${real},${user},${sys},${rss},${out_dir},${GIT_BRANCH},${GIT_COMMIT},${MAKEFILE_CUDA_ARCH}" >> "$SUMMARY"
 
     rm -f "$temp_log" "$temp_time"
 }
