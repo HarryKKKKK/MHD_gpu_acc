@@ -33,6 +33,11 @@ struct Conserved {
                  double E_,   double psi_)
         : rho(rho_), rhou(rhou_), rhov(rhov_), rhow(rhow_),
           Bx(Bx_), By(By_), Bz(Bz_), E(E_), psi(psi_) {}
+
+    // Pure-HD convenience constructor (B=0, rhow=0, psi=0)
+    HD Conserved(double rho_, double rhou_, double rhov_, double E_)
+        : rho(rho_), rhou(rhou_), rhov(rhov_), rhow(0),
+          Bx(0), By(0), Bz(0), E(E_), psi(0) {}
 };
 
 // ============================================================
@@ -59,6 +64,11 @@ struct Primitive {
                  double p_,   double psi_)
         : rho(rho_), u(u_), v(v_), w(w_),
           Bx(Bx_), By(By_), Bz(Bz_), p(p_), psi(psi_) {}
+
+    // Pure-HD convenience constructor (B=0, w=0, psi=0)
+    HD Primitive(double rho_, double u_, double v_, double p_)
+        : rho(rho_), u(u_), v(v_), w(0),
+          Bx(0), By(0), Bz(0), p(p_), psi(0) {}
 };
 
 // ------------------------------------------------------------
