@@ -21,20 +21,6 @@ constexpr double kRhoFloor = 1.0e-12;
 constexpr double kPFloor   = 1.0e-12;
 constexpr int kDtBlockSize = 256;
 
-// Bank conflict padding for shared memory.
-// Each double occupies 2 bank slots (8 bytes / 4 bytes per bank slot).
-// Adding 1 element of padding per row makes the row stride an odd number,
-// so consecutive rows map to different banks.
-//
-// advance_y: state_tile_w was blockDim.x = 16.
-//   stride in bank slots = 16 * 2 = 32 → all threads hit the same bank (32-way conflict).
-//   With PAD_Y = 1: stride = 17 * 2 = 34 → 34 % 32 = 2 → no conflict.
-//
-// advance_x: state_tile_w was blockDim.x + 4 = 20.
-//   stride in bank slots = 20 * 2 = 40 → 40 % 32 = 8 → 4-way conflict.
-//   With PAD_X = 1: stride = 21 * 2 = 42 → 42 % 32 = 10 → no conflict.
-//
-// recon and flux tiles get the same treatment for the same reason.
 constexpr int PAD_X = 1;   // padding for advance_x tile rows
 constexpr int PAD_Y = 1;   // padding for advance_y tile rows
 

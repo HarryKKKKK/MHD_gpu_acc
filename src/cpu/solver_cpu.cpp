@@ -83,8 +83,6 @@ inline Primitive limited_slope(
 
 // ============================================================
 // MUSCL-Hancock half-step reconstruction for one cell triplet.
-// Produces time-advanced interface states U_left_star and
-// U_right_star at the cell interfaces in direction `dir`.
 // ============================================================
 
 inline void reconstruct_cell_muscl_hancock(
@@ -251,12 +249,6 @@ void fill_y_face_cache(
         }
     }
 }
-
-// ============================================================
-// Apply mixed-GLM ψ damping (Dedner et al., eq. 45):
-//   psi^{n+1} = exp(-dt * ch / cr) * psi^{n*}
-// Applied to all interior cells after each complete timestep.
-// ============================================================
 
 void apply_psi_damping(Grid2D& grid, double dt) {
     const double factor = std::exp(-dt * phys::ch_glm / phys::cr_glm);

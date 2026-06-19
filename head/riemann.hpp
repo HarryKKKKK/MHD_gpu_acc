@@ -406,9 +406,6 @@ HD inline Conserved riemann_flux(
         return hll_flux(UL, UR, dir, ch);
     }
 
-    // HLLD and FORCE can produce NaN in degenerate edge cases.
-    // Detect and fall back to HLL so that one bad face does not
-    // propagate NaN across the entire grid via the y-sweep.
     const Conserved F = (solver == RiemannSolver::HLLD)
                       ? hlld_flux(UL, UR, dir, ch)
                       : force_flux(UL, UR, dir, ch);
@@ -420,8 +417,6 @@ HD inline Conserved riemann_flux(
     return F;
 }
 
-// Backward-compatible overload — uses phys::ch_glm (CPU) or 0 (GPU/CUDA).
-// GPU solvers that have not yet been updated to pass ch explicitly use this.
 HD inline Conserved riemann_flux(
     const Conserved& UL,
     const Conserved& UR,
