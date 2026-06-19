@@ -23,7 +23,7 @@ namespace phys {
 // adiabatic exponent — set per test case before initialisation
 // GPU note: only CPU code modifies this; CUDA builds should treat it as 5/3
 #ifdef __CUDACC__
-__device__ __host__ static constexpr double gamma = 5.0 / 3.0;
+__device__ static constexpr double gamma = 5.0 / 3.0;
 #else
 inline double gamma = 5.0 / 3.0;
 #endif
