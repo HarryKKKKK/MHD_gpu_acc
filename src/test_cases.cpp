@@ -1,8 +1,13 @@
 #include "test_cases.hpp"
 
+#define _USE_MATH_DEFINES
 #include <cmath>
 #include <stdexcept>
 #include <string>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 #include "physics.hpp"
 
@@ -46,7 +51,10 @@ Conserved peak_bx_state(double x, double y) {
     constexpr double sqrt4pi = 2.0 * 1.7724538509055159;  // sqrt(4π)
 
     const double s  = x*x + y*y;
-    const double rs = 4096.0*s*s - 128.0*s + 1.0;
+    // Compact-support bump: (64s-1)^2 for s<1/64, zero outside.
+    // Radius of support: r = 1/8 = 0.125. Without the cutoff the
+    // function grows as s^2 and produces unphysical B at domain edges.
+    const double rs = (s < 1.0/64.0) ? (4096.0*s*s - 128.0*s + 1.0) : 0.0;
 
     const double rho = 1.0;
     const double ux  = 1.0;
@@ -113,9 +121,7 @@ Conserved shock_reflection_state(double /*x*/, double /*y*/) {
 // Four quadrants with different initial states.
 // ============================================================
 Conserved riemann2d_state(double x, double y) {
-    constexpr double gamma = 5.0 / 3.0;
-
-    // Quadrant data (Table I, conserved variables)
+    // Quadrant data (Table I, conserved variables; gamma=5/3 implicit in E values)
     // Quadrant I: x>0, y>0
     // Quadrant II: x<0, y>0
     // Quadrant III: x<0, y<0

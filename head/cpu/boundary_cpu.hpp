@@ -15,7 +15,6 @@ inline void copy_ghost_cells(const Grid2D& src, Grid2D& dst) {
     const int ie      = src.i_end();
     const int jb      = src.j_begin();
     const int je      = src.j_end();
-    const int total_nx = src.total_nx();
     const int total_ny = src.total_ny();
 
     for (int j = 0; j < total_ny; ++j) {

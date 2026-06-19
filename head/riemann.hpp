@@ -190,7 +190,8 @@ HD inline Conserved hlld_flux(
     const double rhoLs = rhoL * (SL - unL) / (SL - SM);
     const double rhoRs = rhoR * (SR - unR) / (SR - SM);
 
-    if (rhoLs <= 0.0 || rhoRs <= 0.0) {
+    if (rhoLs <= 0.0 || rhoRs <= 0.0 ||
+        !std::isfinite(rhoLs) || !std::isfinite(rhoRs)) {
         return hll_flux(UL, UR, dir, ch);
     }
 
@@ -202,41 +203,6 @@ HD inline Conserved hlld_flux(
     const double sqrtRhoRs = sqrt(rhoRs);
     const double SLs = SM - fabs(BnL) / sqrtRhoLs;
     const double SRs = SM + fabs(BnR) / sqrtRhoRs;
-
-    // Helper lambda for star state
-    // Computes (ut*, uw*, Bt*, Bw*, E*) for one side
-    // Returns false if degenerate (fall through to HLL)
-    auto star_state = [&](
-        double rho, double un, double ut, double uw,
-        double Bn, double Bt, double Bw, double E,
-        double S, double rhos,
-        double& uts, double& uws, double& Bts, double& Bws, double& Es
-    ) -> bool {
-        const double denom = rho*(S - un) - rhos*(S - SM); // = rho*(S-un)*(1 - rhoL/rhos)?
-        // Actually: denominator for transverse components (eq. 44-46)
-        const double d = rho*(S - un)*(S - SM) - Bn*Bn;
-        if (fabs(d) < 1.0e-14) {
-            // Degenerate: Bn → 0, no rotation of transverse fields
-            uts = ut; uws = uw;
-            Bts = Bt; Bws = Bw;
-        } else {
-            uts = ut - Bn*Bt*(SM - un) / d;
-            uws = uw - Bn*Bw*(SM - un) / d;
-            Bts = Bt * (rho*(S-un)*(S-un) - Bn*Bn) / d;
-            Bws = Bw * (rho*(S-un)*(S-un) - Bn*Bn) / d;
-        }
-        const double BdotUs = Bn*SM + Bts*uts + Bws*uws;
-        const double BdotU  = Bn*un + Bt*ut  + Bw*uw;
-        Es = (E*(S - un) - ptL*(S >= 0.0 ? 1.0 : -1.0) * 0.0
-             - ptstar * SM + Bn*BdotUs)
-             // simplified: use eq. 48
-             ;
-        // Full eq. 48: E* = (E*(S-un) - pt*un + pt**(SM) + Bn*(u.B) - Bn*(u*.B*)) / (S-SM)
-        const double BdotUstar = Bn*SM + Bts*uts + Bws*uws;
-        Es = ( E*(S - un) - ptL*un + ptstar*SM
-             + Bn*(BdotUstar - BdotU) ) / (S - SM);
-        return true;
-    };
 
     // L* state
     double utLs, uwLs, BtLs, BwLs, ELs;
@@ -436,16 +402,22 @@ HD inline Conserved riemann_flux(
     RiemannSolver    solver,
     double           ch
 ) {
-    switch (solver) {
-        case RiemannSolver::HLL:
-            return hll_flux(UL, UR, dir, ch);
-        case RiemannSolver::HLLD:
-            return hlld_flux(UL, UR, dir, ch);
-        case RiemannSolver::FORCE:
-            return force_flux(UL, UR, dir, ch);
-        default:
-            return hll_flux(UL, UR, dir, ch);
+    if (solver == RiemannSolver::HLL) {
+        return hll_flux(UL, UR, dir, ch);
     }
+
+    // HLLD and FORCE can produce NaN in degenerate edge cases.
+    // Detect and fall back to HLL so that one bad face does not
+    // propagate NaN across the entire grid via the y-sweep.
+    const Conserved F = (solver == RiemannSolver::HLLD)
+                      ? hlld_flux(UL, UR, dir, ch)
+                      : force_flux(UL, UR, dir, ch);
+
+    if (!finite_number(F.rho) || !finite_number(F.E) ||
+        !finite_number(F.Bx)  || !finite_number(F.psi)) {
+        return hll_flux(UL, UR, dir, ch);
+    }
+    return F;
 }
 
 // Backward-compatible overload — uses phys::ch_glm (CPU) or 0 (GPU/CUDA).

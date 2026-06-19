@@ -206,12 +206,13 @@ __global__ void compute_block_max_speed_kernel(
         );
 
         const Primitive V = phys::cons_to_prim(U);
-        const double a = phys::sound_speed(V);
 
-        const double sx = fabs(V.u) + a;
-        const double sy = fabs(V.v) + a;
-
-        local_speed = fmax(sx, sy);
+        if (is_physical_gpu(V)) {
+            const double sx = phys::max_signal_speed_x(V, 0.0);
+            const double sy = phys::max_signal_speed_y(V, 0.0);
+            if (isfinite(sx) && isfinite(sy))
+                local_speed = fmax(sx, sy);
+        }
     }
 
     const unsigned int mask = 0xFFFFFFFFu;
@@ -277,12 +278,15 @@ __global__ void advance_first_order_kernel(
                               - dtdx * (FxR - FxL)
                               - dtdy * (FyT - FyB);
 
+    const Conserved result = (isfinite(Unew_cell.rho) && isfinite(Unew_cell.E))
+                           ? Unew_cell : Uc;
+
     const int c = Uold.flat_index(i, j);
 
-    Unew.rho[c]  = Unew_cell.rho;
-    Unew.rhou[c] = Unew_cell.rhou;
-    Unew.rhov[c] = Unew_cell.rhov;
-    Unew.E[c]    = Unew_cell.E;
+    Unew.rho[c]  = result.rho;
+    Unew.rhou[c] = result.rhou;
+    Unew.rhov[c] = result.rhov;
+    Unew.E[c]    = result.E;
 }
 
 // -----------------------------------------------------------------------------
@@ -466,14 +470,17 @@ __global__ void advance_x_reconstruct_smem_fused_kernel(
 
     const Conserved Unew_cell = Uc - dt_over_dx * (Fx_p - Fx_m);
 
+    const Conserved result = (isfinite(Unew_cell.rho) && isfinite(Unew_cell.E))
+                           ? Unew_cell : Uc;
+
     const int gi = Uin.i_begin() + local_i;
     const int gj = Uin.j_begin() + local_j;
     const int gidx = Uin.flat_index(gi, gj);
 
-    Uout.rho[gidx]  = Unew_cell.rho;
-    Uout.rhou[gidx] = Unew_cell.rhou;
-    Uout.rhov[gidx] = Unew_cell.rhov;
-    Uout.E[gidx]    = Unew_cell.E;
+    Uout.rho[gidx]  = result.rho;
+    Uout.rhou[gidx] = result.rhou;
+    Uout.rhov[gidx] = result.rhov;
+    Uout.E[gidx]    = result.E;
 }
 
 // -----------------------------------------------------------------------------
@@ -672,14 +679,17 @@ __global__ void advance_y_reconstruct_smem_fused_kernel(
 
     const Conserved Unew_cell = Uc - dt_over_dy * (Fy_p - Fy_m);
 
+    const Conserved result = (isfinite(Unew_cell.rho) && isfinite(Unew_cell.E))
+                           ? Unew_cell : Uc;
+
     const int gi = Uin.i_begin() + local_i;
     const int gj = Uin.j_begin() + local_j;
     const int gidx = Uin.flat_index(gi, gj);
 
-    Uout.rho[gidx]  = Unew_cell.rho;
-    Uout.rhou[gidx] = Unew_cell.rhou;
-    Uout.rhov[gidx] = Unew_cell.rhov;
-    Uout.E[gidx]    = Unew_cell.E;
+    Uout.rho[gidx]  = result.rho;
+    Uout.rhou[gidx] = result.rhou;
+    Uout.rhov[gidx] = result.rhov;
+    Uout.E[gidx]    = result.E;
 }
 
 } // namespace

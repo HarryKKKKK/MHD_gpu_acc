@@ -289,11 +289,13 @@ double compute_dt(const Grid2D& grid, double cfl) {
             const Primitive V = phys::cons_to_prim(grid(i, j));
 
             // Skip non-physical cells (shouldn't occur but be safe)
-            if (V.rho <= 0.0 || V.p <= 0.0) continue;
+            if (!std::isfinite(V.rho) || !std::isfinite(V.p) ||
+                V.rho <= 0.0 || V.p <= 0.0) continue;
 
-            const double sx = phys::max_signal_speed_x(V, 0.0);
-            const double sy = phys::max_signal_speed_y(V, 0.0);
-            max_speed = std::max(max_speed, std::max(sx, sy));
+            const double sx = phys::max_signal_speed_x(V, phys::ch_glm);
+            const double sy = phys::max_signal_speed_y(V, phys::ch_glm);
+            if (std::isfinite(sx) && std::isfinite(sy))
+                max_speed = std::max(max_speed, std::max(sx, sy));
         }
     }
 
@@ -344,6 +346,8 @@ void advance_first_order(
             Unew(i, j) = Uold(i, j)
                        - dt_over_dx * (Fx_p - Fx_m)
                        - dt_over_dy * (Fy_p - Fy_m);
+            if (!std::isfinite(Unew(i,j).rho) || !std::isfinite(Unew(i,j).E))
+                Unew(i,j) = Uold(i,j);
         }
     }
 
@@ -425,6 +429,14 @@ void advance_second_order(
         }
     }
 
+    // Safety: reset any NaN cells from the x-sweep to their old values.
+    // One NaN flux can silently corrupt every cell in a column via the
+    // y-sweep (fmax(NaN,x)=x masks the damage in diagnostics).
+    for (int j = jb; j < je; ++j)
+        for (int i = ib; i < ie; ++i)
+            if (!std::isfinite(Utmp(i,j).rho) || !std::isfinite(Utmp(i,j).E))
+                Utmp(i,j) = Uold(i,j);
+
     // Step 3: BC on Utmp — Dirichlet cells come from Uold
     copy_ghost_cells(Uold, Utmp);
     apply_boundary(Utmp, bc);
@@ -451,6 +463,12 @@ void advance_second_order(
                 );
         }
     }
+
+    // Safety: reset any NaN cells from the y-sweep.
+    for (int j = jb; j < je; ++j)
+        for (int i = ib; i < ie; ++i)
+            if (!std::isfinite(Unew(i,j).rho) || !std::isfinite(Unew(i,j).E))
+                Unew(i,j) = Utmp(i,j);
 
     // Step 6: BC on Unew — Dirichlet cells come from Utmp
     copy_ghost_cells(Utmp, Unew);
