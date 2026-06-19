@@ -1,0 +1,67 @@
+#pragma once
+
+#include <string>
+
+#include "types.hpp"
+
+// ============================================================
+// Boundary condition types
+// ============================================================
+enum class BoundaryType {
+    Periodic,      // periodic wrap-around
+    Transmissive,  // zero-gradient (Neumann) outflow
+    Reflecting,    // symmetry (reflecting) wall
+    Dirichlet      // fixed value from initial data (applied externally)
+};
+
+struct BoundaryConfig {
+    BoundaryType left   = BoundaryType::Transmissive;
+    BoundaryType right  = BoundaryType::Transmissive;
+    BoundaryType bottom = BoundaryType::Transmissive;
+    BoundaryType top    = BoundaryType::Transmissive;
+};
+
+// ============================================================
+// Test case identifiers — 5 cases from Dedner et al. (2002)
+// ============================================================
+enum class CaseId {
+    PeakBx,          // §5: peak in Bx, γ=5/3, periodic
+    Riemann1D,       // §5: 1D Riemann problem, γ=5/3
+    ShockReflection, // §5: oblique shock reflection, γ=1.4
+    Riemann2D,       // §5: 2D Riemann problem, γ=5/3
+    KelvinHelmholtz  // §5: Kelvin-Helmholtz instability, γ=1.4
+};
+
+// ============================================================
+// Case configuration (domain, grid, time, physics)
+// ============================================================
+struct CaseConfig {
+    int    nx;
+    int    ny;
+    int    ng;       // number of ghost layers (≥2 for MUSCL-Hancock)
+    double x_min;
+    double x_max;
+    double y_min;
+    double y_max;
+    double cfl;
+    double t_end;
+    double gamma;    // adiabatic exponent for this case
+    BoundaryConfig bc;
+};
+
+// ============================================================
+// API
+// ============================================================
+CaseId     parse_case_id(const std::string& case_name);
+std::string case_id_to_string(CaseId case_id);
+
+CaseConfig  get_case_config(CaseId case_id);
+CaseConfig  get_case_config(const std::string& case_name);
+
+// Scale grid resolution by factor n (nx *= n, ny *= n)
+CaseConfig  get_n_case_config(CaseId case_id, int n);
+CaseConfig  get_n_case_config(const std::string& case_name, int n);
+
+// Return initial conserved state at cell center (x, y)
+Conserved   initial_state_at(CaseId case_id, double x, double y);
+Conserved   initial_state_at(const std::string& case_name, double x, double y);
