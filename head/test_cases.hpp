@@ -22,13 +22,9 @@ struct BoundaryConfig {
 };
 
 // ============================================================
-// Test case identifiers — 5 cases from Dedner et al. (2002)
+// Test case identifiers
 // ============================================================
 enum class CaseId {
-    PeakBx,          // §5: peak in Bx, γ=5/3, periodic
-    Riemann1D,       // §5: 1D Riemann problem, γ=5/3
-    ShockReflection, // §5: oblique shock reflection, γ=1.4
-    Riemann2D,       // §5: 2D Riemann problem, γ=5/3
     KelvinHelmholtz  // §5: Kelvin-Helmholtz instability, γ=1.4
 };
 

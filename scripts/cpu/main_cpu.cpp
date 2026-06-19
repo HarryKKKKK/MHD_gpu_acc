@@ -4,7 +4,7 @@
 // Usage:
 //   ./main_cpu [case_name] [--order 1|2] [--solver hll|hlld|force] [--out output_dir]
 //
-// case_name: peak_bx | riemann1d | shock_reflection | riemann2d | kelvin_helmholtz
+// case_name: kelvin_helmholtz
 //
 // Output: one CSV file per field at t_end (rho, p, Bx, By, Bz, psi, u, v, E)
 // written to output_dir (default: "output/").
@@ -88,7 +88,7 @@ void write_all_fields(
 // ============================================================
 
 struct RunConfig {
-    std::string  case_name  = "peak_bx";
+    std::string  case_name  = "kelvin_helmholtz";
     int          order      = 2;
     RiemannSolver solver    = RiemannSolver::HLLD;
     std::string  out_dir    = "output";
