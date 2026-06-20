@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 NX, NY   = 800, 4
 X_MIN, X_MAX = 0.0, 1.0
 
-OUTPUT_DIR = "outputs/gpu_brio_wu_hll_n1_12379"
+OUTPUT_DIR = "outputs/gpu_brio_wu_hlld_n1"
 PREFIX     = "brio_wu_gpu"
 TAG        = "t10"
 
@@ -49,7 +49,7 @@ for ax, (data, ylabel) in zip(axes, panels):
 for ax in axes[2:]:
     ax.set_xlabel("$x$", fontsize=12)
 
-fig.suptitle(r"Brio–Wu shock tube, $t = 0.1$, $\gamma = 2$  (HLL)", fontsize=11)
+fig.suptitle(r"Brio–Wu shock tube, $t = 0.1$, $\gamma = 2$  (HLLD)", fontsize=11)
 fig.tight_layout()
 
 os.makedirs("figs", exist_ok=True)

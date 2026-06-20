@@ -247,18 +247,24 @@ CaseConfig get_case_config(CaseId id) {
                 }
             };
 
-        case CaseId::OrszagTang:
+        case CaseId::OrszagTang: {
             // Fully periodic, domain [0, 2π]²
-            return CaseConfig{
+            // Snapshots at t=π and t=2π correspond to Mignone et al. (2010) §4.5
+            // times t=0.5 and t=1 on their [0,1]² domain (same physics, 2π scaling).
+            CaseConfig cfg{
                 192, 192, 2,
                 0.0, 2.0 * M_PI, 0.0, 2.0 * M_PI,
-                /*cfl=*/0.4, /*t_end=*/M_PI,
+                /*cfl=*/0.4, /*t_end=*/2.0 * M_PI,
                 /*gamma=*/5.0 / 3.0,
                 BoundaryConfig{
                     BoundaryType::Periodic, BoundaryType::Periodic,
                     BoundaryType::Periodic, BoundaryType::Periodic
                 }
             };
+            cfg.snapshot_times = {M_PI, 2.0 * M_PI};
+            cfg.snapshot_tags  = {"tpi", "t2pi"};
+            return cfg;
+        }
     }
     throw std::runtime_error("Unhandled CaseId in get_case_config.");
 }
