@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "types.hpp"
 
@@ -46,6 +47,11 @@ struct CaseConfig {
     double t_end;
     double gamma;    // adiabatic exponent for this case
     BoundaryConfig bc;
+    // Ordered physical times at which to write field snapshots.
+    // Tags are file-name labels (e.g. "t006" for dimensionless t=0.6).
+    // If empty, only the final state is written.
+    std::vector<double>      snapshot_times = {};
+    std::vector<std::string> snapshot_tags  = {};
 };
 
 // ============================================================

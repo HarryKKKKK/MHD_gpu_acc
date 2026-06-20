@@ -2,6 +2,8 @@
 
 #define _USE_MATH_DEFINES
 #include <cmath>
+#include <iomanip>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -189,18 +191,48 @@ CaseConfig get_case_config(CaseId id) {
                 }
             };
 
-        case CaseId::ShockBubble:
+        case CaseId::ShockBubble: {
             // Transmissive inflow/outflow; reflecting channel walls (top/bottom)
-            return CaseConfig{
+            CaseConfig cfg{
                 500, 197, 2,
                 0.0, 0.225, 0.0, 0.089,
-                /*cfl=*/0.4, /*t_end=*/0.0011741,
+                /*cfl=*/0.4, /*t_end=*/0.0,  // set below from snapshot schedule
                 /*gamma=*/1.4,
                 BoundaryConfig{
                     BoundaryType::Transmissive, BoundaryType::Transmissive,
                     BoundaryType::Reflecting,   BoundaryType::Reflecting
                 }
             };
+
+            // Physical snapshot times derived from Haas & Sturtevant (1987) Fig. 4.
+            // Dimensionless time: t = T * Ms * s / R  =>  T = T0 + t_paper * tau
+            //   T0  = time for shock to reach the bubble left edge = (xc-R-xs)/vs
+            //   tau = time for shock to traverse one bubble radius  = R/vs
+            constexpr double gam_sb  = 1.4;
+            constexpr double p0_sb   = 1.01325e5;   // Pa
+            constexpr double rho_sb  = 1.29;         // kg/m³
+            constexpr double Ms_sb   = 1.22;
+            constexpr double xc_sb   = 0.035;        // bubble centre x, m
+            constexpr double R_sb    = 0.025;        // bubble radius, m
+            constexpr double xs_sb   = 0.005;        // initial shock position, m
+            const double vs_sb  = Ms_sb * std::sqrt(gam_sb * p0_sb / rho_sb);
+            const double T0_sb  = (xc_sb - R_sb - xs_sb) / vs_sb;
+            const double tau_sb = R_sb / vs_sb;
+
+            // Dimensionless snapshot times from the paper (Fig. 4, Ms = 1.22)
+            const double t_paper[] = {0.6, 1.2, 1.8, 3.0, 4.6, 6.2, 7.8, 12.6, 19.0};
+            for (double tp : t_paper) {
+                cfg.snapshot_times.push_back(T0_sb + tp * tau_sb);
+                // Tag format: "t" + dimensionless_time*10 zero-padded to 3 digits
+                // e.g. t=0.6 -> "t006", t=12.6 -> "t126", t=19.0 -> "t190"
+                std::ostringstream oss;
+                oss << "t" << std::setw(3) << std::setfill('0')
+                    << static_cast<int>(std::round(tp * 10.0));
+                cfg.snapshot_tags.push_back(oss.str());
+            }
+            cfg.t_end = cfg.snapshot_times.back();
+            return cfg;
+        }
 
         case CaseId::BrioWu:
             // 1D problem: periodic in y, transmissive in x

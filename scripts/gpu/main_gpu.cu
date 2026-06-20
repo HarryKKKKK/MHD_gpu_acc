@@ -198,14 +198,23 @@ int main(int argc, char** argv) {
     if (rc.write_out)
         write_all_fields(Uold, rc.out_dir, rc.case_name + "_gpu_t0");
 
+    const bool has_snaps = !cfg.snapshot_times.empty();
+    std::size_t snap_idx = 0;
+
     double t    = 0.0;
     int    step = 0;
 
     auto wall_start = std::chrono::steady_clock::now();
 
     while (t < cfg.t_end) {
+        // Determine the next time we must not overshoot:
+        // either the next snapshot or t_end, whichever is sooner.
+        double t_next = cfg.t_end;
+        if (has_snaps && snap_idx < cfg.snapshot_times.size())
+            t_next = std::min(t_next, cfg.snapshot_times[snap_idx]);
+
         const double dt_raw = compute_dt_gpu(Uold, ws, cfg.cfl);
-        const double dt     = std::min(dt_raw, cfg.t_end - t);
+        const double dt     = std::min(dt_raw, t_next - t);
 
         if (rc.order == 2) {
             advance_second_order_gpu(Uold, Utmp, Unew, ws, dt, rc.solver, cfg.bc);
@@ -216,6 +225,19 @@ int main(int argc, char** argv) {
         Uold.swap(Unew);
         t    += dt;
         step += 1;
+
+        // Write any snapshots whose time we have just reached.
+        if (rc.write_out && has_snaps) {
+            while (snap_idx < cfg.snapshot_times.size() &&
+                   t >= cfg.snapshot_times[snap_idx] - 1e-12) {
+                std::cout << "  [snap] " << cfg.snapshot_tags[snap_idx]
+                          << "  t_phys=" << std::scientific << std::setprecision(6)
+                          << t << " s\n";
+                write_all_fields(Uold, rc.out_dir,
+                    rc.case_name + "_gpu_" + cfg.snapshot_tags[snap_idx]);
+                ++snap_idx;
+            }
+        }
     }
 
     auto wall_end = std::chrono::steady_clock::now();
@@ -226,7 +248,8 @@ int main(int argc, char** argv) {
     std::cout << "  Elapsed : " << elapsed << " s  ("
               << static_cast<double>(step) / elapsed << " steps/s)\n";
 
-    if (rc.write_out) {
+    // For cases without a snapshot schedule, write final state with legacy tag.
+    if (rc.write_out && !has_snaps) {
         write_all_fields(Uold, rc.out_dir,
             rc.case_name + "_gpu_t" +
             std::to_string(static_cast<int>(std::round(cfg.t_end * 100))));
