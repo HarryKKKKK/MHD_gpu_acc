@@ -1,0 +1,5 @@
+arch,case,solver,n,nx,ny,total_cells,total_steps,real_seconds,user_seconds,sys_seconds,max_rss_kb,output_dir,git_branch,git_commit,cuda_arch
+gpu,kelvin_helmholtz,hll,1,200,400,80000,4646,3.26,1.91,0.30,129552,outputs/gpu_kelvin_helmholtz_hll_n1_12386,main,36c4fca,-arch=sm_90
+gpu,shock_bubble,hll,1,500,197,98500,6900,10.94,4.94,0.46,133216,outputs/gpu_shock_bubble_hll_n1_12386,main,36c4fca,-arch=sm_90
+gpu,brio_wu,hll,1,800,4,3200,874,0.75,0.11,0.28,112684,outputs/gpu_brio_wu_hll_n1_12386,main,36c4fca,-arch=sm_90
+gpu,orszag_tang,hll,1,192,192,36864,609,0.90,0.22,0.27,119288,outputs/gpu_orszag_tang_hll_n1_12386,main,36c4fca,-arch=sm_90
