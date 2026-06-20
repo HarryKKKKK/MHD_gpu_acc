@@ -26,7 +26,7 @@ GPU_COMPUTE_CAP=$(nvidia-smi --query-gpu=name,compute_cap --format=csv,noheader 
 mkdir -p logs validation outputs
 
 read -r -a SCALES  <<< "${SCALES_STR:-1}"
-read -r -a CASES   <<< "${CASES_STR:-kelvin_helmholtz}"
+read -r -a CASES   <<< "${CASES_STR:-kelvin_helmholtz shock_bubble brio_wu orszag_tang}"
 read -r -a SOLVERS <<< "${SOLVERS_STR:-hll}"
 
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
