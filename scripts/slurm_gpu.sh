@@ -73,7 +73,7 @@ run_and_record() {
     local solver_name="$2"
     local n_scale="$3"
 
-    local out_dir="outputs/gpu_${case_name}_${solver_name}_n${n_scale}_${SLURM_JOB_ID}"
+    local out_dir="outputs/gpu_${case_name}_${solver_name}_n${n_scale}"
     mkdir -p "$out_dir"
 
     echo ""

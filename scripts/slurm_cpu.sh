@@ -112,7 +112,7 @@ for CASE in "${CASES[@]}"; do
             echo ""
             echo "===== CPU OMP RUN: case=${CASE}, solver=${SOLVER}, order=${ORDER}, threads=${OMP_THREADS} ====="
 
-            OUT_DIR="outputs/${CASE}_${SOLVER}_o${ORDER}_t${OMP_THREADS}_${SLURM_JOB_ID}"
+            OUT_DIR="outputs/${CASE}_${SOLVER}_o${ORDER}_t${OMP_THREADS}"
             RUN_LOG="logs/cpu_${CASE}_${SOLVER}_o${ORDER}_t${OMP_THREADS}_${SLURM_JOB_ID}.log"
             TIME_LOG="logs/cpu_${CASE}_${SOLVER}_o${ORDER}_t${OMP_THREADS}_${SLURM_JOB_ID}.time"
 
