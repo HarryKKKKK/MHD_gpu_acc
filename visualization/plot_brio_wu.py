@@ -1,6 +1,6 @@
 """
 Brio-Wu 1D MHD shock tube at t = 0.1, γ = 2.
-Four-panel comparison: ρ, p, v_x, B_y vs x.
+Four-panel comparison: ρ, p, v_y, B_y vs x.
 Reference: Brio & Wu (1988) Fig. 4; Dedner et al. (2002) Table IV.
 """
 
@@ -25,13 +25,13 @@ def load(field):
 
 rho = load("rho")
 p   = load("p")
-u   = load("u")
+v   = load("v")
 By  = load("By")
 
 panels = [
     (rho, r"$\rho$"),
     (p,   r"$p$"),
-    (u,   r"$v_x$"),
+    (v,   r"$v_y$"),
     (By,  r"$B_y$"),
 ]
 
