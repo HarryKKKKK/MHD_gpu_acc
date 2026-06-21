@@ -39,20 +39,28 @@ void write_field_csv(
     const std::string& path,
     FieldFn            field_fn   // Conserved -> double
 ) {
-    std::ofstream f(path);
-    if (!f) throw std::runtime_error("Cannot open output file: " + path);
+    namespace fs = std::filesystem;
+    const std::string tmp_path = path + ".tmp";
+    {
+        std::ofstream f(tmp_path);
+        if (!f) throw std::runtime_error("Cannot open output file: " + tmp_path);
 
-    const int ib = grid.i_begin(), ie = grid.i_end();
-    const int jb = grid.j_begin(), je = grid.j_end();
+        const int ib = grid.i_begin(), ie = grid.i_end();
+        const int jb = grid.j_begin(), je = grid.j_end();
 
-    f << std::scientific << std::setprecision(8);
-    for (int j = je - 1; j >= jb; --j) {        // top row first (conventional image layout)
-        for (int i = ib; i < ie; ++i) {
-            if (i > ib) f << ',';
-            f << field_fn(grid(i, j));
+        f << std::scientific << std::setprecision(8);
+        for (int j = je - 1; j >= jb; --j) {        // top row first (conventional image layout)
+            for (int i = ib; i < ie; ++i) {
+                if (i > ib) f << ',';
+                f << field_fn(grid(i, j));
+            }
+            f << '\n';
         }
-        f << '\n';
-    }
+        if (!f) throw std::runtime_error("Write error: " + tmp_path);
+    } // flush + close before rename
+
+    // Atomic rename: final file is either complete or absent
+    fs::rename(tmp_path, path);
 }
 
 void write_all_fields(
@@ -60,8 +68,7 @@ void write_all_fields(
     const std::string& dir,
     const std::string& prefix
 ) {
-    namespace fs = std::filesystem;
-    fs::create_directories(dir);
+    std::filesystem::create_directories(dir);
 
     const auto path = [&](const char* name) {
         return dir + "/" + prefix + "_" + name + ".csv";
