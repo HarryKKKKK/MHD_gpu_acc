@@ -169,6 +169,7 @@ int main(int argc, char** argv) {
     std::cout << "[GPU] nx: "          << cfg.nx            << "\n";
     std::cout << "[GPU] ny: "          << cfg.ny            << "\n";
     std::cout << "[GPU] total_cells: " << (cfg.nx * cfg.ny) << "\n";
+    std::cout << std::flush;  // flush now: Slurm stdout is fully buffered (not a tty)
 
     // Build initial CPU grid then upload to GPU.
     Grid2D cpu_grid = make_n_grid(rc.case_name, rc.n_scale);
@@ -216,6 +217,20 @@ int main(int argc, char** argv) {
         const double dt_raw = compute_dt_gpu(Uold, ws, cfg.cfl);
         const double dt     = std::min(dt_raw, t_next - t);
 
+        // Guard against numerical blowup: dt should never be zero or non-finite.
+        if (!std::isfinite(dt) || dt <= 0.0) {
+            std::cerr << "[ERROR] dt=" << dt << " at step=" << step
+                      << " t=" << t << " (dt_raw=" << dt_raw << "). Aborting.\n";
+            break;
+        }
+        // Warn if dt is suspiciously tiny (signal speed may have blown up).
+        constexpr double kDtFloor = 1.0e-14;
+        if (dt < kDtFloor) {
+            std::cerr << "[WARN]  dt=" << dt << " at step=" << step
+                      << " t=" << t << " — possible instability, stopping.\n";
+            break;
+        }
+
         if (rc.order == 2) {
             advance_second_order_gpu(Uold, Utmp, Unew, ws, dt, rc.solver, cfg.bc);
         } else {
@@ -225,6 +240,18 @@ int main(int argc, char** argv) {
         Uold.swap(Unew);
         t    += dt;
         step += 1;
+
+        // Periodic progress output so the Slurm log is never silent for long.
+        if (step % 500 == 0) {
+            const double elapsed_so_far =
+                std::chrono::duration<double>(
+                    std::chrono::steady_clock::now() - wall_start).count();
+            std::cout << "  [step " << std::setw(6) << step
+                      << "]  t=" << std::scientific << std::setprecision(4) << t
+                      << "  dt=" << dt
+                      << "  wall=" << std::fixed << std::setprecision(1)
+                      << elapsed_so_far << "s\n" << std::flush;
+        }
 
         // Write any snapshots whose time we have just reached.
         if (rc.write_out && has_snaps) {

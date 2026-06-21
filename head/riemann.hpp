@@ -13,7 +13,7 @@
 //   HLLD  — HLLD (Miyoshi & Kusano 2005); more accurate for MHD
 //   FORCE — Local FORCE (average of Lax-Friedrichs and Richtmyer)
 //
-// All solvers take the global GLM cleaning speed phys::ch_glm which
+// All solvers take the global GLM cleaning speed phys::get_ch_glm() which
 // must be set (on CPU) before the flux computation step.
 // ============================================================
 
@@ -22,11 +22,11 @@ enum class Direction { X, Y };
 enum class RiemannSolver { HLL, HLLD, FORCE };
 
 // ------------------------------------------------------------
-// Physical flux wrapper — uses phys::ch_glm (host: inline double;
+// Physical flux wrapper — uses phys::get_ch_glm() (host: inline double;
 // device: __device__ static double set each step via set_gpu_physics_ch)
 // ------------------------------------------------------------
 HD inline Conserved physical_flux(const Conserved& U, Direction dir) {
-    const double ch = phys::ch_glm;
+    const double ch = phys::get_ch_glm();
     return (dir == Direction::X) ? phys::flux_x(U, ch)
                                  : phys::flux_y(U, ch);
 }
@@ -420,5 +420,5 @@ HD inline Conserved riemann_flux(
     Direction        dir,
     RiemannSolver    solver
 ) {
-    return riemann_flux(UL, UR, dir, solver, phys::ch_glm);
+    return riemann_flux(UL, UR, dir, solver, phys::get_ch_glm());
 }

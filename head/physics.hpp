@@ -21,9 +21,11 @@
 namespace phys {
 
 // adiabatic exponent — set per test case before initialisation
-// GPU: set via set_gpu_physics_gamma() before launching kernels
+// GPU: device copy (d_gamma) set via set_gpu_physics_gamma(); host copy (gamma)
+// kept in sync by the same setter so HD functions can read the right one.
 #ifdef __CUDACC__
-__device__ static double gamma = 5.0 / 3.0;
+__device__ static double d_gamma = 5.0 / 3.0;  // device copy
+inline double gamma = 5.0 / 3.0;               // host mirror
 #else
 inline double gamma = 5.0 / 3.0;
 #endif
@@ -31,11 +33,34 @@ inline double gamma = 5.0 / 3.0;
 // GLM cleaning speed ch (set each timestep from max signal speed, Section 4)
 // Mixed-GLM damping ratio c_r = c_p^2 / c_h (optimal ~0.18, Fig. 2)
 #ifdef __CUDACC__
-__device__ static double ch_glm = 0.0;
-__device__ static double cr_glm = 0.18;
+__device__ static double d_ch_glm = 0.0;        // device copy
+__device__ static double d_cr_glm = 0.18;       // device copy
+inline double ch_glm = 0.0;                     // host mirror
+inline double cr_glm = 0.18;                    // host mirror
 #else
 inline double ch_glm = 0.0;
 inline double cr_glm = 0.18;
+#endif
+
+// HD accessors — pick device or host copy depending on compilation path.
+#ifdef __CUDACC__
+HD inline double get_gamma() {
+#ifdef __CUDA_ARCH__
+    return d_gamma;
+#else
+    return gamma;
+#endif
+}
+HD inline double get_ch_glm() {
+#ifdef __CUDA_ARCH__
+    return d_ch_glm;
+#else
+    return ch_glm;
+#endif
+}
+#else
+HD inline double get_gamma()  { return gamma; }
+HD inline double get_ch_glm() { return ch_glm; }
 #endif
 
 // ------------------------------------------------------------
@@ -48,7 +73,7 @@ HD inline Primitive cons_to_prim(const Conserved& U) {
     const double uz = U.rhow * inv_rho;
     const double Bmag2 = U.Bx*U.Bx + U.By*U.By + U.Bz*U.Bz;
     const double ke    = 0.5 * U.rho * (ux*ux + uy*uy + uz*uz);
-    const double p     = (gamma - 1.0) * (U.E - ke - 0.5*Bmag2);
+    const double p     = (get_gamma() - 1.0) * (U.E - ke - 0.5*Bmag2);
     return Primitive(U.rho, ux, uy, uz, U.Bx, U.By, U.Bz, p, U.psi);
 }
 
@@ -58,7 +83,7 @@ HD inline Primitive cons_to_prim(const Conserved& U) {
 HD inline Conserved prim_to_cons(const Primitive& V) {
     const double Bmag2 = V.Bx*V.Bx + V.By*V.By + V.Bz*V.Bz;
     const double ke    = 0.5 * V.rho * (V.u*V.u + V.v*V.v + V.w*V.w);
-    const double E     = V.p / (gamma - 1.0) + ke + 0.5*Bmag2;
+    const double E     = V.p / (get_gamma() - 1.0) + ke + 0.5*Bmag2;
     return Conserved(V.rho, V.rho*V.u, V.rho*V.v, V.rho*V.w,
                      V.Bx, V.By, V.Bz, E, V.psi);
 }
@@ -84,7 +109,7 @@ HD inline Conserved flux_x(const Conserved& U, double ch) {
     const double uz = U.rhow * inv_rho;
     const double Bmag2 = U.Bx*U.Bx + U.By*U.By + U.Bz*U.Bz;
     const double ke    = 0.5 * U.rho * (ux*ux + uy*uy + uz*uz);
-    const double p     = (gamma - 1.0) * (U.E - ke - 0.5*Bmag2);
+    const double p     = (get_gamma() - 1.0) * (U.E - ke - 0.5*Bmag2);
     const double p_tot = p + 0.5*Bmag2;
     const double BdotU = U.Bx*ux + U.By*uy + U.Bz*uz;
 
@@ -121,7 +146,7 @@ HD inline Conserved flux_y(const Conserved& U, double ch) {
     const double uz = U.rhow * inv_rho;
     const double Bmag2 = U.Bx*U.Bx + U.By*U.By + U.Bz*U.Bz;
     const double ke    = 0.5 * U.rho * (ux*ux + uy*uy + uz*uz);
-    const double p     = (gamma - 1.0) * (U.E - ke - 0.5*Bmag2);
+    const double p     = (get_gamma() - 1.0) * (U.E - ke - 0.5*Bmag2);
     const double p_tot = p + 0.5*Bmag2;
     const double BdotU = U.Bx*ux + U.By*uy + U.Bz*uz;
 
@@ -148,7 +173,7 @@ HD inline Conserved flux_y(const Conserved& U, double ch) {
 //   c_f = sqrt( 1/2 * (a^2 + b^2 + sqrt((a^2+b^2)^2 - 4*a^2*b_x^2)) )
 // ------------------------------------------------------------
 HD inline double fast_speed_x(const Primitive& V) {
-    const double a2  = gamma * V.p / V.rho;
+    const double a2  = get_gamma() * V.p / V.rho;
     const double b2  = (V.Bx*V.Bx + V.By*V.By + V.Bz*V.Bz) / V.rho;
     const double bx2 = V.Bx * V.Bx / V.rho;
     const double disc = (a2 + b2)*(a2 + b2) - 4.0*a2*bx2;
@@ -157,7 +182,7 @@ HD inline double fast_speed_x(const Primitive& V) {
 
 // Fast magnetosonic speed in the y-direction (swap Bx ↔ By)
 HD inline double fast_speed_y(const Primitive& V) {
-    const double a2  = gamma * V.p / V.rho;
+    const double a2  = get_gamma() * V.p / V.rho;
     const double b2  = (V.Bx*V.Bx + V.By*V.By + V.Bz*V.Bz) / V.rho;
     const double by2 = V.By * V.By / V.rho;
     const double disc = (a2 + b2)*(a2 + b2) - 4.0*a2*by2;
@@ -166,7 +191,7 @@ HD inline double fast_speed_y(const Primitive& V) {
 
 // Sound speed (for reference / diagnostics)
 HD inline double sound_speed(const Primitive& V) {
-    return sqrt(gamma * V.p / V.rho);
+    return sqrt(get_gamma() * V.p / V.rho);
 }
 
 // ------------------------------------------------------------

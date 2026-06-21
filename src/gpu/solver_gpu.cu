@@ -202,9 +202,9 @@ __global__ void compute_block_max_speed_kernel(
         const Primitive V = phys::cons_to_prim(U);
 
         if (is_physical(V)) {
-            // Use the previous-step ch_glm for the CFL estimate
-            const double sx = phys::max_signal_speed_x(V, phys::ch_glm);
-            const double sy = phys::max_signal_speed_y(V, phys::ch_glm);
+            // Use the previous-step ch_glm for the CFL estimate (d_ch_glm = device copy)
+            const double sx = phys::max_signal_speed_x(V, phys::d_ch_glm);
+            const double sy = phys::max_signal_speed_y(V, phys::d_ch_glm);
             if (isfinite(sx) && isfinite(sy))
                 local_speed = fmax(sx, sy);
         }
@@ -563,11 +563,13 @@ __global__ void advance_y_kernel(
 // __device__ static copies of phys::gamma / phys::ch_glm)
 // ============================================================
 void set_gpu_physics_gamma(double g) {
-    CUDA_CHECK(cudaMemcpyToSymbol(phys::gamma, &g, sizeof(double)));
+    CUDA_CHECK(cudaMemcpyToSymbol(phys::d_gamma, &g, sizeof(double)));
+    phys::gamma = g;   // keep host mirror in sync for HD functions on host path
 }
 
 void set_gpu_physics_ch(double ch) {
-    CUDA_CHECK(cudaMemcpyToSymbol(phys::ch_glm, &ch, sizeof(double)));
+    CUDA_CHECK(cudaMemcpyToSymbol(phys::d_ch_glm, &ch, sizeof(double)));
+    phys::ch_glm = ch; // keep host mirror in sync
 }
 
 // ============================================================
@@ -657,7 +659,7 @@ void advance_first_order_gpu(
     // Mixed-GLM psi damping
     const double ch = [&]() {
         double h = 0.0;
-        CUDA_CHECK(cudaMemcpyFromSymbol(&h, phys::ch_glm, sizeof(double)));
+        CUDA_CHECK(cudaMemcpyFromSymbol(&h, phys::d_ch_glm, sizeof(double)));
         return h;
     }();
     if (ch > 0.0) {
@@ -742,7 +744,7 @@ void advance_second_order_gpu(
     // 5: mixed-GLM psi damping (Dedner eq. 45)
     const double ch = [&]() {
         double h = 0.0;
-        CUDA_CHECK(cudaMemcpyFromSymbol(&h, phys::ch_glm, sizeof(double)));
+        CUDA_CHECK(cudaMemcpyFromSymbol(&h, phys::d_ch_glm, sizeof(double)));
         return h;
     }();
     if (ch > 0.0) {
