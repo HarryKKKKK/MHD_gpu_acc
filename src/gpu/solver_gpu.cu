@@ -168,9 +168,14 @@ __device__ inline void reconstruct_muscl_hancock(
     const Conserved UL = phys::prim_to_cons(WL);
     const Conserved UR = phys::prim_to_cons(WR);
 
-    // Half-step evolution using physical flux (reads phys::ch_glm device var)
-    const Conserved FL = physical_flux(UL, dir);
-    const Conserved FR = physical_flux(UR, dir);
+    // Half-step predictor: use ch=0 so the ch²*Bₙ GLM term does not appear.
+    // With ch set to max signal speed (possibly large), including it here causes
+    // the psi predictor correction to blow up.  GLM cleaning still happens in the
+    // Riemann (corrector) step via phys::d_ch_glm.
+    const Conserved FL = (dir == Direction::X) ? phys::flux_x(UL, 0.0)
+                                               : phys::flux_y(UL, 0.0);
+    const Conserved FR = (dir == Direction::X) ? phys::flux_x(UR, 0.0)
+                                               : phys::flux_y(UR, 0.0);
     const Conserved half = 0.5 * dt_over_d * (FR - FL);
 
     UL_star = safe_cons(UL - half, UL);
