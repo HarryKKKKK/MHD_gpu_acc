@@ -223,11 +223,13 @@ int main(int argc, char** argv) {
                       << " t=" << t << " (dt_raw=" << dt_raw << "). Aborting.\n";
             break;
         }
-        // Warn if dt is suspiciously tiny (signal speed may have blown up).
-        constexpr double kDtFloor = 1.0e-14;
-        if (dt < kDtFloor) {
-            std::cerr << "[WARN]  dt=" << dt << " at step=" << step
-                      << " t=" << t << " — possible instability, stopping.\n";
+        // Warn if dt is suspiciously tiny relative to t_end (signal speed blowup).
+        // A dt more than 8 orders of magnitude below t_end/N_expected is pathological.
+        const double dt_floor = 1.0e-8 * cfg.t_end;
+        if (dt < dt_floor) {
+            std::cerr << "[WARN]  dt=" << std::scientific << dt
+                      << " (floor=" << dt_floor << ") at step=" << step
+                      << " t=" << t << " — numerical blowup, stopping.\n";
             break;
         }
 
