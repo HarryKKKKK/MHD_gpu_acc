@@ -14,7 +14,7 @@
 #
 #  Test case      Solver  Reference
 #  -----------    ------  -----------------------------------------
-#  shock_bubble   hll     Haas & Sturtevant (1987) Fig. 4, Ms=1.22
+#  shock_bubble   hllc    Haas & Sturtevant (1987) Fig. 4, Ms=1.22
 #                         9 snapshots at dimensionless t = 0.6..19.0
 #  brio_wu        hlld    Brio & Wu (1988) Fig. 4; Mignone et al. (2010) §4.2
 #                         γ=2, left(ρ=1,p=1,Bx=0.75,By=1), right(ρ=0.125,p=0.1,By=-1)
@@ -44,7 +44,7 @@ make gpu
 # ── Validation matrix ───────────────────────────────────────────────────────
 #   Parallel arrays: CASES[i] runs with SOLVERS[i]
 declare -a CASES=("shock_bubble" "brio_wu"  "orszag_tang")
-declare -a SOLVERS=("hll"        "hlld"     "hlld")
+declare -a SOLVERS=("hllc"       "hlld"     "hlld")
 
 for i in "${!CASES[@]}"; do
     case_name="${CASES[$i]}"
