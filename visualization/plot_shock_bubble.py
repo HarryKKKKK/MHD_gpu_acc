@@ -22,7 +22,7 @@ NX, NY   = 500, 197
 X_MIN, X_MAX = 0.0, 0.225
 Y_MIN, Y_MAX = 0.0, 0.089
 
-OUTPUT_DIR = "outputs/gpu_shock_bubble_hll_n1"
+OUTPUT_DIR = "outputs/gpu_shock_bubble_hllc_n1"
 PREFIX     = "shock_bubble_gpu"
 
 DENSITY_LEVELS = np.linspace(0.1, 2.8, 45)

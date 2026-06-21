@@ -39,20 +39,39 @@ echo ""
 
 echo "===== BUILD ====="
 make clean
-make gpu
+make cpu gpu
 
 # ── Validation matrix ───────────────────────────────────────────────────────
 #   Parallel arrays: CASES[i] runs with SOLVERS[i]
 declare -a CASES=("shock_bubble" "brio_wu"  "orszag_tang")
 declare -a SOLVERS=("hllc"       "hlld"     "hlld")
 
+# ── CPU runs ─────────────────────────────────────────────────────────────────
+echo ""
+echo "===== CPU RUNS ====="
+for i in "${!CASES[@]}"; do
+    case_name="${CASES[$i]}"
+    solver="${SOLVERS[$i]}"
+    out_dir="outputs/cpu_${case_name}_${solver}"
+
+    echo ""
+    echo "===== CPU | ${case_name} | solver=${solver} ====="
+    echo "Output: ${out_dir}"
+
+    OMP_NUM_THREADS=8 OMP_PROC_BIND=true OMP_PLACES=cores \
+        ./main_cpu "${case_name}" --solver "${solver}" --out "${out_dir}"
+done
+
+# ── GPU runs ─────────────────────────────────────────────────────────────────
+echo ""
+echo "===== GPU RUNS ====="
 for i in "${!CASES[@]}"; do
     case_name="${CASES[$i]}"
     solver="${SOLVERS[$i]}"
     out_dir="outputs/gpu_${case_name}_${solver}_n1"
 
     echo ""
-    echo "===== ${case_name} | solver=${solver} ====="
+    echo "===== GPU | ${case_name} | solver=${solver} ====="
     echo "Output: ${out_dir}"
 
     ./main_gpu 1 --case "${case_name}" --solver "${solver}" --out "${out_dir}"
@@ -62,6 +81,7 @@ echo ""
 echo "===== VALIDATION COMPLETE ====="
 echo "Output directories:"
 for i in "${!CASES[@]}"; do
+    echo "  outputs/cpu_${CASES[$i]}_${SOLVERS[$i]}/"
     echo "  outputs/gpu_${CASES[$i]}_${SOLVERS[$i]}_n1/"
 done
 echo ""
