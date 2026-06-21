@@ -159,9 +159,15 @@ HD inline Conserved hllc_flux(
     const double cfR = (dir == Direction::X) ? phys::fast_speed_x(VR)
                                              : phys::fast_speed_y(VR);
 
-    // Outer wave speeds — include GLM waves at ±ch (eq. 33 Dedner)
-    const double SL = fmin(fmin(unL - cfL, unR - cfR), -ch);
-    const double SR = fmax(fmax(unL + cfL, unR + cfR),  ch);
+    // Outer wave speeds — physical fast-magnetosonic bounds only.
+    // Do NOT include ±ch here: ch_glm is a global maximum and using it as a
+    // floor on per-interface bounds adds O(ch/cf - 1) excess dissipation on
+    // every cell whose local speed is below the domain maximum (e.g. the
+    // helium bubble interior in shock_bubble). The ±ch eigenvalues belong
+    // to the psi/GLM sub-system, not to the physical MHD waves, so they
+    // must not corrupt the rho/momentum/energy fluxes.
+    const double SL = fmin(unL - cfL, unR - cfR);
+    const double SR = fmax(unL + cfL, unR + cfR);
 
     const Conserved FL = (dir == Direction::X) ? phys::flux_x(UL, ch)
                                                : phys::flux_y(UL, ch);
@@ -286,9 +292,9 @@ HD inline Conserved hlld_flux(
     const double cfR = (dir == Direction::X) ? phys::fast_speed_x(VR)
                                              : phys::fast_speed_y(VR);
 
-    // Outer fast wave speeds (include GLM waves)
-    const double SL = fmin(fmin(unL - cfL, unR - cfR), -ch);
-    const double SR = fmax(fmax(unL + cfL, unR + cfR),  ch);
+    // Outer fast wave speeds — physical bounds only (see hllc_flux comment).
+    const double SL = fmin(unL - cfL, unR - cfR);
+    const double SR = fmax(unL + cfL, unR + cfR);
 
     // Fall back to HLL if outer waves degenerate
     const double denom_RL = SR - SL;
