@@ -1,2 +1,0 @@
-arch,case,solver,n,nx,ny,total_cells,total_steps,real_seconds,user_seconds,sys_seconds,max_rss_kb,git_branch,git_commit
-gpu,kelvin_helmholtz,hll,1,200,400,80000,5917,2.27,1.87,0.31,221060,main,6b62927

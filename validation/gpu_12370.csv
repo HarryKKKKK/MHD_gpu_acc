@@ -1,2 +1,0 @@
-arch,case,solver,n,nx,ny,total_cells,total_steps,real_seconds,user_seconds,sys_seconds,max_rss_kb,output_dir,git_branch,git_commit,cuda_arch
-gpu,kelvin_helmholtz,hll,1,200,400,80000,5917,1.67,1.22,0.29,124916,outputs/gpu_kelvin_helmholtz_hll_n1_12370,main,6b62927,-arch=sm_90
