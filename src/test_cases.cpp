@@ -192,7 +192,6 @@ CaseConfig get_case_config(CaseId id) {
             };
 
         case CaseId::ShockBubble: {
-            // Transmissive inflow/outflow; reflecting channel walls (top/bottom)
             CaseConfig cfg{
                 500, 197, 2,
                 0.0, 0.225, 0.0, 0.089,
@@ -200,7 +199,7 @@ CaseConfig get_case_config(CaseId id) {
                 /*gamma=*/1.4,
                 BoundaryConfig{
                     BoundaryType::Transmissive, BoundaryType::Transmissive,
-                    BoundaryType::Reflecting,   BoundaryType::Reflecting
+                    BoundaryType::Transmissive, BoundaryType::Transmissive
                 }
             };
 
