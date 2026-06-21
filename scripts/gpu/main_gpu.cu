@@ -112,6 +112,7 @@ static RunConfig parse_args(int argc, char** argv) {
         } else if (arg == "--solver" && i + 1 < argc) {
             std::string s = argv[++i];
             if      (s == "hll")   rc.solver = RiemannSolver::HLL;
+            else if (s == "hllc")  rc.solver = RiemannSolver::HLLC;
             else if (s == "hlld")  rc.solver = RiemannSolver::HLLD;
             else if (s == "force") rc.solver = RiemannSolver::FORCE;
             else throw std::runtime_error("Unknown solver: " + s);
@@ -165,6 +166,7 @@ int main(int argc, char** argv) {
     std::cout << "  Gamma  : " << cfg.gamma << "\n";
     std::cout << "  Solver : "
               << (rc.solver == RiemannSolver::HLL  ? "HLL"  :
+                  rc.solver == RiemannSolver::HLLC ? "HLLC" :
                   rc.solver == RiemannSolver::HLLD ? "HLLD" : "FORCE") << "\n";
     std::cout << "[GPU] nx: "          << cfg.nx            << "\n";
     std::cout << "[GPU] ny: "          << cfg.ny            << "\n";

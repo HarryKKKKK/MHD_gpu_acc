@@ -10,6 +10,7 @@
 //
 // Supported solvers:
 //   HLL   — HLL with MHD fast magnetosonic + GLM wave speeds
+//   HLLC  — HLLC (Toro et al. 1994); 3-wave, optimal for pure-hydro cases
 //   HLLD  — HLLD (Miyoshi & Kusano 2005); more accurate for MHD
 //   FORCE — Local FORCE (average of Lax-Friedrichs and Richtmyer)
 //
@@ -19,7 +20,7 @@
 
 enum class Direction { X, Y };
 
-enum class RiemannSolver { HLL, HLLD, FORCE };
+enum class RiemannSolver { HLL, HLLC, HLLD, FORCE };
 
 // ------------------------------------------------------------
 // Physical flux wrapper — uses phys::get_ch_glm() (host: inline double;
@@ -103,6 +104,134 @@ HD inline Conserved hll_flux(
     if (fabs(denom) < 1.0e-14) return 0.5 * (FL + FR);
 
     return (SR * FL - SL * FR + (SL * SR) * (UR - UL)) / denom;
+}
+
+// ============================================================
+// HLLC Riemann solver (Toro et al. 1994).
+//
+// 3-wave solver with a contact wave at SM.  Reduces to the
+// standard hydro HLLC when B = 0 (e.g. shock_bubble test).
+// For the general MHD case the tangential B fields are held
+// fixed across the contact — a valid first approximation when
+// |B| is small, and exact for pure hydro.
+//
+// References:
+//   Toro, Spruce & Speares (1994), Shock Waves 4, 25-34.
+//   Li (2005), J. Comput. Phys. 203, 344-357 (energy formula).
+// ============================================================
+HD inline Conserved hllc_flux(
+    const Conserved& UL,
+    const Conserved& UR,
+    Direction        dir,
+    double           ch
+) {
+    const Primitive VL = phys::cons_to_prim(UL);
+    const Primitive VR = phys::cons_to_prim(UR);
+
+    if (!primitive_is_physical(VL) || !primitive_is_physical(VR)) {
+        return hll_flux(UL, UR, dir, ch);
+    }
+
+    const double rhoL = VL.rho, rhoR = VR.rho;
+    const double pL   = VL.p,   pR   = VR.p;
+
+    double unL, unR, utL, utR, uwL, uwR;
+    double BnL, BnR, BtL, BtR, BwL, BwR;
+
+    if (dir == Direction::X) {
+        unL = VL.u;  unR = VR.u;
+        utL = VL.v;  utR = VR.v;
+        uwL = VL.w;  uwR = VR.w;
+        BnL = VL.Bx; BnR = VR.Bx;
+        BtL = VL.By; BtR = VR.By;
+        BwL = VL.Bz; BwR = VR.Bz;
+    } else {
+        unL = VL.v;  unR = VR.v;
+        utL = VL.u;  utR = VR.u;
+        uwL = VL.w;  uwR = VR.w;
+        BnL = VL.By; BnR = VR.By;
+        BtL = VL.Bx; BtR = VR.Bx;
+        BwL = VL.Bz; BwR = VR.Bz;
+    }
+
+    const double cfL = (dir == Direction::X) ? phys::fast_speed_x(VL)
+                                             : phys::fast_speed_y(VL);
+    const double cfR = (dir == Direction::X) ? phys::fast_speed_x(VR)
+                                             : phys::fast_speed_y(VR);
+
+    // Outer wave speeds — include GLM waves at ±ch (eq. 33 Dedner)
+    const double SL = fmin(fmin(unL - cfL, unR - cfR), -ch);
+    const double SR = fmax(fmax(unL + cfL, unR + cfR),  ch);
+
+    const Conserved FL = (dir == Direction::X) ? phys::flux_x(UL, ch)
+                                               : phys::flux_y(UL, ch);
+    const Conserved FR = (dir == Direction::X) ? phys::flux_x(UR, ch)
+                                               : phys::flux_y(UR, ch);
+
+    if (SL >= 0.0) return FL;
+    if (SR <= 0.0) return FR;
+
+    const double BmagL2 = BnL*BnL + BtL*BtL + BwL*BwL;
+    const double BmagR2 = BnR*BnR + BtR*BtR + BwR*BwR;
+    const double ptL = pL + 0.5*BmagL2;
+    const double ptR = pR + 0.5*BmagR2;
+
+    // Contact wave speed (Miyoshi & Kusano eq. 38)
+    const double numerSM = (SR - unR)*rhoR*unR - (SL - unL)*rhoL*unL + ptL - ptR;
+    const double denomSM = (SR - unR)*rhoR     - (SL - unL)*rhoL;
+    if (fabs(denomSM) < 1.0e-14) return hll_flux(UL, UR, dir, ch);
+    const double SM = numerSM / denomSM;
+
+    // Star densities (mass conservation across each outer wave)
+    const double rhoLs = rhoL * (SL - unL) / (SL - SM);
+    const double rhoRs = rhoR * (SR - unR) / (SR - SM);
+    if (rhoLs <= 0.0 || rhoRs <= 0.0 ||
+        !finite_number(rhoLs) || !finite_number(rhoRs)) {
+        return hll_flux(UL, UR, dir, ch);
+    }
+
+    // Total pressure in each star region (momentum conservation)
+    const double ptLs = ptL + rhoL*(SL - unL)*(SM - unL);
+    const double ptRs = ptR + rhoR*(SR - unR)*(SM - unR);
+
+    // GLM psi: linear interpolation (same treatment as HLLD)
+    const double psiM = 0.5*(VL.psi + VR.psi) - 0.5*ch*(BnR - BnL);
+
+    // Tangential B unchanged across contact (exact for B=0, HLLC approximation for MHD)
+    // Energy in star states via Li (2005) eq. 17 (generalises Toro to MHD)
+    const double BdotUL  = BnL*unL + BtL*utL + BwL*uwL;
+    const double BdotULs = BnL*SM  + BtL*utL + BwL*uwL;  // un -> SM, tangential unchanged
+    const double BdotUR  = BnR*unR + BtR*utR + BwR*uwR;
+    const double BdotURs = BnR*SM  + BtR*utR + BwR*uwR;
+
+    const double ELs = ((SL - unL)*UL.E - ptL*unL + ptLs*SM
+                        + BnL*(BdotULs - BdotUL)) / (SL - SM);
+    const double ERs = ((SR - unR)*UR.E - ptR*unR + ptRs*SM
+                        + BnR*(BdotURs - BdotUR)) / (SR - SM);
+
+    // Build conserved star state with direction rotation (same lambda pattern as HLLD)
+    auto build_conserved = [&](
+        double rhos, double uns, double uts, double uws,
+        double Bns,  double Bts, double Bws, double Es, double psis
+    ) -> Conserved {
+        if (dir == Direction::X) {
+            return Conserved(rhos, rhos*uns, rhos*uts, rhos*uws,
+                             Bns, Bts, Bws, Es, psis);
+        } else {
+            return Conserved(rhos, rhos*uts, rhos*uns, rhos*uws,
+                             Bts, Bns, Bws, Es, psis);
+        }
+    };
+
+    if (SM >= 0.0) {
+        const Conserved ULs = build_conserved(
+            rhoLs, SM, utL, uwL, BnL, BtL, BwL, ELs, psiM);
+        return FL + SL * (ULs - UL);
+    } else {
+        const Conserved URs = build_conserved(
+            rhoRs, SM, utR, uwR, BnR, BtR, BwR, ERs, psiM);
+        return FR + SR * (URs - UR);
+    }
 }
 
 // ============================================================
@@ -403,9 +532,9 @@ HD inline Conserved riemann_flux(
         return hll_flux(UL, UR, dir, ch);
     }
 
-    const Conserved F = (solver == RiemannSolver::HLLD)
-                      ? hlld_flux(UL, UR, dir, ch)
-                      : force_flux(UL, UR, dir, ch);
+    const Conserved F = (solver == RiemannSolver::HLLC)  ? hllc_flux(UL, UR, dir, ch)
+                      : (solver == RiemannSolver::HLLD)  ? hlld_flux(UL, UR, dir, ch)
+                                                         : force_flux(UL, UR, dir, ch);
 
     if (!finite_number(F.rho) || !finite_number(F.E) ||
         !finite_number(F.Bx)  || !finite_number(F.psi)) {
