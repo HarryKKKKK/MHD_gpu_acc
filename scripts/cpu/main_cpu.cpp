@@ -170,9 +170,12 @@ int main(int argc, char** argv) {
 
     // ---- Write initial condition ----
     if (rc.write_out)
-        write_all_fields(Uold, rc.out_dir, rc.case_name + "_t0");
+        write_all_fields(Uold, rc.out_dir, rc.case_name + "_cpu_t0");
 
     // ---- Time loop ----
+    const bool   has_snaps = !cfg.snapshot_times.empty();
+    std::size_t  snap_idx  = 0;
+
     double t     = 0.0;
     int    step  = 0;
     double t_print_next = 0.0;
@@ -183,8 +186,26 @@ int main(int argc, char** argv) {
     std::cout << "  ----  ----------  ----------  ----------\n";
 
     while (t < cfg.t_end) {
+        // Clamp dt to the next snapshot (or t_end), whichever comes first
+        double t_next = cfg.t_end;
+        if (has_snaps && snap_idx < cfg.snapshot_times.size())
+            t_next = std::min(t_next, cfg.snapshot_times[snap_idx]);
+
         const double dt_raw = compute_dt(Uold, cfg.cfl);
-        const double dt     = std::min(dt_raw, cfg.t_end - t);
+        const double dt     = std::min(dt_raw, t_next - t);
+
+        if (!std::isfinite(dt) || dt <= 0.0) {
+            std::cerr << "[ERROR] dt=" << dt << " at step=" << step
+                      << " t=" << t << " (dt_raw=" << dt_raw << "). Aborting.\n";
+            break;
+        }
+        const double dt_floor = 1.0e-8 * cfg.t_end;
+        if (dt < dt_floor) {
+            std::cerr << "[WARN]  dt=" << std::scientific << dt
+                      << " (floor=" << dt_floor << ") at step=" << step
+                      << " t=" << t << " — numerical blowup, stopping.\n";
+            break;
+        }
 
         if (rc.order == 2) {
             advance_second_order(Uold, Utmp, Unew, dt, ws, rc.solver, cfg.bc);
@@ -198,7 +219,6 @@ int main(int argc, char** argv) {
 
         // Console progress
         if (t >= t_print_next || t >= cfg.t_end) {
-            // Compute max |B| for diagnostics
             double max_B = 0.0;
             for (int j = Uold.j_begin(); j < Uold.j_end(); ++j)
                 for (int i = Uold.i_begin(); i < Uold.i_end(); ++i) {
@@ -212,6 +232,19 @@ int main(int argc, char** argv) {
                       << "  " << std::setw(10) << max_B << "\n";
             t_print_next = t + rc.print_interval;
         }
+
+        // Write snapshots whose time we have just reached
+        if (rc.write_out && has_snaps) {
+            while (snap_idx < cfg.snapshot_times.size() &&
+                   t >= cfg.snapshot_times[snap_idx] - 1e-12) {
+                std::cout << "  [snap] " << cfg.snapshot_tags[snap_idx]
+                          << "  t_phys=" << std::scientific << std::setprecision(6)
+                          << t << " s\n";
+                write_all_fields(Uold, rc.out_dir,
+                    rc.case_name + "_cpu_" + cfg.snapshot_tags[snap_idx]);
+                ++snap_idx;
+            }
+        }
     }
 
     auto wall_end = std::chrono::steady_clock::now();
@@ -219,10 +252,11 @@ int main(int argc, char** argv) {
     std::cout << "\n  Done: " << step << " steps in " << elapsed << " s  ("
               << static_cast<double>(step) / elapsed << " steps/s)\n";
 
-    // ---- Write final output ----
-    if (rc.write_out) {
+    // Write final state only for cases without a snapshot schedule
+    if (rc.write_out && !has_snaps) {
         write_all_fields(Uold, rc.out_dir,
-            rc.case_name + "_t" + std::to_string(static_cast<int>(std::round(cfg.t_end * 100))));
+            rc.case_name + "_cpu_t" +
+            std::to_string(static_cast<int>(std::round(cfg.t_end * 100))));
     }
 
     return 0;

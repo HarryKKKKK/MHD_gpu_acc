@@ -22,7 +22,7 @@ NX, NY   = 500, 197
 X_MIN, X_MAX = 0.0, 0.225
 Y_MIN, Y_MAX = 0.0, 0.089
 
-OUTPUT_DIR = "outputs/gpu_shock_bubble_hllc_n1"
+OUTPUT_DIR = "outputs/cpu_shock_bubble_hllc"
 PREFIX     = "shock_bubble_gpu"
 
 DENSITY_LEVELS = np.linspace(0.1, 2.8, 45)
@@ -91,7 +91,7 @@ for ax, (t_paper, tag, path) in zip(axes, available):
 
     ax.set_title(f"$t = {t_paper}$", fontsize=9, pad=2)
 
-fig.suptitle(r"Shock–bubble interaction, $M_s = 1.22$ (HLL)", fontsize=11, y=1.002)
+fig.suptitle(r"Shock–bubble interaction, $M_s = 1.22$ (HLLC)", fontsize=11, y=1.002)
 fig.tight_layout(h_pad=0.4)
 
 os.makedirs("figs", exist_ok=True)
