@@ -37,12 +37,13 @@ CPU_BUILD_DIR := $(BUILD_DIR)/cpu
 GPU_BUILD_DIR := $(BUILD_DIR)/gpu
 MPI_BUILD_DIR := $(BUILD_DIR)/mpi
 MPI_OMP_BUILD_DIR := $(BUILD_DIR)/mpi_omp
+BIN_DIR := bin
 
-CPU_TARGET := main_cpu
-CPU_SERIAL_TARGET := main_cpu_serial
-GPU_TARGET := main_gpu
-MPI_TARGET := main_mpi
-MPI_OMP_TARGET := main_mpi_omp
+CPU_TARGET := $(BIN_DIR)/main_cpu
+CPU_SERIAL_TARGET := $(BIN_DIR)/main_cpu_serial
+GPU_TARGET := $(BIN_DIR)/main_gpu
+MPI_TARGET := $(BIN_DIR)/main_mpi
+MPI_OMP_TARGET := $(BIN_DIR)/main_mpi_omp
 
 CPU_MAIN := scripts/cpu/main_cpu.cpp
 GPU_MAIN := scripts/gpu/main_gpu.cu
@@ -93,6 +94,7 @@ all: cpu cpu_serial mpi
 cpu: $(CPU_TARGET)
 
 $(CPU_TARGET): $(CPU_OBJS)
+	@mkdir -p $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) $(CPU_OBJS) -o $@ -lstdc++fs
 
 $(CPU_BUILD_DIR)/main_cpu.o: $(CPU_MAIN)
@@ -118,6 +120,7 @@ $(CPU_BUILD_DIR)/solver_cpu.o: src/cpu/solver_cpu.cpp
 cpu_serial: $(CPU_SERIAL_TARGET)
 
 $(CPU_SERIAL_TARGET): $(CPU_SERIAL_OBJS)
+	@mkdir -p $(BIN_DIR)
 	$(CXX) $(CXXFLAGS_BASE) $(CPU_SERIAL_OBJS) -o $@ -lstdc++fs
 
 $(CPU_BUILD_DIR)/main_cpu_serial.o: $(CPU_MAIN)
@@ -143,6 +146,7 @@ $(CPU_BUILD_DIR)/solver_cpu_serial.o: src/cpu/solver_cpu.cpp
 mpi: $(MPI_TARGET)
 
 $(MPI_TARGET): $(MPI_OBJS)
+	@mkdir -p $(BIN_DIR)
 	$(MPICXX) $(MPICXXFLAGS) $(MPI_OBJS) -o $@ -lstdc++fs
 
 $(MPI_BUILD_DIR)/main_mpi.o: $(MPI_MAIN)
@@ -168,6 +172,7 @@ $(MPI_BUILD_DIR)/solver_mpi.o: src/cpu/solver_mpi.cpp
 mpi_omp: $(MPI_OMP_TARGET)
 
 $(MPI_OMP_TARGET): $(MPI_OMP_OBJS)
+	@mkdir -p $(BIN_DIR)
 	$(MPICXX) $(MPICXXFLAGS_OMP) $(MPI_OMP_OBJS) -o $@ -lstdc++fs
 
 $(MPI_OMP_BUILD_DIR)/main_mpi.o: $(MPI_MAIN)
@@ -193,6 +198,7 @@ $(MPI_OMP_BUILD_DIR)/solver_mpi.o: src/cpu/solver_mpi.cpp
 gpu: $(GPU_TARGET)
 
 $(GPU_TARGET): $(GPU_OBJS)
+	@mkdir -p $(BIN_DIR)
 	$(NVCC) $(NVCCFLAGS) $(GPU_OBJS) -o $@ -lstdc++fs
 
 $(GPU_BUILD_DIR)/main_gpu.o: $(GPU_MAIN)
@@ -220,35 +226,35 @@ $(GPU_BUILD_DIR)/boundary_gpu.o: src/gpu/boundary_gpu.cu
 # =========================
 .PHONY: run_cpu
 run_cpu: $(CPU_TARGET)
-	./$(CPU_TARGET)
+	$(CPU_TARGET)
 
 .PHONY: run_cpu_serial
 run_cpu_serial: $(CPU_SERIAL_TARGET)
-	./$(CPU_SERIAL_TARGET)
+	$(CPU_SERIAL_TARGET)
 
 .PHONY: run_cpu_omp
 run_cpu_omp: $(CPU_TARGET)
-	OMP_NUM_THREADS=8 OMP_PROC_BIND=true OMP_PLACES=cores ./$(CPU_TARGET)
+	OMP_NUM_THREADS=8 OMP_PROC_BIND=true OMP_PLACES=cores $(CPU_TARGET)
 
 .PHONY: run_gpu
 run_gpu: $(GPU_TARGET)
-	./$(GPU_TARGET)
+	$(GPU_TARGET)
 
 .PHONY: run_mpi
 run_mpi: $(MPI_TARGET)
-	OMP_NUM_THREADS=1 mpirun -np 4 ./$(MPI_TARGET) 1 --timing-only
+	OMP_NUM_THREADS=1 mpirun -np 4 $(MPI_TARGET) 1 --timing-only
 
 .PHONY: run_mpi_output
 run_mpi_output: $(MPI_TARGET)
-	OMP_NUM_THREADS=1 mpirun -np 4 ./$(MPI_TARGET) 1 --output
+	OMP_NUM_THREADS=1 mpirun -np 4 $(MPI_TARGET) 1 --output
 
 .PHONY: run_mpi_omp
 run_mpi_omp: $(MPI_OMP_TARGET)
-	OMP_NUM_THREADS=4 OMP_PROC_BIND=true OMP_PLACES=cores mpirun -np 4 ./$(MPI_OMP_TARGET) 1 --timing-only
+	OMP_NUM_THREADS=4 OMP_PROC_BIND=true OMP_PLACES=cores mpirun -np 4 $(MPI_OMP_TARGET) 1 --timing-only
 
 # =========================
 # Clean
 # =========================
 .PHONY: clean
 clean:
-	rm -rf $(BUILD_DIR) $(CPU_TARGET) $(CPU_SERIAL_TARGET) $(GPU_TARGET) $(MPI_TARGET) $(MPI_OMP_TARGET)
+	rm -rf $(BUILD_DIR) $(BIN_DIR)

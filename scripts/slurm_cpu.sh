@@ -118,7 +118,7 @@ for CASE in "${CASES[@]}"; do
 
             /usr/bin/time -f "real_seconds=%e\nuser_seconds=%U\nsys_seconds=%S\nmax_rss_kb=%M" \
                 -o "$TIME_LOG" \
-                ./main_cpu "$CASE" --solver "$SOLVER" --order "$ORDER" --out "$OUT_DIR" \
+                ./bin/main_cpu "$CASE" --solver "$SOLVER" --order "$ORDER" --out "$OUT_DIR" \
                 2>&1 | tee "$RUN_LOG"
 
             echo "----- TIME -----"

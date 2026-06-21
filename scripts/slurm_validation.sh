@@ -59,7 +59,7 @@ for i in "${!CASES[@]}"; do
     echo "Output: ${out_dir}"
 
     OMP_NUM_THREADS=8 OMP_PROC_BIND=true OMP_PLACES=cores \
-        ./main_cpu "${case_name}" --solver "${solver}" --out "${out_dir}"
+        ./bin/main_cpu "${case_name}" --solver "${solver}" --out "${out_dir}"
 done
 
 # ── GPU runs ─────────────────────────────────────────────────────────────────
@@ -74,7 +74,7 @@ for i in "${!CASES[@]}"; do
     echo "===== GPU | ${case_name} | solver=${solver} ====="
     echo "Output: ${out_dir}"
 
-    ./main_gpu 1 --case "${case_name}" --solver "${solver}" --out "${out_dir}"
+    ./bin/main_gpu 1 --case "${case_name}" --solver "${solver}" --out "${out_dir}"
 done
 
 echo ""

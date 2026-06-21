@@ -86,7 +86,7 @@ run_and_record() {
 
     /usr/bin/time -f "real_seconds=%e\nuser_seconds=%U\nsys_seconds=%S\nmax_rss_kb=%M" \
         -o "$temp_time" \
-        ./main_gpu "$n_scale" --case "$case_name" --solver "$solver_name" --out "$out_dir" \
+        ./bin/main_gpu "$n_scale" --case "$case_name" --solver "$solver_name" --out "$out_dir" \
         2>&1 | tee "$temp_log"
 
     local nx ny cells steps real user sys rss
