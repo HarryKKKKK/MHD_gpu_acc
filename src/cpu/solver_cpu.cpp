@@ -302,63 +302,6 @@ double compute_dt(const Grid2D& grid, double cfl) {
 }
 
 // ============================================================
-// First-order Godunov with configurable Riemann solver and BC
-// ============================================================
-
-void advance_first_order(
-    const Grid2D&        Uold,
-    Grid2D&              Unew,
-    double               dt,
-    RiemannSolver        solver,
-    const BoundaryConfig& bc
-) {
-    const int ib = Uold.i_begin();
-    const int ie = Uold.i_end();
-    const int jb = Uold.j_begin();
-    const int je = Uold.j_end();
-
-    const double dt_over_dx = dt / Uold.dx();
-    const double dt_over_dy = dt / Uold.dy();
-    const double ch         = phys::ch_glm;
-
-#ifdef _OPENMP
-#pragma omp parallel for collapse(2) schedule(static)
-#endif
-    for (int j = jb; j < je; ++j) {
-        for (int i = ib; i < ie; ++i) {
-            const Conserved Fx_p = riemann_flux(
-                Uold(i,     j), Uold(i + 1, j), Direction::X, solver, ch);
-            const Conserved Fx_m = riemann_flux(
-                Uold(i - 1, j), Uold(i,     j), Direction::X, solver, ch);
-            const Conserved Fy_p = riemann_flux(
-                Uold(i, j),     Uold(i, j + 1), Direction::Y, solver, ch);
-            const Conserved Fy_m = riemann_flux(
-                Uold(i, j - 1), Uold(i, j),     Direction::Y, solver, ch);
-
-            Unew(i, j) = Uold(i, j)
-                       - dt_over_dx * (Fx_p - Fx_m)
-                       - dt_over_dy * (Fy_p - Fy_m);
-            if (!std::isfinite(Unew(i,j).rho) || !std::isfinite(Unew(i,j).E))
-                Unew(i,j) = Uold(i,j);
-        }
-    }
-
-    copy_ghost_cells(Uold, Unew);  // preserve Dirichlet ghost cells
-    apply_boundary(Unew, bc);
-    apply_psi_damping(Unew, dt);
-}
-
-// Backward-compatible convenience overload: HLL + all-transmissive
-void advance_first_order(
-    const Grid2D& Uold,
-    Grid2D&       Unew,
-    double        dt
-) {
-    static const BoundaryConfig all_transmissive{};
-    advance_first_order(Uold, Unew, dt, RiemannSolver::HLL, all_transmissive);
-}
-
-// ============================================================
 // Second-order MUSCL-Hancock, x-then-y dimensional splitting.
 //
 // Steps:

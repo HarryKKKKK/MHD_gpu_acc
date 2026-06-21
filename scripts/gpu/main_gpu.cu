@@ -97,7 +97,6 @@ static void write_all_fields(
 struct RunConfig {
     std::string   case_name = "kelvin_helmholtz";
     int           n_scale   = 1;
-    int           order     = 2;
     RiemannSolver solver    = RiemannSolver::HLLD;
     std::string   out_dir   = "output";
     bool          write_out = false;
@@ -116,8 +115,6 @@ static RunConfig parse_args(int argc, char** argv) {
             else if (s == "hlld")  rc.solver = RiemannSolver::HLLD;
             else if (s == "force") rc.solver = RiemannSolver::FORCE;
             else throw std::runtime_error("Unknown solver: " + s);
-        } else if (arg == "--order" && i + 1 < argc) {
-            rc.order = std::stoi(argv[++i]);
         } else if (arg == "--out" && i + 1 < argc) {
             rc.out_dir   = argv[++i];
             rc.write_out = true;
@@ -162,7 +159,6 @@ int main(int argc, char** argv) {
     std::cout << "=== MHD GLM GPU Solver ===\n";
     std::cout << "  Case   : " << rc.case_name << "\n";
     std::cout << "  n      : " << rc.n_scale << "\n";
-    std::cout << "  Order  : " << rc.order << "\n";
     std::cout << "  Gamma  : " << cfg.gamma << "\n";
     std::cout << "  Solver : "
               << (rc.solver == RiemannSolver::HLL  ? "HLL"  :
@@ -235,11 +231,7 @@ int main(int argc, char** argv) {
             break;
         }
 
-        if (rc.order == 2) {
-            advance_second_order_gpu(Uold, Utmp, Unew, ws, dt, rc.solver, cfg.bc);
-        } else {
-            advance_first_order_gpu(Uold, Unew, dt, rc.solver, cfg.bc);
-        }
+        advance_second_order_gpu(Uold, Utmp, Unew, ws, dt, rc.solver, cfg.bc);
 
         Uold.swap(Unew);
         t    += dt;

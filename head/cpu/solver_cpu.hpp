@@ -44,27 +44,6 @@ struct CpuWorkspace {
 double compute_dt(const Grid2D& grid, double cfl);
 
 // ============================================================
-// First-order Godunov, configurable Riemann solver.
-// bc controls ghost-cell boundary conditions after the update.
-// If any side uses BoundaryType::Dirichlet, copy_ghost_cells
-// must have been called externally before this function.
-// ============================================================
-void advance_first_order(
-    const Grid2D&        Uold,
-    Grid2D&              Unew,
-    double               dt,
-    RiemannSolver        solver,
-    const BoundaryConfig& bc
-);
-
-// Convenience overload: HLL + all-transmissive BC
-void advance_first_order(
-    const Grid2D& Uold,
-    Grid2D&       Unew,
-    double        dt
-);
-
-// ============================================================
 // Second-order MUSCL-Hancock with dimensional (Strang) splitting.
 // ws must be initialised with ws.init(cfg.nx, cfg.ny) before the loop.
 // ============================================================
