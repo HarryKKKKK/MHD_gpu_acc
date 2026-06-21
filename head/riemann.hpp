@@ -525,6 +525,44 @@ HD inline Conserved force_flux(
 }
 
 // ============================================================
+// GLM (psi-Bn) subsystem flux — exact upwind of the 2x2 linear
+// system with eigenvalues ±ch (Dedner et al. 2002, eq. 41-43).
+//
+//   Bn*  = 1/2 (BnL + BnR) - 1/(2 ch) (psiR - psiL)
+//   psi* = 1/2 (psiL + psiR) - ch/2  (BnR - BnL)
+//   F_Bn  = psi*
+//   F_psi = ch^2 * Bn*
+//
+// The cleaning term -ch/2 (BnR - BnL) in psi* is what transports
+// div(B) error out of the domain. HLLC/HLLD do NOT resolve this
+// pair (their star states pass Bn through and the bounds no longer
+// reach ±ch), so the Bn/psi flux components must be overwritten
+// with this exact value or divergence cleaning silently fails.
+// HLL already reproduces this algebraically (it keeps ±ch in its
+// bounds), so it is left untouched.
+// ============================================================
+HD inline void apply_glm_flux(
+    Conserved&       F,
+    const Conserved& UL,
+    const Conserved& UR,
+    Direction        dir,
+    double           ch
+) {
+    if (ch <= 0.0) return;  // GLM inactive (e.g. ch not yet set)
+    const double BnL  = (dir == Direction::X) ? UL.Bx : UL.By;
+    const double BnR  = (dir == Direction::X) ? UR.Bx : UR.By;
+    const double psiL = UL.psi;
+    const double psiR = UR.psi;
+
+    const double Bn_star  = 0.5*(BnL + BnR) - 0.5/ch*(psiR - psiL);
+    const double psi_star = 0.5*(psiL + psiR) - 0.5*ch*(BnR - BnL);
+
+    if (dir == Direction::X) F.Bx = psi_star;
+    else                     F.By = psi_star;
+    F.psi = ch*ch * Bn_star;
+}
+
+// ============================================================
 // Unified interface — explicit ch form
 // ============================================================
 HD inline Conserved riemann_flux(
@@ -538,14 +576,18 @@ HD inline Conserved riemann_flux(
         return hll_flux(UL, UR, dir, ch);
     }
 
-    const Conserved F = (solver == RiemannSolver::HLLC)  ? hllc_flux(UL, UR, dir, ch)
-                      : (solver == RiemannSolver::HLLD)  ? hlld_flux(UL, UR, dir, ch)
-                                                         : force_flux(UL, UR, dir, ch);
+    Conserved F = (solver == RiemannSolver::HLLC)  ? hllc_flux(UL, UR, dir, ch)
+                : (solver == RiemannSolver::HLLD)  ? hlld_flux(UL, UR, dir, ch)
+                                                   : force_flux(UL, UR, dir, ch);
 
     if (!finite_number(F.rho) || !finite_number(F.E) ||
         !finite_number(F.Bx)  || !finite_number(F.psi)) {
         return hll_flux(UL, UR, dir, ch);
     }
+
+    // Overwrite the psi-Bn pair with the exact GLM upwind flux so that
+    // divergence cleaning works with HLLC/HLLD (see apply_glm_flux).
+    apply_glm_flux(F, UL, UR, dir, ch);
     return F;
 }
 
