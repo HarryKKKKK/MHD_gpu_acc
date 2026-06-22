@@ -22,7 +22,7 @@ cd "$WORKDIR"
 GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
 GIT_COMMIT=$(git rev-parse --short HEAD   2>/dev/null || echo "unknown")
 
-mkdir -p logs validation outputs
+mkdir -p logs validation "outputs/${SLURM_JOB_ID}"
 
 # Fixed parameters for this timing run
 CASES=(brio_wu orszag_tang)
@@ -88,7 +88,7 @@ parse_timing() { grep '^\[TIMING\]' "$1" | grep -oP "(?<=${2}=)[^ ]+" | tail -1;
 run_case() {
     local case_name="$1"
 
-    local out_dir="outputs/cpu_timing_${case_name}_${SOLVER}_n${N_SCALE}_t${OMP_THREADS}"
+    local out_dir="outputs/${SLURM_JOB_ID}/${case_name}_${SOLVER}_n${N_SCALE}"
     mkdir -p "$out_dir"
 
     echo "===== RUN: ${case_name} | solver=${SOLVER} | n=${N_SCALE} | threads=${OMP_THREADS} ====="
@@ -166,6 +166,7 @@ tail -n +2 "$SUMMARY" | while IFS=',' read -r \
 done
 
 echo ""
-echo "Full CSV: ${SUMMARY}"
+echo "Output dir: outputs/${SLURM_JOB_ID}/"
+echo "Full CSV:   ${SUMMARY}"
 echo "===== END ====="
 date
