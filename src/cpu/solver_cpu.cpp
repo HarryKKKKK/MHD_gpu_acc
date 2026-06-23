@@ -356,21 +356,17 @@ void advance_second_order(
             const int local_i_face_m = (i - 1) - (ib - 1);
             const int local_i_face_p =  i      - (ib - 1);
 
+            // Safety: one NaN flux can silently corrupt every cell in a column
+            // via the y-sweep, so reset any non-finite cells immediately.
             Utmp(i, j) = Uold(i, j)
                 - dt_over_dx * (
                     ws.fx_cache[xface_idx(local_j, local_i_face_p, nx_faces)] -
                     ws.fx_cache[xface_idx(local_j, local_i_face_m, nx_faces)]
                 );
-        }
-    }
-
-    // Safety: reset any NaN cells from the x-sweep to their old values.
-    // One NaN flux can silently corrupt every cell in a column via the
-    // y-sweep (fmax(NaN,x)=x masks the damage in diagnostics).
-    for (int j = jb; j < je; ++j)
-        for (int i = ib; i < ie; ++i)
             if (!std::isfinite(Utmp(i,j).rho) || !std::isfinite(Utmp(i,j).E))
                 Utmp(i,j) = Uold(i,j);
+        }
+    }
 
     // Step 3: BC on Utmp — Dirichlet cells come from Uold
     copy_ghost_cells(Uold, Utmp);
@@ -396,14 +392,10 @@ void advance_second_order(
                     ws.fy_cache[yface_idx(local_j_face_p, local_i, nx_cells)] -
                     ws.fy_cache[yface_idx(local_j_face_m, local_i, nx_cells)]
                 );
-        }
-    }
-
-    // Safety: reset any NaN cells from the y-sweep.
-    for (int j = jb; j < je; ++j)
-        for (int i = ib; i < ie; ++i)
             if (!std::isfinite(Unew(i,j).rho) || !std::isfinite(Unew(i,j).E))
                 Unew(i,j) = Utmp(i,j);
+        }
+    }
 
     // Step 6: BC on Unew — Dirichlet cells come from Utmp
     copy_ghost_cells(Utmp, Unew);
