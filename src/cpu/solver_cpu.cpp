@@ -151,17 +151,19 @@ inline Conserved muscl_hancock_flux_x(
     return riemann_flux(Ui_R, Uip1_L, Direction::X, solver, phys::ch_glm);
 }
 
+// W is the transposed primitive cache (column-major: W[i * total_ny + j]).
+// y-direction accesses W(i, j-1..j+2) are then contiguous in memory.
 inline Conserved muscl_hancock_flux_y(
     const std::vector<Primitive>& W,
-    int total_nx,
+    int total_ny,
     int i, int j,
     double dt_over_dy,
     RiemannSolver solver
 ) {
     Conserved Uj_L, Uj_R, Ujp1_L, Ujp1_R;
 
-    const auto widx = [total_nx](int ci, int cj) -> std::size_t {
-        return static_cast<std::size_t>(cj) * total_nx + ci;
+    const auto widx = [total_ny](int ci, int cj) -> std::size_t {
+        return static_cast<std::size_t>(ci) * total_ny + cj;
     };
 
     reconstruct_cell_muscl_hancock(
@@ -243,7 +245,7 @@ void fill_y_face_cache(
     const int je = Uin.j_end();
 
     const int    nx_cells   = ie - ib;
-    const int    total_nx   = Uin.total_nx();
+    const int    total_ny   = Uin.total_ny();
     const double dt_over_dy = dt / Uin.dy();
 
 #ifdef _OPENMP
@@ -255,7 +257,7 @@ void fill_y_face_cache(
             const int local_i      = i - ib;
 
             fy_cache[yface_idx(local_j_face, local_i, nx_cells)] =
-                muscl_hancock_flux_y(W, total_nx, i, j, dt_over_dy, solver);
+                muscl_hancock_flux_y(W, total_ny, i, j, dt_over_dy, solver);
         }
     }
 }
@@ -401,7 +403,10 @@ void advance_second_order(
     // Steps 4-5: y-sweep  (Utmp → Unew)
     // ----------------------------------------------------------
 
-    // Rebuild primitive cache from Utmp (ghost cells updated by BC above).
+    // Rebuild primitive cache from Utmp (ghost cells updated by BC above),
+    // then transpose into prim_cache_T (column-major: [i * total_ny + j]) so that
+    // muscl_hancock_flux_y's W(i, j±k) accesses are stride-1 reads instead of
+    // the ~36 KB strides that cause L1 cache misses in the row-major layout.
 #ifdef _OPENMP
 #pragma omp parallel for collapse(2) schedule(static)
 #endif
@@ -410,7 +415,16 @@ void advance_second_order(
             ws.prim_cache[static_cast<std::size_t>(jj) * total_nx + ii] =
                 phys::cons_to_prim(Utmp(ii, jj));
 
-    fill_y_face_cache(Utmp, ws.prim_cache, dt, ws.fy_cache, solver);
+    ws.prim_cache_T.resize(total_cells);
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+    for (int ii = 0; ii < total_nx; ++ii)
+        for (int jj = 0; jj < total_ny; ++jj)
+            ws.prim_cache_T[static_cast<std::size_t>(ii) * total_ny + jj] =
+                ws.prim_cache[static_cast<std::size_t>(jj) * total_nx + ii];
+
+    fill_y_face_cache(Utmp, ws.prim_cache_T, dt, ws.fy_cache, solver);
 
 #ifdef _OPENMP
 #pragma omp parallel for collapse(2) schedule(static)

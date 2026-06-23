@@ -27,6 +27,11 @@ struct CpuWorkspace {
     // Populated before each directional sweep to avoid redundant cons_to_prim calls.
     std::vector<Primitive> prim_cache;
 
+    // Transposed primitive cache for y-sweep: total_ny * total_nx entries, column-major
+    // layout [i * total_ny + j]. Eliminates the ~36 KB stride-access cache misses that
+    // occur when muscl_hancock_flux_y reads W(i, j±k) from the row-major prim_cache.
+    std::vector<Primitive> prim_cache_T;
+
     void init(int nx_, int ny_) {
         nx = nx_;
         ny = ny_;
