@@ -151,28 +151,23 @@ inline Conserved muscl_hancock_flux_x(
     return riemann_flux(Ui_R, Uip1_L, Direction::X, solver, phys::ch_glm);
 }
 
-// W is the transposed primitive cache (column-major: W[i * total_ny + j]).
-// y-direction accesses W(i, j-1..j+2) are then contiguous in memory.
-inline Conserved muscl_hancock_flux_y(
-    const std::vector<Primitive>& W,
-    int total_ny,
-    int i, int j,
+// col[j] = W(i, j) for the current column i, preloaded from prim_cache.
+// All accesses col[j-1..j+2] are sequential reads within the same ~27 KB buffer.
+inline Conserved muscl_hancock_flux_y_col(
+    const Primitive* col,
+    int j,
     double dt_over_dy,
     RiemannSolver solver
 ) {
     Conserved Uj_L, Uj_R, Ujp1_L, Ujp1_R;
 
-    const auto widx = [total_ny](int ci, int cj) -> std::size_t {
-        return static_cast<std::size_t>(ci) * total_ny + cj;
-    };
-
     reconstruct_cell_muscl_hancock(
-        W[widx(i,j-1)], W[widx(i,j)], W[widx(i,j+1)],
+        col[j-1], col[j], col[j+1],
         dt_over_dy, Direction::Y,
         Uj_L, Uj_R
     );
     reconstruct_cell_muscl_hancock(
-        W[widx(i,j)], W[widx(i,j+1)], W[widx(i,j+2)],
+        col[j], col[j+1], col[j+2],
         dt_over_dy, Direction::Y,
         Ujp1_L, Ujp1_R
     );
@@ -245,21 +240,39 @@ void fill_y_face_cache(
     const int je = Uin.j_end();
 
     const int    nx_cells   = ie - ib;
+    const int    total_nx   = Uin.total_nx();
     const int    total_ny   = Uin.total_ny();
     const double dt_over_dy = dt / Uin.dy();
 
+    // Parallelize over columns. Each thread preloads one column of W(i, *)
+    // into a private buffer (~total_ny × 72 B ≈ 28 KB, fits in L1). The
+    // strided read from prim_cache happens once per column; all subsequent
+    // face computations read sequentially from that buffer.
 #ifdef _OPENMP
-#pragma omp parallel for collapse(2) schedule(static)
+#pragma omp parallel
+    {
+        std::vector<Primitive> col(total_ny);
+#pragma omp for schedule(static)
 #endif
-    for (int j = jb - 1; j < je; ++j) {
         for (int i = ib; i < ie; ++i) {
-            const int local_j_face = j - (jb - 1);
-            const int local_i      = i - ib;
+            const int local_i = i - ib;
 
-            fy_cache[yface_idx(local_j_face, local_i, nx_cells)] =
-                muscl_hancock_flux_y(W, total_ny, i, j, dt_over_dy, solver);
+#ifdef _OPENMP
+#else
+            std::vector<Primitive> col(total_ny);
+#endif
+            for (int jj = 0; jj < total_ny; ++jj)
+                col[jj] = W[static_cast<std::size_t>(jj) * total_nx + i];
+
+            for (int j = jb - 1; j < je; ++j) {
+                const int local_j_face = j - (jb - 1);
+                fy_cache[yface_idx(local_j_face, local_i, nx_cells)] =
+                    muscl_hancock_flux_y_col(col.data(), j, dt_over_dy, solver);
+            }
         }
+#ifdef _OPENMP
     }
+#endif
 }
 
 void apply_psi_damping(Grid2D& grid, double dt) {
@@ -403,10 +416,7 @@ void advance_second_order(
     // Steps 4-5: y-sweep  (Utmp → Unew)
     // ----------------------------------------------------------
 
-    // Rebuild primitive cache from Utmp (ghost cells updated by BC above),
-    // then transpose into prim_cache_T (column-major: [i * total_ny + j]) so that
-    // muscl_hancock_flux_y's W(i, j±k) accesses are stride-1 reads instead of
-    // the ~36 KB strides that cause L1 cache misses in the row-major layout.
+    // Rebuild primitive cache from Utmp (ghost cells updated by BC above).
 #ifdef _OPENMP
 #pragma omp parallel for collapse(2) schedule(static)
 #endif
@@ -415,16 +425,7 @@ void advance_second_order(
             ws.prim_cache[static_cast<std::size_t>(jj) * total_nx + ii] =
                 phys::cons_to_prim(Utmp(ii, jj));
 
-    ws.prim_cache_T.resize(total_cells);
-#ifdef _OPENMP
-#pragma omp parallel for schedule(static)
-#endif
-    for (int ii = 0; ii < total_nx; ++ii)
-        for (int jj = 0; jj < total_ny; ++jj)
-            ws.prim_cache_T[static_cast<std::size_t>(ii) * total_ny + jj] =
-                ws.prim_cache[static_cast<std::size_t>(jj) * total_nx + ii];
-
-    fill_y_face_cache(Utmp, ws.prim_cache_T, dt, ws.fy_cache, solver);
+    fill_y_face_cache(Utmp, ws.prim_cache, dt, ws.fy_cache, solver);
 
 #ifdef _OPENMP
 #pragma omp parallel for collapse(2) schedule(static)
