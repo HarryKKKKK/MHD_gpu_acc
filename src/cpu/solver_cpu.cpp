@@ -86,18 +86,14 @@ inline Primitive limited_slope(
 // ============================================================
 
 inline void reconstruct_cell_muscl_hancock(
-    const Conserved& Um,
-    const Conserved& Uc,
-    const Conserved& Up,
+    const Primitive& Wm,
+    const Primitive& Wc,
+    const Primitive& Wp,
     double           dt_over_d,
     Direction        dir,
     Conserved&       U_left_star,
     Conserved&       U_right_star
 ) {
-    const Primitive Wm = phys::cons_to_prim(Um);
-    const Primitive Wc = phys::cons_to_prim(Uc);
-    const Primitive Wp = phys::cons_to_prim(Up);
-
     const Primitive slope = limited_slope(Wm, Wc, Wp);
 
     Primitive W_left  = Wc - 0.5 * slope;
@@ -129,20 +125,25 @@ inline void reconstruct_cell_muscl_hancock(
 // ============================================================
 
 inline Conserved muscl_hancock_flux_x(
-    const Grid2D& U,
+    const std::vector<Primitive>& W,
+    int total_nx,
     int i, int j,
     double dt_over_dx,
     RiemannSolver solver
 ) {
     Conserved Ui_L, Ui_R, Uip1_L, Uip1_R;
 
+    const auto widx = [total_nx](int ci, int cj) -> std::size_t {
+        return static_cast<std::size_t>(cj) * total_nx + ci;
+    };
+
     reconstruct_cell_muscl_hancock(
-        U(i - 1, j), U(i, j), U(i + 1, j),
+        W[widx(i-1,j)], W[widx(i,j)], W[widx(i+1,j)],
         dt_over_dx, Direction::X,
         Ui_L, Ui_R
     );
     reconstruct_cell_muscl_hancock(
-        U(i, j), U(i + 1, j), U(i + 2, j),
+        W[widx(i,j)], W[widx(i+1,j)], W[widx(i+2,j)],
         dt_over_dx, Direction::X,
         Uip1_L, Uip1_R
     );
@@ -151,20 +152,25 @@ inline Conserved muscl_hancock_flux_x(
 }
 
 inline Conserved muscl_hancock_flux_y(
-    const Grid2D& U,
+    const std::vector<Primitive>& W,
+    int total_nx,
     int i, int j,
     double dt_over_dy,
     RiemannSolver solver
 ) {
     Conserved Uj_L, Uj_R, Ujp1_L, Ujp1_R;
 
+    const auto widx = [total_nx](int ci, int cj) -> std::size_t {
+        return static_cast<std::size_t>(cj) * total_nx + ci;
+    };
+
     reconstruct_cell_muscl_hancock(
-        U(i, j - 1), U(i, j), U(i, j + 1),
+        W[widx(i,j-1)], W[widx(i,j)], W[widx(i,j+1)],
         dt_over_dy, Direction::Y,
         Uj_L, Uj_R
     );
     reconstruct_cell_muscl_hancock(
-        U(i, j), U(i, j + 1), U(i, j + 2),
+        W[widx(i,j)], W[widx(i,j+1)], W[widx(i,j+2)],
         dt_over_dy, Direction::Y,
         Ujp1_L, Ujp1_R
     );
@@ -191,6 +197,7 @@ inline int yface_idx(int local_j_face, int local_i, int nx_cells) {
 
 void fill_x_face_cache(
     const Grid2D& Uin,
+    const std::vector<Primitive>& W,
     double dt,
     std::vector<Conserved>& fx_cache,
     RiemannSolver solver
@@ -201,6 +208,7 @@ void fill_x_face_cache(
     const int je = Uin.j_end();
 
     const int    nx_faces    = (ie - ib) + 1;
+    const int    total_nx    = Uin.total_nx();
     const double dt_over_dx  = dt / Uin.dx();
 
 #ifdef _OPENMP
@@ -212,7 +220,7 @@ void fill_x_face_cache(
             const int local_i_face = i - (ib - 1);
 
             fx_cache[xface_idx(local_j, local_i_face, nx_faces)] =
-                muscl_hancock_flux_x(Uin, i, j, dt_over_dx, solver);
+                muscl_hancock_flux_x(W, total_nx, i, j, dt_over_dx, solver);
         }
     }
 }
@@ -224,6 +232,7 @@ void fill_x_face_cache(
 
 void fill_y_face_cache(
     const Grid2D& Uin,
+    const std::vector<Primitive>& W,
     double dt,
     std::vector<Conserved>& fy_cache,
     RiemannSolver solver
@@ -234,6 +243,7 @@ void fill_y_face_cache(
     const int je = Uin.j_end();
 
     const int    nx_cells   = ie - ib;
+    const int    total_nx   = Uin.total_nx();
     const double dt_over_dy = dt / Uin.dy();
 
 #ifdef _OPENMP
@@ -245,7 +255,7 @@ void fill_y_face_cache(
             const int local_i      = i - ib;
 
             fy_cache[yface_idx(local_j_face, local_i, nx_cells)] =
-                muscl_hancock_flux_y(Uin, i, j, dt_over_dy, solver);
+                muscl_hancock_flux_y(W, total_nx, i, j, dt_over_dy, solver);
         }
     }
 }
@@ -341,11 +351,26 @@ void advance_second_order(
     const double dt_over_dx = dt / Uold.dx();
     const double dt_over_dy = dt / Uold.dy();
 
+    const int total_nx = Uold.total_nx();
+    const int total_ny = Uold.total_ny();
+    const std::size_t total_cells = static_cast<std::size_t>(total_nx) * total_ny;
+    ws.prim_cache.resize(total_cells);
+
     // ----------------------------------------------------------
     // Steps 1-2: x-sweep  (Uold → Utmp)
     // ----------------------------------------------------------
 
-    fill_x_face_cache(Uold, dt, ws.fx_cache, solver);
+    // Pre-compute all primitives once; fill_x_face_cache reads from this cache
+    // instead of calling cons_to_prim per-face, eliminating ~5x redundant conversions.
+#ifdef _OPENMP
+#pragma omp parallel for collapse(2) schedule(static)
+#endif
+    for (int jj = 0; jj < total_ny; ++jj)
+        for (int ii = 0; ii < total_nx; ++ii)
+            ws.prim_cache[static_cast<std::size_t>(jj) * total_nx + ii] =
+                phys::cons_to_prim(Uold(ii, jj));
+
+    fill_x_face_cache(Uold, ws.prim_cache, dt, ws.fx_cache, solver);
 
 #ifdef _OPENMP
 #pragma omp parallel for collapse(2) schedule(static)
@@ -376,7 +401,16 @@ void advance_second_order(
     // Steps 4-5: y-sweep  (Utmp → Unew)
     // ----------------------------------------------------------
 
-    fill_y_face_cache(Utmp, dt, ws.fy_cache, solver);
+    // Rebuild primitive cache from Utmp (ghost cells updated by BC above).
+#ifdef _OPENMP
+#pragma omp parallel for collapse(2) schedule(static)
+#endif
+    for (int jj = 0; jj < total_ny; ++jj)
+        for (int ii = 0; ii < total_nx; ++ii)
+            ws.prim_cache[static_cast<std::size_t>(jj) * total_nx + ii] =
+                phys::cons_to_prim(Utmp(ii, jj));
+
+    fill_y_face_cache(Utmp, ws.prim_cache, dt, ws.fy_cache, solver);
 
 #ifdef _OPENMP
 #pragma omp parallel for collapse(2) schedule(static)
