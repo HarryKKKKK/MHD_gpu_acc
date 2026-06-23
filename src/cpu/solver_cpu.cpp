@@ -151,23 +151,26 @@ inline Conserved muscl_hancock_flux_x(
     return riemann_flux(Ui_R, Uip1_L, Direction::X, solver, phys::ch_glm);
 }
 
-// col[j] = W(i, j) for the current column i, preloaded from prim_cache.
-// All accesses col[j-1..j+2] are sequential reads within the same ~27 KB buffer.
-inline Conserved muscl_hancock_flux_y_col(
-    const Primitive* col,
-    int j,
+inline Conserved muscl_hancock_flux_y(
+    const std::vector<Primitive>& W,
+    int total_nx,
+    int i, int j,
     double dt_over_dy,
     RiemannSolver solver
 ) {
     Conserved Uj_L, Uj_R, Ujp1_L, Ujp1_R;
 
+    const auto widx = [total_nx](int ci, int cj) -> std::size_t {
+        return static_cast<std::size_t>(cj) * total_nx + ci;
+    };
+
     reconstruct_cell_muscl_hancock(
-        col[j-1], col[j], col[j+1],
+        W[widx(i,j-1)], W[widx(i,j)], W[widx(i,j+1)],
         dt_over_dy, Direction::Y,
         Uj_L, Uj_R
     );
     reconstruct_cell_muscl_hancock(
-        col[j], col[j+1], col[j+2],
+        W[widx(i,j)], W[widx(i,j+1)], W[widx(i,j+2)],
         dt_over_dy, Direction::Y,
         Ujp1_L, Ujp1_R
     );
@@ -241,38 +244,20 @@ void fill_y_face_cache(
 
     const int    nx_cells   = ie - ib;
     const int    total_nx   = Uin.total_nx();
-    const int    total_ny   = Uin.total_ny();
     const double dt_over_dy = dt / Uin.dy();
 
-    // Parallelize over columns. Each thread preloads one column of W(i, *)
-    // into a private buffer (~total_ny × 72 B ≈ 28 KB, fits in L1). The
-    // strided read from prim_cache happens once per column; all subsequent
-    // face computations read sequentially from that buffer.
 #ifdef _OPENMP
-#pragma omp parallel
-    {
-        std::vector<Primitive> col(total_ny);
-#pragma omp for schedule(static)
+#pragma omp parallel for collapse(2) schedule(static)
 #endif
+    for (int j = jb - 1; j < je; ++j) {
         for (int i = ib; i < ie; ++i) {
-            const int local_i = i - ib;
+            const int local_j_face = j - (jb - 1);
+            const int local_i      = i - ib;
 
-#ifdef _OPENMP
-#else
-            std::vector<Primitive> col(total_ny);
-#endif
-            for (int jj = 0; jj < total_ny; ++jj)
-                col[jj] = W[static_cast<std::size_t>(jj) * total_nx + i];
-
-            for (int j = jb - 1; j < je; ++j) {
-                const int local_j_face = j - (jb - 1);
-                fy_cache[yface_idx(local_j_face, local_i, nx_cells)] =
-                    muscl_hancock_flux_y_col(col.data(), j, dt_over_dy, solver);
-            }
+            fy_cache[yface_idx(local_j_face, local_i, nx_cells)] =
+                muscl_hancock_flux_y(W, total_nx, i, j, dt_over_dy, solver);
         }
-#ifdef _OPENMP
     }
-#endif
 }
 
 void apply_psi_damping(Grid2D& grid, double dt) {
