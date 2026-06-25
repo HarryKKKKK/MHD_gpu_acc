@@ -15,14 +15,24 @@ SLURM_SUBMIT_DIR="${SLURM_SUBMIT_DIR:-$(pwd)}"
 WORKDIR="${WORKDIR:-${SLURM_SUBMIT_DIR}}"
 cd "$WORKDIR"
 
+GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+GIT_COMMIT=$(git rev-parse --short HEAD   2>/dev/null || echo "unknown")
+
 mkdir -p logs validation outputs
 
-# Override on the command line like:
-# CASES_STR="kelvin_helmholtz" SOLVERS_STR="hll" ORDERS_STR="2" sbatch scripts/slurm_cpu.sh
+# Override any of these on the command line before sbatch, e.g.:
+#   SCALES_STR="1 2 4" CASES_STR="kelvin_helmholtz" SOLVERS_STR="hlld" sbatch scripts/slurm_cpu.sh
+#
+# SCALES_STR : weak-scaling factors n (grid scaled n× in each dimension per run)
+# CASES_STR  : space-separated test case names
+# SOLVERS_STR: space-separated Riemann solver names (hll hlld force)
+read -r -a SCALES  <<< "${SCALES_STR:-1}"
 read -r -a CASES   <<< "${CASES_STR:-kelvin_helmholtz}"
 read -r -a SOLVERS <<< "${SOLVERS_STR:-hll hlld force}"
-read -r -a ORDERS  <<< "${ORDERS_STR:-1 2}"
 
+# ------------------------------------------------------------------
+# Detect how many physical cores are available on this node.
+# ------------------------------------------------------------------
 detect_cpus_on_node() {
     if [ -n "${SLURM_CPUS_ON_NODE:-}" ]; then
         echo "${SLURM_CPUS_ON_NODE}"
@@ -52,13 +62,15 @@ echo "JobID              : ${SLURM_JOB_ID}"
 echo "Host               : $(hostname)"
 echo "Start              : $(date)"
 echo "Workdir            : ${WORKDIR}"
+echo "Git Branch         : ${GIT_BRANCH}"
+echo "Git Commit         : ${GIT_COMMIT}"
 echo "Partition          : ${SLURM_JOB_PARTITION:-unknown}"
 echo "SLURM_CPUS_ON_NODE : ${SLURM_CPUS_ON_NODE:-unset}"
 echo "Detected CPUs/node : ${CPUS_ON_NODE}"
 echo "OMP_THREADS        : ${OMP_THREADS}"
+echo "SCALES             : ${SCALES[*]}"
 echo "CASES              : ${CASES[*]}"
 echo "SOLVERS            : ${SOLVERS[*]}"
-echo "ORDERS             : ${ORDERS[*]}"
 echo ""
 
 echo "===== CPU TOPOLOGY ====="
@@ -77,54 +89,85 @@ echo "===== BUILD ====="
 make clean
 make cpu
 
+# ------------------------------------------------------------------
+# Summary CSV header
+# ------------------------------------------------------------------
 SUMMARY="validation/cpu_omp_${SLURM_JOB_ID}.csv"
-echo "arch,case,solver,order,threads,nx,ny,total_cells,total_steps,elapsed_s,real_seconds,user_seconds,sys_seconds,max_rss_kb,run_log,time_log" > "$SUMMARY"
+echo "arch,case,solver,n,threads,nx,ny,total_cells,steps,elapsed_s,steps_per_s,Mcell_updates_s,real_s,user_s,sys_s,max_rss_kb,git_branch,git_commit" \
+    > "$SUMMARY"
 
-# Parse fields from main_cpu stdout.
-# Lines of interest:
-#   "  Grid      : NX x NY"
-#   "  Done: STEPS steps in ELAPSED s  (...)"
-extract_cpu_fields() {
-    local run_log="$1"
-    local nx ny cells steps elapsed
-    nx=$(awk '/Grid[[:space:]]*:/{print $3}' "$run_log")
-    ny=$(awk '/Grid[[:space:]]*:/{print $5}' "$run_log")
-    cells=$(( ${nx:-0} * ${ny:-0} ))
-    steps=$(awk '/Done:/{print $2}' "$run_log")
-    elapsed=$(awk '/Done:/{print $5}' "$run_log")
-    echo "${nx},${ny},${cells},${steps},${elapsed}"
+# ------------------------------------------------------------------
+# Parse the machine-readable [TIMING] line emitted by main_cpu.
+# Format: [TIMING] n=N nx=NX ny=NY steps=S elapsed_s=E steps_per_s=P Mcell_updates_s=M
+# ------------------------------------------------------------------
+parse_timing_line() {
+    local log="$1"
+    local field="$2"
+    grep '^\[TIMING\]' "$log" | grep -oP "(?<=${field}=)[^ ]+" | tail -1
 }
 
-append_row() {
-    local solver_name="$1" order="$2" case_name="$3" run_log="$4" time_log="$5"
-    local fields real user sys rss
-    fields=$(extract_cpu_fields "$run_log")
-    real=$(awk -F '=' '/real_seconds/{print $2}' "$time_log")
-    user=$(awk -F '=' '/user_seconds/{print $2}' "$time_log")
-    sys=$(awk -F '=' '/sys_seconds/{print $2}' "$time_log")
-    rss=$(awk -F '=' '/max_rss_kb/{print $2}' "$time_log")
-    echo "cpu_omp,${case_name},${solver_name},${order},${OMP_THREADS},${fields},${real},${user},${sys},${rss},${run_log},${time_log}" >> "$SUMMARY"
+# ------------------------------------------------------------------
+# One run: build a row in the summary CSV.
+# ------------------------------------------------------------------
+run_and_record() {
+    local case_name="$1"
+    local solver="$2"
+    local n_scale="$3"
+
+    local out_dir="outputs/cpu_${case_name}_${solver}_n${n_scale}_t${OMP_THREADS}"
+    mkdir -p "$out_dir"
+
+    echo ""
+    echo "===== CPU OMP RUN: case=${case_name}, solver=${solver}, n=${n_scale}, threads=${OMP_THREADS} ====="
+
+    local temp_log temp_time
+    temp_log=$(mktemp)
+    temp_time=$(mktemp)
+
+    /usr/bin/time -f "real_seconds=%e\nuser_seconds=%U\nsys_seconds=%S\nmax_rss_kb=%M" \
+        -o "$temp_time" \
+        ./bin/main_cpu "$case_name" --n "$n_scale" --solver "$solver" --out "$out_dir" \
+        2>&1 | tee "$temp_log"
+
+    echo "----- TIME -----"
+    cat "$temp_time"
+
+    # Parse fields from the [TIMING] line
+    local n nx ny steps elapsed steps_per_s Mcell
+    n=$(        parse_timing_line "$temp_log" "n")
+    nx=$(       parse_timing_line "$temp_log" "nx")
+    ny=$(       parse_timing_line "$temp_log" "ny")
+    steps=$(    parse_timing_line "$temp_log" "steps")
+    elapsed=$(  parse_timing_line "$temp_log" "elapsed_s")
+    steps_per_s=$(parse_timing_line "$temp_log" "steps_per_s")
+    Mcell=$(    parse_timing_line "$temp_log" "Mcell_updates_s")
+    local cells=$(( ${nx:-0} * ${ny:-0} ))
+
+    # Parse /usr/bin/time fields
+    local real user sys rss
+    real=$(awk -F '=' '/real_seconds/{print $2}' "$temp_time")
+    user=$(awk -F '=' '/user_seconds/{print $2}' "$temp_time")
+    sys=$( awk -F '=' '/sys_seconds/{print $2}'  "$temp_time")
+    rss=$( awk -F '=' '/max_rss_kb/{print $2}'   "$temp_time")
+
+    echo "------------------------------------------------------------"
+    echo "[TIMING RECORDED] elapsed=${elapsed}s | steps=${steps} | Mcell_updates/s=${Mcell}"
+    echo "[WALL TIME]       real=${real}s | user=${user}s | sys=${sys}s | RSS=${rss}KB"
+    echo "------------------------------------------------------------"
+
+    echo "cpu_omp,${case_name},${solver},${n:-${n_scale}},${OMP_THREADS},${nx},${ny},${cells},${steps},${elapsed},${steps_per_s},${Mcell},${real},${user},${sys},${rss},${GIT_BRANCH},${GIT_COMMIT}" \
+        >> "$SUMMARY"
+
+    rm -f "$temp_log" "$temp_time"
 }
 
-for CASE in "${CASES[@]}"; do
-    for SOLVER in "${SOLVERS[@]}"; do
-        for ORDER in "${ORDERS[@]}"; do
-            echo ""
-            echo "===== CPU OMP RUN: case=${CASE}, solver=${SOLVER}, order=${ORDER}, threads=${OMP_THREADS} ====="
-
-            OUT_DIR="outputs/${CASE}_${SOLVER}_o${ORDER}_t${OMP_THREADS}"
-            RUN_LOG="logs/cpu_${CASE}_${SOLVER}_o${ORDER}_t${OMP_THREADS}_${SLURM_JOB_ID}.log"
-            TIME_LOG="logs/cpu_${CASE}_${SOLVER}_o${ORDER}_t${OMP_THREADS}_${SLURM_JOB_ID}.time"
-
-            /usr/bin/time -f "real_seconds=%e\nuser_seconds=%U\nsys_seconds=%S\nmax_rss_kb=%M" \
-                -o "$TIME_LOG" \
-                ./bin/main_cpu "$CASE" --solver "$SOLVER" --order "$ORDER" --out "$OUT_DIR" \
-                2>&1 | tee "$RUN_LOG"
-
-            echo "----- TIME -----"
-            cat "$TIME_LOG"
-
-            append_row "$SOLVER" "$ORDER" "$CASE" "$RUN_LOG" "$TIME_LOG"
+# ------------------------------------------------------------------
+# Main sweep: for each (n, case, solver) combination
+# ------------------------------------------------------------------
+for N in "${SCALES[@]}"; do
+    for CASE in "${CASES[@]}"; do
+        for SOLVER in "${SOLVERS[@]}"; do
+            run_and_record "$CASE" "$SOLVER" "$N"
         done
     done
 done

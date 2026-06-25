@@ -23,11 +23,16 @@ struct CpuWorkspace {
     // y-face flux cache: nx * (ny+1) entries
     std::vector<Conserved> fy_cache;
 
+    // Full-grid primitive cache (including ghost cells): total_nx * total_ny entries.
+    // Populated before each directional sweep to avoid redundant cons_to_prim calls.
+    std::vector<Primitive> prim_cache;
+
     void init(int nx_, int ny_) {
         nx = nx_;
         ny = ny_;
         fx_cache.resize(static_cast<std::size_t>(nx + 1) * ny);
         fy_cache.resize(static_cast<std::size_t>(nx) * (ny + 1));
+        // prim_cache is lazily sized in advance_second_order (needs grid's ng).
     }
 
     bool is_initialized() const {
@@ -42,27 +47,6 @@ struct CpuWorkspace {
 // Also sets phys::ch_glm = max signal speed for this step.
 // ============================================================
 double compute_dt(const Grid2D& grid, double cfl);
-
-// ============================================================
-// First-order Godunov, configurable Riemann solver.
-// bc controls ghost-cell boundary conditions after the update.
-// If any side uses BoundaryType::Dirichlet, copy_ghost_cells
-// must have been called externally before this function.
-// ============================================================
-void advance_first_order(
-    const Grid2D&        Uold,
-    Grid2D&              Unew,
-    double               dt,
-    RiemannSolver        solver,
-    const BoundaryConfig& bc
-);
-
-// Convenience overload: HLL + all-transmissive BC
-void advance_first_order(
-    const Grid2D& Uold,
-    Grid2D&       Unew,
-    double        dt
-);
 
 // ============================================================
 // Second-order MUSCL-Hancock with dimensional (Strang) splitting.

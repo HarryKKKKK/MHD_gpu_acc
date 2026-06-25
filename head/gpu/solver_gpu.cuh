@@ -40,17 +40,6 @@ void free_gpu_workspace(GpuWorkspace& ws);
 double compute_dt_gpu(const Grid2DGPU& grid, GpuWorkspace& ws, double cfl);
 
 // ============================================================
-// Advance — first-order Godunov
-// ============================================================
-void advance_first_order_gpu(
-    const Grid2DGPU& Uold,
-    Grid2DGPU&       Unew,
-    double           dt,
-    RiemannSolver    solver,
-    const BoundaryConfig& bc
-);
-
-// ============================================================
 // Advance — second-order MUSCL-Hancock (x-then-y splitting)
 // ============================================================
 void advance_second_order_gpu(

@@ -239,40 +239,6 @@ __global__ void compute_block_max_speed_kernel(
 }
 
 // ============================================================
-// First-order Godunov kernel (9-component)
-// ============================================================
-__global__ void advance_first_order_kernel(
-    ConstGrid2DGPUView Uold,
-    Grid2DGPUView      Unew,
-    double             dt,
-    RiemannSolver      solver
-) {
-    const int i = blockIdx.x * blockDim.x + threadIdx.x + Uold.i_begin();
-    const int j = blockIdx.y * blockDim.y + threadIdx.y + Uold.j_begin();
-
-    if (i >= Uold.i_end() || j >= Uold.j_end()) return;
-
-    const Conserved Uc  = gload(Uold, i,     j);
-    const Conserved Uim = gload(Uold, i - 1, j);
-    const Conserved Uip = gload(Uold, i + 1, j);
-    const Conserved Ujm = gload(Uold, i, j - 1);
-    const Conserved Ujp = gload(Uold, i, j + 1);
-
-    // riemann_flux uses phys::ch_glm (device var) via the no-ch overload
-    const Conserved FxL = riemann_flux(Uim, Uc,  Direction::X, solver);
-    const Conserved FxR = riemann_flux(Uc,  Uip, Direction::X, solver);
-    const Conserved FyB = riemann_flux(Ujm, Uc,  Direction::Y, solver);
-    const Conserved FyT = riemann_flux(Uc,  Ujp, Direction::Y, solver);
-
-    const Conserved Unew_c = Uc
-        - (dt / Uold.dx) * (FxR - FxL)
-        - (dt / Uold.dy) * (FyT - FyB);
-
-    const Conserved result = safe_cons(Unew_c, Uc);
-    gstore(Unew, i, j, result);
-}
-
-// ============================================================
 // GLM psi damping kernel
 // factor = exp(-dt * ch / cr_glm), applied to every active cell.
 // ============================================================
@@ -636,42 +602,6 @@ double compute_dt_gpu(const Grid2DGPU& grid, GpuWorkspace& ws, double cfl) {
     set_gpu_physics_ch(max_speed);
 
     return cfl * std::min(grid.dx(), grid.dy()) / max_speed;
-}
-
-// ============================================================
-// First-order advance
-// ============================================================
-void advance_first_order_gpu(
-    const Grid2DGPU& Uold,
-    Grid2DGPU&       Unew,
-    double           dt,
-    RiemannSolver    solver,
-    const BoundaryConfig& bc
-) {
-    const dim3 threads(16, 16);
-    const dim3 blocks(
-        (Uold.nx() + threads.x - 1) / threads.x,
-        (Uold.ny() + threads.y - 1) / threads.y
-    );
-
-    advance_first_order_kernel<<<blocks, threads>>>(
-        make_view(static_cast<const Grid2DGPU&>(Uold)),
-        make_view(Unew), dt, solver);
-    CUDA_CHECK(cudaGetLastError());
-
-    apply_boundary_gpu(Unew, bc);
-
-    // Mixed-GLM psi damping
-    const double ch = [&]() {
-        double h = 0.0;
-        CUDA_CHECK(cudaMemcpyFromSymbol(&h, phys::d_ch_glm, sizeof(double)));
-        return h;
-    }();
-    if (ch > 0.0) {
-        const double factor = std::exp(-dt * ch / kCrGlm);
-        apply_psi_damping_kernel<<<blocks, threads>>>(make_view(Unew), factor);
-        CUDA_CHECK(cudaGetLastError());
-    }
 }
 
 // ============================================================

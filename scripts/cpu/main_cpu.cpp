@@ -2,9 +2,9 @@
 // Implements GLM-MHD following Dedner et al. (2002), J. Comput. Phys. 175, 645-673.
 //
 // Usage:
-//   ./main_cpu [case_name] [--order 1|2] [--solver hll|hlld|force] [--out output_dir]
+//   ./main_cpu [case_name] [--n N] [--solver hll|hlld|force] [--out output_dir] [--no-out]
 //
-// case_name: kelvin_helmholtz
+// --n N  : weak-scaling factor; scales the base grid by N in each dimension (default 1)
 //
 // Output: one CSV file per field at t_end (rho, p, Bx, By, Bz, psi, u, v, E)
 // written to output_dir (default: "output/").
@@ -95,20 +95,21 @@ void write_all_fields(
 // ============================================================
 
 struct RunConfig {
-    std::string  case_name  = "kelvin_helmholtz";
-    int          order      = 2;
-    RiemannSolver solver    = RiemannSolver::HLLD;
-    std::string  out_dir    = "output";
-    bool         write_out  = true;
-    double       print_interval = 0.1;  // console update every this many t units
+    std::string   case_name       = "kelvin_helmholtz";
+    int           n_scale         = 1;
+    RiemannSolver solver          = RiemannSolver::HLLD;
+    std::string   out_dir         = "output";
+    bool          write_out       = true;
+    double        print_interval  = 0.1;
 };
 
 RunConfig parse_args(int argc, char** argv) {
     RunConfig rc;
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
-        if (arg == "--order" && i + 1 < argc) {
-            rc.order = std::stoi(argv[++i]);
+        if (arg == "--n" && i + 1 < argc) {
+            rc.n_scale = std::stoi(argv[++i]);
+            if (rc.n_scale < 1) throw std::runtime_error("--n must be >= 1");
         } else if (arg == "--solver" && i + 1 < argc) {
             std::string s = argv[++i];
             if      (s == "hll")   rc.solver = RiemannSolver::HLL;
@@ -144,7 +145,7 @@ int main(int argc, char** argv) {
 
     std::cout << "=== MHD GLM Solver (Dedner et al. 2002) ===\n";
     std::cout << "  Case      : " << rc.case_name << "\n";
-    std::cout << "  Order     : " << rc.order << "\n";
+    std::cout << "  Scale (n) : " << rc.n_scale << "\n";
     std::cout << "  Solver    : "
               << (rc.solver == RiemannSolver::HLL  ? "HLL"  :
                   rc.solver == RiemannSolver::HLLC ? "HLLC" :
@@ -153,7 +154,7 @@ int main(int argc, char** argv) {
     // ---- Case config ----
     CaseConfig cfg;
     try {
-        cfg = get_case_config(rc.case_name);
+        cfg = get_n_case_config(rc.case_name, rc.n_scale);
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << "\n";
         return 1;
@@ -167,13 +168,13 @@ int main(int argc, char** argv) {
     std::cout << "  gamma     : " << cfg.gamma << "\n";
 
     // ---- Initialise grid ----
-    // phys::gamma set inside make_initial_grid via init.cpp
-    Grid2D Uold = make_initial_grid(parse_case_id(rc.case_name));
+    // phys::gamma set inside make_n_grid via init.cpp
+    Grid2D Uold = make_n_grid(rc.case_name, rc.n_scale);
     Grid2D Unew = Uold;   // copy (includes ghost cells from init)
     Grid2D Utmp = Uold;   // scratch for second-order advance
 
     CpuWorkspace ws;
-    if (rc.order == 2) ws.init(cfg.nx, cfg.ny);
+    ws.init(cfg.nx, cfg.ny);
 
     // ---- Write initial condition ----
     if (rc.write_out)
@@ -214,11 +215,7 @@ int main(int argc, char** argv) {
             break;
         }
 
-        if (rc.order == 2) {
-            advance_second_order(Uold, Utmp, Unew, dt, ws, rc.solver, cfg.bc);
-        } else {
-            advance_first_order(Uold, Unew, dt, rc.solver, cfg.bc);
-        }
+        advance_second_order(Uold, Utmp, Unew, dt, ws, rc.solver, cfg.bc);
 
         std::swap(Uold, Unew);
         t    += dt;
@@ -255,9 +252,21 @@ int main(int argc, char** argv) {
     }
 
     auto wall_end = std::chrono::steady_clock::now();
-    const double elapsed = std::chrono::duration<double>(wall_end - wall_start).count();
+    const double elapsed        = std::chrono::duration<double>(wall_end - wall_start).count();
+    const double steps_per_s   = static_cast<double>(step) / elapsed;
+    const double Mcell_upd_s   = static_cast<double>(step) * cfg.nx * cfg.ny / elapsed / 1.0e6;
+
     std::cout << "\n  Done: " << step << " steps in " << elapsed << " s  ("
-              << static_cast<double>(step) / elapsed << " steps/s)\n";
+              << steps_per_s << " steps/s)\n";
+    std::cout << "[TIMING]"
+              << " n="               << rc.n_scale
+              << " nx="              << cfg.nx
+              << " ny="              << cfg.ny
+              << " steps="           << step
+              << " elapsed_s="       << std::fixed << std::setprecision(4) << elapsed
+              << " steps_per_s="     << std::fixed << std::setprecision(2) << steps_per_s
+              << " Mcell_updates_s=" << std::fixed << std::setprecision(1) << Mcell_upd_s
+              << "\n" << std::flush;
 
     // Write final state only for cases without a snapshot schedule
     if (rc.write_out && !has_snaps) {
