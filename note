@@ -1,3 +1,7 @@
 Test Euler Test - shock bubble
 1D test: Brio-Wu
 2D test: Orszag–Tang
+2D test: kl
+
+MPI & GPU code - running time
+profile GPU code

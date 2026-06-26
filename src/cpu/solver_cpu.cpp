@@ -119,66 +119,6 @@ inline void reconstruct_cell_muscl_hancock(
 }
 
 // ============================================================
-// MUSCL-Hancock interface fluxes — each calls reconstruct on
-// two neighbouring cells and passes the interface states to the
-// chosen Riemann solver.
-// ============================================================
-
-inline Conserved muscl_hancock_flux_x(
-    const std::vector<Primitive>& W,
-    int total_nx,
-    int i, int j,
-    double dt_over_dx,
-    RiemannSolver solver
-) {
-    Conserved Ui_L, Ui_R, Uip1_L, Uip1_R;
-
-    const auto widx = [total_nx](int ci, int cj) -> std::size_t {
-        return static_cast<std::size_t>(cj) * total_nx + ci;
-    };
-
-    reconstruct_cell_muscl_hancock(
-        W[widx(i-1,j)], W[widx(i,j)], W[widx(i+1,j)],
-        dt_over_dx, Direction::X,
-        Ui_L, Ui_R
-    );
-    reconstruct_cell_muscl_hancock(
-        W[widx(i,j)], W[widx(i+1,j)], W[widx(i+2,j)],
-        dt_over_dx, Direction::X,
-        Uip1_L, Uip1_R
-    );
-
-    return riemann_flux(Ui_R, Uip1_L, Direction::X, solver, phys::ch_glm);
-}
-
-inline Conserved muscl_hancock_flux_y(
-    const std::vector<Primitive>& W,
-    int total_nx,
-    int i, int j,
-    double dt_over_dy,
-    RiemannSolver solver
-) {
-    Conserved Uj_L, Uj_R, Ujp1_L, Ujp1_R;
-
-    const auto widx = [total_nx](int ci, int cj) -> std::size_t {
-        return static_cast<std::size_t>(cj) * total_nx + ci;
-    };
-
-    reconstruct_cell_muscl_hancock(
-        W[widx(i,j-1)], W[widx(i,j)], W[widx(i,j+1)],
-        dt_over_dy, Direction::Y,
-        Uj_L, Uj_R
-    );
-    reconstruct_cell_muscl_hancock(
-        W[widx(i,j)], W[widx(i,j+1)], W[widx(i,j+2)],
-        dt_over_dy, Direction::Y,
-        Ujp1_L, Ujp1_R
-    );
-
-    return riemann_flux(Uj_R, Ujp1_L, Direction::Y, solver, phys::ch_glm);
-}
-
-// ============================================================
 // Cache index helpers
 // ============================================================
 
@@ -191,14 +131,75 @@ inline int yface_idx(int local_j_face, int local_i, int nx_cells) {
 }
 
 // ============================================================
-// Fill x-face flux cache for all interior faces.
+// Reconstruction fill: compute each cell's left/right MUSCL-
+// Hancock face states once, storing them in recon_L / recon_R.
+//
+// X-direction: covers cells i in [ib-1, ie] (all cells adjacent
+// to an interior interface), rows j in [jb, je).
+// ============================================================
+
+void fill_recon_x_cache(
+    const std::vector<Primitive>& W,
+    int ib, int ie, int jb, int je,
+    int total_nx,
+    double dt_over_dx,
+    std::vector<Conserved>& recon_L,
+    std::vector<Conserved>& recon_R
+) {
+#ifdef _OPENMP
+#pragma omp parallel for collapse(2) schedule(static)
+#endif
+    for (int j = jb; j < je; ++j) {
+        for (int i = ib - 1; i <= ie; ++i) {
+            const std::size_t idx = static_cast<std::size_t>(j) * total_nx + i;
+            reconstruct_cell_muscl_hancock(
+                W[static_cast<std::size_t>(j) * total_nx + (i - 1)],
+                W[idx],
+                W[static_cast<std::size_t>(j) * total_nx + (i + 1)],
+                dt_over_dx, Direction::X,
+                recon_L[idx], recon_R[idx]
+            );
+        }
+    }
+}
+
+// Y-direction: covers cells j in [jb-1, je], columns i in [ib, ie).
+void fill_recon_y_cache(
+    const std::vector<Primitive>& W,
+    int ib, int ie, int jb, int je,
+    int total_nx,
+    double dt_over_dy,
+    std::vector<Conserved>& recon_L,
+    std::vector<Conserved>& recon_R
+) {
+#ifdef _OPENMP
+#pragma omp parallel for collapse(2) schedule(static)
+#endif
+    for (int j = jb - 1; j <= je; ++j) {
+        for (int i = ib; i < ie; ++i) {
+            const std::size_t idx = static_cast<std::size_t>(j) * total_nx + i;
+            reconstruct_cell_muscl_hancock(
+                W[static_cast<std::size_t>(j - 1) * total_nx + i],
+                W[idx],
+                W[static_cast<std::size_t>(j + 1) * total_nx + i],
+                dt_over_dy, Direction::Y,
+                recon_L[idx], recon_R[idx]
+            );
+        }
+    }
+}
+
+// ============================================================
+// Fill x-face flux cache using precomputed reconstruction states.
+// recon_R[i,j] is the right-face (i+1/2 left state) of cell (i,j).
+// recon_L[i,j] is the left-face  (i-1/2 right state) of cell (i,j).
 // Face local_i_face = 0 is the left ghost interface at i = ib-1.
 // ============================================================
 
 void fill_x_face_cache(
     const Grid2D& Uin,
-    const std::vector<Primitive>& W,
-    double dt,
+    const std::vector<Conserved>& recon_L,
+    const std::vector<Conserved>& recon_R,
     std::vector<Conserved>& fx_cache,
     RiemannSolver solver
 ) {
@@ -207,9 +208,8 @@ void fill_x_face_cache(
     const int jb = Uin.j_begin();
     const int je = Uin.j_end();
 
-    const int    nx_faces    = (ie - ib) + 1;
-    const int    total_nx    = Uin.total_nx();
-    const double dt_over_dx  = dt / Uin.dx();
+    const int nx_faces = (ie - ib) + 1;
+    const int total_nx = Uin.total_nx();
 
 #ifdef _OPENMP
 #pragma omp parallel for collapse(2) schedule(static)
@@ -219,21 +219,26 @@ void fill_x_face_cache(
             const int local_j      = j - jb;
             const int local_i_face = i - (ib - 1);
 
+            const std::size_t idx_i   = static_cast<std::size_t>(j) * total_nx + i;
+            const std::size_t idx_ip1 = static_cast<std::size_t>(j) * total_nx + (i + 1);
+
             fx_cache[xface_idx(local_j, local_i_face, nx_faces)] =
-                muscl_hancock_flux_x(W, total_nx, i, j, dt_over_dx, solver);
+                riemann_flux(recon_R[idx_i], recon_L[idx_ip1], Direction::X, solver, phys::ch_glm);
         }
     }
 }
 
 // ============================================================
-// Fill y-face flux cache for all interior faces.
+// Fill y-face flux cache using precomputed reconstruction states.
+// recon_R[i,j] is the top-face  (j+1/2 bottom state) of cell (i,j).
+// recon_L[i,j] is the bot-face  (j-1/2 top state)    of cell (i,j).
 // Face local_j_face = 0 is the bottom ghost interface at j = jb-1.
 // ============================================================
 
 void fill_y_face_cache(
     const Grid2D& Uin,
-    const std::vector<Primitive>& W,
-    double dt,
+    const std::vector<Conserved>& recon_L,
+    const std::vector<Conserved>& recon_R,
     std::vector<Conserved>& fy_cache,
     RiemannSolver solver
 ) {
@@ -242,9 +247,8 @@ void fill_y_face_cache(
     const int jb = Uin.j_begin();
     const int je = Uin.j_end();
 
-    const int    nx_cells   = ie - ib;
-    const int    total_nx   = Uin.total_nx();
-    const double dt_over_dy = dt / Uin.dy();
+    const int nx_cells = ie - ib;
+    const int total_nx = Uin.total_nx();
 
 #ifdef _OPENMP
 #pragma omp parallel for collapse(2) schedule(static)
@@ -254,8 +258,11 @@ void fill_y_face_cache(
             const int local_j_face = j - (jb - 1);
             const int local_i      = i - ib;
 
+            const std::size_t idx_j   = static_cast<std::size_t>(j)     * total_nx + i;
+            const std::size_t idx_jp1 = static_cast<std::size_t>(j + 1) * total_nx + i;
+
             fy_cache[yface_idx(local_j_face, local_i, nx_cells)] =
-                muscl_hancock_flux_y(W, total_nx, i, j, dt_over_dy, solver);
+                riemann_flux(recon_R[idx_j], recon_L[idx_jp1], Direction::Y, solver, phys::ch_glm);
         }
     }
 }
@@ -355,13 +362,15 @@ void advance_second_order(
     const int total_ny = Uold.total_ny();
     const std::size_t total_cells = static_cast<std::size_t>(total_nx) * total_ny;
     ws.prim_cache.resize(total_cells);
+    ws.recon_L_cache.resize(total_cells);
+    ws.recon_R_cache.resize(total_cells);
 
     // ----------------------------------------------------------
     // Steps 1-2: x-sweep  (Uold → Utmp)
     // ----------------------------------------------------------
 
-    // Pre-compute all primitives once; fill_x_face_cache reads from this cache
-    // instead of calling cons_to_prim per-face, eliminating ~5x redundant conversions.
+    // Pre-compute all primitives once; reconstruction reads from this cache
+    // instead of calling cons_to_prim per-face.
 #ifdef _OPENMP
 #pragma omp parallel for collapse(2) schedule(static)
 #endif
@@ -370,7 +379,11 @@ void advance_second_order(
             ws.prim_cache[static_cast<std::size_t>(jj) * total_nx + ii] =
                 phys::cons_to_prim(Uold(ii, jj));
 
-    fill_x_face_cache(Uold, ws.prim_cache, dt, ws.fx_cache, solver);
+    // Reconstruct each cell once; fill_x_face_cache reads from the cache
+    // instead of reconstructing cell i+1 redundantly for interfaces i+1/2 and i+3/2.
+    fill_recon_x_cache(ws.prim_cache, ib, ie, jb, je, total_nx, dt_over_dx,
+                       ws.recon_L_cache, ws.recon_R_cache);
+    fill_x_face_cache(Uold, ws.recon_L_cache, ws.recon_R_cache, ws.fx_cache, solver);
 
 #ifdef _OPENMP
 #pragma omp parallel for collapse(2) schedule(static)
@@ -410,7 +423,9 @@ void advance_second_order(
             ws.prim_cache[static_cast<std::size_t>(jj) * total_nx + ii] =
                 phys::cons_to_prim(Utmp(ii, jj));
 
-    fill_y_face_cache(Utmp, ws.prim_cache, dt, ws.fy_cache, solver);
+    fill_recon_y_cache(ws.prim_cache, ib, ie, jb, je, total_nx, dt_over_dy,
+                       ws.recon_L_cache, ws.recon_R_cache);
+    fill_y_face_cache(Utmp, ws.recon_L_cache, ws.recon_R_cache, ws.fy_cache, solver);
 
 #ifdef _OPENMP
 #pragma omp parallel for collapse(2) schedule(static)

@@ -27,6 +27,13 @@ struct CpuWorkspace {
     // Populated before each directional sweep to avoid redundant cons_to_prim calls.
     std::vector<Primitive> prim_cache;
 
+    // Per-cell MUSCL-Hancock half-stepped face states.
+    // recon_L[i,j] = left-face (lower-index) half-stepped state of cell (i,j).
+    // recon_R[i,j] = right-face (higher-index) half-stepped state of cell (i,j).
+    // Shared between x and y sweeps (used one at a time); lazily sized like prim_cache.
+    std::vector<Conserved> recon_L_cache;
+    std::vector<Conserved> recon_R_cache;
+
     void init(int nx_, int ny_) {
         nx = nx_;
         ny = ny_;
