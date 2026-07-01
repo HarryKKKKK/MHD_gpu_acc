@@ -147,6 +147,46 @@ Conserved orszag_tang_state(double x, double y) {
     return make_mhd(rho, u, v, 0.0, Bx, By, 0.0, p, gamma);
 }
 
+// ============================================================
+// MHD Rotor problem — first rotor problem
+//   (Tóth 2000, J. Comput. Phys. 161, 605-652, §6.6, γ = 1.4)
+//
+// Domain: [0, 1] × [0, 1].  A dense disk (r < r0) in rigid rotation
+// embedded in a static ambient medium (r > r1), joined by a linear
+// taper region (r0 <= r <= r1).  Bx, By, p are uniform everywhere.
+// ============================================================
+Conserved rotor_state(double x, double y) {
+    constexpr double gamma = 1.4;
+    constexpr double r0 = 0.1;
+    constexpr double r1 = 0.115;
+    constexpr double v0 = 2.0;
+    constexpr double p  = 1.0;
+    static const double Bx = 5.0 / std::sqrt(4.0 * M_PI);
+    constexpr double By = 0.0;
+
+    const double dx = x - 0.5;
+    const double dy = y - 0.5;
+    const double r  = std::sqrt(dx*dx + dy*dy);
+
+    double rho, vx, vy;
+    if (r < r0) {
+        rho = 10.0;
+        vx  = -v0 * dy / r0;
+        vy  =  v0 * dx / r0;
+    } else if (r > r1) {
+        rho = 1.0;
+        vx  = 0.0;
+        vy  = 0.0;
+    } else {
+        const double f = (r1 - r) / (r1 - r0);
+        rho = 1.0 + 9.0 * f;
+        vx  = -f * v0 * dy / r;
+        vy  =  f * v0 * dx / r;
+    }
+
+    return make_mhd(rho, vx, vy, 0.0, Bx, By, 0.0, p, gamma);
+}
+
 } // namespace
 
 // ============================================================
@@ -158,10 +198,11 @@ CaseId parse_case_id(const std::string& name) {
     if (name == "shock_bubble")     return CaseId::ShockBubble;
     if (name == "brio_wu")          return CaseId::BrioWu;
     if (name == "orszag_tang")      return CaseId::OrszagTang;
+    if (name == "rotor")            return CaseId::Rotor;
 
     throw std::runtime_error(
         "Unknown MHD test case: '" + name + "'. "
-        "Valid names: kelvin_helmholtz, shock_bubble, brio_wu, orszag_tang."
+        "Valid names: kelvin_helmholtz, shock_bubble, brio_wu, orszag_tang, rotor."
     );
 }
 
@@ -171,6 +212,7 @@ std::string case_id_to_string(CaseId id) {
         case CaseId::ShockBubble:     return "shock_bubble";
         case CaseId::BrioWu:          return "brio_wu";
         case CaseId::OrszagTang:      return "orszag_tang";
+        case CaseId::Rotor:           return "rotor";
     }
     throw std::runtime_error("Unhandled CaseId in case_id_to_string.");
 }
@@ -264,6 +306,19 @@ CaseConfig get_case_config(CaseId id) {
             cfg.snapshot_tags  = {"tpi", "t2pi"};
             return cfg;
         }
+
+        case CaseId::Rotor:
+            // Domain [0,1]^2, fully transmissive (outflow) on all sides.
+            return CaseConfig{
+                400, 400, 2,
+                0.0, 1.0, 0.0, 1.0,
+                /*cfl=*/0.4, /*t_end=*/0.15,
+                /*gamma=*/1.4,
+                BoundaryConfig{
+                    BoundaryType::Transmissive, BoundaryType::Transmissive,
+                    BoundaryType::Transmissive, BoundaryType::Transmissive
+                }
+            };
     }
     throw std::runtime_error("Unhandled CaseId in get_case_config.");
 }
@@ -291,6 +346,7 @@ Conserved initial_state_at(CaseId id, double x, double y) {
         case CaseId::ShockBubble:     return shock_bubble_state(x, y);
         case CaseId::BrioWu:          return brio_wu_state(x, y);
         case CaseId::OrszagTang:      return orszag_tang_state(x, y);
+        case CaseId::Rotor:           return rotor_state(x, y);
     }
     throw std::runtime_error("Unhandled CaseId in initial_state_at.");
 }

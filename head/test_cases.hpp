@@ -29,7 +29,8 @@ enum class CaseId {
     KelvinHelmholtz,  // §5: Kelvin-Helmholtz instability, γ=1.4
     ShockBubble,      // Mach 1.22 shock–bubble interaction, γ=1.4
     BrioWu,           // Brio–Wu 1D MHD shock tube, γ=2.0
-    OrszagTang        // Orszag–Tang 2D MHD vortex, γ=5/3
+    OrszagTang,       // Orszag–Tang 2D MHD vortex, γ=5/3
+    Rotor             // Tóth (2000) §6.6 first rotor problem, γ=1.4
 };
 
 // ============================================================
