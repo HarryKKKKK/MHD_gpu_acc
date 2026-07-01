@@ -3,8 +3,8 @@
 #SBATCH -A hansirui
 #SBATCH -p debug
 #SBATCH -N 1
-#SBATCH --ntasks=112
-#SBATCH --cpus-per-task=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=112
 #SBATCH --time=02:00:00
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
@@ -14,15 +14,24 @@
 # (see slurm_cpu_omp.sh for rationale — allocation here is sub-node,
 # not whole-node).
 #
-# --ntasks=112, --cpus-per-task=1, -N 1: 112 single-threaded MPI ranks,
-# one per physical core, all on one node (mirrors the OMP script's
-# core count so the two are directly comparable; hyperthreads unused).
+# --ntasks=1 --cpus-per-task=112 (NOT --ntasks=112 --cpus-per-task=1):
+# mpirun is forked directly from the sbatch *batch script*, not launched
+# via `srun`. Slurm only gives the batch script itself the CPU affinity
+# of ONE task's worth of cpus-per-task; --ntasks is reserved for
+# separate srun-launched steps. With --ntasks=112 --cpus-per-task=1 the
+# batch script (and therefore mpirun and everything it forks) is only
+# bound to 1 CPU, and `mpirun --bind-to core` fails with "would result
+# in binding more processes than cpus on a resource". Requesting the
+# same shape as the OMP script (one task, 112 cpus) gives the batch
+# script — and mpirun's local fork of 112 ranks inside it — the full
+# 112-cpu affinity mask instead.
+#
+# 112 single-threaded MPI ranks, one per physical core, all on one node
+# (mirrors the OMP script's core count so the two are comparable;
+# hyperthreads unused).
 #
 # mpicxx/mpirun (OpenMPI 4.1.7a1) are already on PATH by default on
-# this cluster — no `module load` needed. mpirun is launched directly
-# (not via srun) since everything is single-node; the sbatch batch
-# script itself runs inside the job's cgroup, so mpirun's forked local
-# ranks inherit the allocated cpuset correctly without srun.
+# this cluster — no `module load` needed.
 #
 # Cases   : orszag_tang, rotor
 # Solvers : hll hllc hlld force
@@ -47,7 +56,7 @@ read -r -a CASES   <<< "${CASES_STR:-orszag_tang rotor}"
 read -r -a SOLVERS <<< "${SOLVERS_STR:-hll hllc hlld force}"
 read -r -a SCALES  <<< "${SCALES_STR:-1 2 4}"
 
-RANKS="${RANKS:-${SLURM_NTASKS:-112}}"
+RANKS="${RANKS:-${SLURM_CPUS_PER_TASK:-112}}"
 # Pure MPI: one thread per rank, no OpenMP oversubscription within a rank.
 export OMP_NUM_THREADS=1
 
