@@ -1,0 +1,1 @@
+arch,case,solver,n,ranks,nx,ny,total_cells,steps,elapsed_s,steps_per_s,Mcell_updates_s,real_s,user_s,sys_s,max_rss_kb,git_branch,git_commit
