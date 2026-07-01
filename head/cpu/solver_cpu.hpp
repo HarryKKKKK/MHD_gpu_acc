@@ -52,8 +52,13 @@ struct CpuWorkspace {
 // ============================================================
 // CFL timestep.
 // Also sets phys::ch_glm = max signal speed for this step.
+//
+// out_max_speed, if non-null, receives the max signal speed computed
+// this step *before* it is written into phys::ch_glm (diagnostic use
+// only — passing nullptr, the default, reproduces the exact prior
+// signature/behaviour).
 // ============================================================
-double compute_dt(const Grid2D& grid, double cfl);
+double compute_dt(const Grid2D& grid, double cfl, double* out_max_speed = nullptr);
 
 // ============================================================
 // Second-order MUSCL-Hancock with dimensional (Strang) splitting.

@@ -74,12 +74,23 @@ __device__ inline bool is_physical(const Primitive& V) {
         && isfinite(V.psi);
 }
 
+// Diagnostic-only counter: counts is_physical() rejections in
+// safe_prim/safe_cons below. Always incremented (only the rejected-
+// candidate branch pays for the atomicAdd); read/reset via
+// reset_floor_trigger_count_gpu()/read_floor_trigger_count_gpu(), meant
+// to be called once per step only when --diag-interval is active.
+__device__ unsigned long long d_floor_trigger_count = 0ULL;
+
 __device__ inline Primitive safe_prim(const Primitive& cand, const Primitive& fb) {
-    return is_physical(cand) ? cand : fb;
+    if (is_physical(cand)) return cand;
+    atomicAdd(&d_floor_trigger_count, 1ULL);
+    return fb;
 }
 
 __device__ inline Conserved safe_cons(const Conserved& cand, const Conserved& fb) {
-    return is_physical(phys::cons_to_prim(cand)) ? cand : fb;
+    if (is_physical(phys::cons_to_prim(cand))) return cand;
+    atomicAdd(&d_floor_trigger_count, 1ULL);
+    return fb;
 }
 
 // ============================================================
@@ -548,6 +559,21 @@ void set_gpu_physics_ch(double ch) {
 }
 
 // ============================================================
+// Diagnostic-only floor-trigger counter (see declaration in
+// head/gpu/solver_gpu.cuh and d_floor_trigger_count above).
+// ============================================================
+void reset_floor_trigger_count_gpu() {
+    const unsigned long long zero = 0ULL;
+    CUDA_CHECK(cudaMemcpyToSymbol(d_floor_trigger_count, &zero, sizeof(zero)));
+}
+
+unsigned long long read_floor_trigger_count_gpu() {
+    unsigned long long value = 0ULL;
+    CUDA_CHECK(cudaMemcpyFromSymbol(&value, d_floor_trigger_count, sizeof(value)));
+    return value;
+}
+
+// ============================================================
 // Workspace
 // ============================================================
 void init_gpu_workspace(GpuWorkspace& ws, const Grid2DGPU& grid) {
@@ -579,7 +605,8 @@ void free_gpu_workspace(GpuWorkspace& ws) {
 // ============================================================
 // Time step — computes max wave speed, sets device ch_glm, returns dt.
 // ============================================================
-double compute_dt_gpu(const Grid2DGPU& grid, GpuWorkspace& ws, double cfl) {
+double compute_dt_gpu(const Grid2DGPU& grid, GpuWorkspace& ws, double cfl,
+                       double* out_max_speed) {
     if (ws.nx != grid.nx() || ws.ny != grid.ny() || !ws.speed_d)
         throw std::runtime_error("compute_dt_gpu: workspace not initialised.");
 
@@ -598,6 +625,11 @@ double compute_dt_gpu(const Grid2DGPU& grid, GpuWorkspace& ws, double cfl) {
     double max_speed = 0.0;
     CUDA_CHECK(cudaMemcpy(&max_speed, ws.max_speed_d,
                           sizeof(double), cudaMemcpyDeviceToHost));
+
+    // Report the raw value even in the max_speed<=0 branch below, so a
+    // diagnostic reader can see this otherwise-silent fallback (dt is
+    // substituted with DBL_MAX and ch_glm is left untouched in that case).
+    if (out_max_speed) *out_max_speed = max_speed;
 
     if (max_speed <= 0.0)
         return std::numeric_limits<double>::max();

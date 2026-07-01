@@ -2,9 +2,15 @@
 // Implements GLM-MHD following Dedner et al. (2002), J. Comput. Phys. 175, 645-673.
 //
 // Usage:
-//   ./main_cpu [case_name] [--n N] [--solver hll|hlld|force] [--out output_dir] [--no-out]
+//   ./main_cpu [case_name] [--n N] [--solver hll|hllc|hlld|force] [--out output_dir] [--no-out]
+//              [--diag-interval N] [--diag-dir dir]
 //
-// --n N  : weak-scaling factor; scales the base grid by N in each dimension (default 1)
+// --n N              : weak-scaling factor; scales the base grid by N in each dimension (default 1)
+// --diag-interval N  : every N steps, append a diagnostic snapshot row (dt, ch_glm,
+//                       max_cf_x/y, field extrema, div(B), floor-trigger count) to
+//                       <diag_dir>/diag_cpu_<case>_<solver>_n<n>.csv. 0 (default) disables
+//                       this entirely — no extra file, no extra per-step work.
+// --diag-dir dir     : directory for the diagnostic CSV (default "diagnostics")
 //
 // Output: one CSV file per field at t_end (rho, p, Bx, By, Bz, psi, u, v, E)
 // written to output_dir (default: "output/").
@@ -23,6 +29,7 @@
 #include "cpu/boundary_cpu.hpp"
 #include "cpu/grid_cpu.hpp"
 #include "cpu/solver_cpu.hpp"
+#include "diagnostics.hpp"
 #include "init.hpp"
 #include "physics.hpp"
 #include "riemann.hpp"
@@ -101,6 +108,8 @@ struct RunConfig {
     std::string   out_dir         = "output";
     bool          write_out       = true;
     double        print_interval  = 0.1;
+    int           diag_interval   = 0;              // 0 = diagnostics disabled
+    std::string   diag_dir        = "diagnostics";
 };
 
 RunConfig parse_args(int argc, char** argv) {
@@ -121,6 +130,10 @@ RunConfig parse_args(int argc, char** argv) {
             rc.out_dir = argv[++i];
         } else if (arg == "--no-out") {
             rc.write_out = false;
+        } else if (arg == "--diag-interval" && i + 1 < argc) {
+            rc.diag_interval = std::stoi(argv[++i]);
+        } else if (arg == "--diag-dir" && i + 1 < argc) {
+            rc.diag_dir = argv[++i];
         } else if (arg[0] != '-') {
             rc.case_name = arg;
         } else {
@@ -142,6 +155,11 @@ int main(int argc, char** argv) {
         std::cerr << "Argument error: " << e.what() << "\n";
         return 1;
     }
+
+    const std::string solver_name =
+        (rc.solver == RiemannSolver::HLL)  ? "hll"  :
+        (rc.solver == RiemannSolver::HLLC) ? "hllc" :
+        (rc.solver == RiemannSolver::HLLD) ? "hlld" : "force";
 
     std::cout << "=== MHD GLM Solver (Dedner et al. 2002) ===\n";
     std::cout << "  Case      : " << rc.case_name << "\n";
@@ -180,6 +198,24 @@ int main(int argc, char** argv) {
     if (rc.write_out)
         write_all_fields(Uold, rc.out_dir, rc.case_name + "_cpu_t0");
 
+    // ---- Diagnostic CSV (--diag-interval N, N=0 disables) ----
+    const bool    diag_on = rc.diag_interval > 0;
+    std::ofstream diag_file;
+    if (diag_on) {
+        std::filesystem::create_directories(rc.diag_dir);
+        const std::string diag_path = rc.diag_dir + "/diag_cpu_" + rc.case_name +
+            "_" + solver_name + "_n" + std::to_string(rc.n_scale) + ".csv";
+        diag_file.open(diag_path);
+        if (!diag_file)
+            throw std::runtime_error("Cannot open diagnostic file: " + diag_path);
+        diag_file << "arch,case,solver,step,t,dt,ch_glm,max_cf_x,max_cf_y,max_speed,"
+                     "max_rho,min_rho,max_p,min_p,max_abs_Bx,max_abs_By,max_abs_Bz,max_abs_psi,"
+                     "divB_L1,divB_max,n_floor_triggered\n";
+        diag_file << std::scientific << std::setprecision(10);
+        std::cout << "  [diag] every " << rc.diag_interval
+                  << " steps -> " << diag_path << "\n";
+    }
+
     // ---- Time loop ----
     const bool   has_snaps = !cfg.snapshot_times.empty();
     std::size_t  snap_idx  = 0;
@@ -187,24 +223,45 @@ int main(int argc, char** argv) {
     double t     = 0.0;
     int    step  = 0;
     double t_print_next = 0.0;
+    std::string exit_reason = "reached_t_end";
 
     auto wall_start = std::chrono::steady_clock::now();
 
     std::cout << "\n  step       t         dt        max|B|\n";
     std::cout << "  ----  ----------  ----------  ----------\n";
 
+    // The whole loop is wrapped in try/catch purely so a diagnostic run
+    // can record exit_reason before an uncaught exception (e.g. compute_dt's
+    // "non-positive maximum wave speed") escapes main() — the exception is
+    // always rethrown afterwards, so the crash/exit-code behaviour when
+    // --diag-interval is off (or even on) is unchanged.
+    try {
     while (t < cfg.t_end) {
         // Clamp dt to the next snapshot (or t_end), whichever comes first
         double t_next = cfg.t_end;
         if (has_snaps && snap_idx < cfg.snapshot_times.size())
             t_next = std::min(t_next, cfg.snapshot_times[snap_idx]);
 
-        const double dt_raw = compute_dt(Uold, cfg.cfl);
+        double max_speed_raw = 0.0;
+        const double dt_raw = compute_dt(Uold, cfg.cfl, &max_speed_raw);
         const double dt     = std::min(dt_raw, t_next - t);
+
+        // Diagnostic snapshot of the state compute_dt() just used, taken
+        // *before* advance_second_order() mutates anything (pure read-only
+        // scan — does not affect dt/flux computation below).
+        const bool do_diag = diag_on && (step % rc.diag_interval == 0);
+        diag::Snapshot snap;
+        if (do_diag) {
+            snap = diag::compute_snapshot(
+                [&](int i, int j) -> Conserved { return Uold(i, j); },
+                Uold.i_begin(), Uold.i_end(), Uold.j_begin(), Uold.j_end(),
+                Uold.dx(), Uold.dy());
+        }
 
         if (!std::isfinite(dt) || dt <= 0.0) {
             std::cerr << "[ERROR] dt=" << dt << " at step=" << step
                       << " t=" << t << " (dt_raw=" << dt_raw << "). Aborting.\n";
+            exit_reason = "dt_invalid";
             break;
         }
         const double dt_floor = 1.0e-8 * cfg.t_end;
@@ -212,10 +269,25 @@ int main(int argc, char** argv) {
             std::cerr << "[WARN]  dt=" << std::scientific << dt
                       << " (floor=" << dt_floor << ") at step=" << step
                       << " t=" << t << " — numerical blowup, stopping.\n";
+            exit_reason = "dt_floor_breach";
             break;
         }
 
+        if (diag_on) diag::reset_floor_trigger_count();
         advance_second_order(Uold, Utmp, Unew, dt, ws, rc.solver, cfg.bc);
+        const long long n_floor = diag_on ? diag::floor_trigger_count : 0;
+
+        if (do_diag) {
+            diag_file << "cpu," << rc.case_name << ',' << solver_name << ','
+                      << step << ',' << t << ',' << dt << ',' << phys::ch_glm << ','
+                      << snap.max_cf_x << ',' << snap.max_cf_y << ',' << max_speed_raw << ','
+                      << snap.max_rho << ',' << snap.min_rho << ','
+                      << snap.max_p   << ',' << snap.min_p   << ','
+                      << snap.max_abs_Bx << ',' << snap.max_abs_By << ',' << snap.max_abs_Bz << ','
+                      << snap.max_abs_psi << ','
+                      << snap.divB_L1 << ',' << snap.divB_max << ','
+                      << n_floor << '\n';
+        }
 
         std::swap(Uold, Unew);
         t    += dt;
@@ -249,6 +321,24 @@ int main(int argc, char** argv) {
                 ++snap_idx;
             }
         }
+    }
+    } catch (const std::exception& e) {
+        exit_reason = std::string("exception:") + e.what();
+        if (diag_on) {
+            diag_file << "# exit_summary: final_step=" << step
+                      << ",final_t=" << t
+                      << ",t_end_target=" << cfg.t_end
+                      << ",exit_reason=" << exit_reason << "\n";
+            diag_file.flush();
+        }
+        throw;
+    }
+
+    if (diag_on) {
+        diag_file << "# exit_summary: final_step=" << step
+                  << ",final_t=" << t
+                  << ",t_end_target=" << cfg.t_end
+                  << ",exit_reason=" << exit_reason << "\n";
     }
 
     auto wall_end = std::chrono::steady_clock::now();

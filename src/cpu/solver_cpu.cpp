@@ -10,6 +10,7 @@
 #endif
 
 #include "cpu/boundary_cpu.hpp"
+#include "diagnostics.hpp"
 #include "physics.hpp"
 #include "riemann.hpp"
 #include "types.hpp"
@@ -59,14 +60,18 @@ inline Primitive enforce_physical_primitive(
     const Primitive& candidate,
     const Primitive& fallback
 ) {
-    return is_physical(candidate) ? candidate : fallback;
+    if (is_physical(candidate)) return candidate;
+    diag::count_floor_trigger();
+    return fallback;
 }
 
 inline Conserved enforce_physical_conserved(
     const Conserved& candidate,
     const Conserved& fallback
 ) {
-    return is_physical(phys::cons_to_prim(candidate)) ? candidate : fallback;
+    if (is_physical(phys::cons_to_prim(candidate))) return candidate;
+    diag::count_floor_trigger();
+    return fallback;
 }
 
 // ============================================================
@@ -289,7 +294,7 @@ void apply_psi_damping(Grid2D& grid, double dt) {
 // Public API
 // ============================================================
 
-double compute_dt(const Grid2D& grid, double cfl) {
+double compute_dt(const Grid2D& grid, double cfl, double* out_max_speed) {
     double max_speed = 0.0;
 
 #ifdef _OPENMP
@@ -309,6 +314,8 @@ double compute_dt(const Grid2D& grid, double cfl) {
                 max_speed = std::max(max_speed, std::max(sx, sy));
         }
     }
+
+    if (out_max_speed) *out_max_speed = max_speed;
 
     if (max_speed <= 0.0) {
         throw std::runtime_error("compute_dt: non-positive maximum wave speed.");

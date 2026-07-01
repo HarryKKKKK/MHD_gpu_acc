@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "diagnostics.hpp"
 #include "gpu/boundary_gpu.cuh"
 #include "gpu/grid_gpu.cuh"
 #include "gpu/solver_gpu.cuh"
@@ -95,11 +96,13 @@ static void write_all_fields(
 // ============================================================
 
 struct RunConfig {
-    std::string   case_name = "kelvin_helmholtz";
-    int           n_scale   = 1;
-    RiemannSolver solver    = RiemannSolver::HLLD;
-    std::string   out_dir   = "output";
-    bool          write_out = false;
+    std::string   case_name     = "kelvin_helmholtz";
+    int           n_scale       = 1;
+    RiemannSolver solver        = RiemannSolver::HLLD;
+    std::string   out_dir       = "output";
+    bool          write_out     = false;
+    int           diag_interval = 0;              // 0 = diagnostics disabled
+    std::string   diag_dir      = "diagnostics";
 };
 
 static RunConfig parse_args(int argc, char** argv) {
@@ -122,6 +125,10 @@ static RunConfig parse_args(int argc, char** argv) {
             rc.write_out = true;
         } else if (arg == "--no-out") {
             rc.write_out = false;
+        } else if (arg == "--diag-interval" && i + 1 < argc) {
+            rc.diag_interval = std::stoi(argv[++i]);
+        } else if (arg == "--diag-dir" && i + 1 < argc) {
+            rc.diag_dir = argv[++i];
         } else if (arg[0] != '-') {
             rc.n_scale = std::stoi(arg);
         } else {
@@ -155,6 +162,11 @@ int main(int argc, char** argv) {
     // Set the host-side gamma for cons_to_prim calls in write_all_fields.
     // The device-side gamma is set via set_gpu_physics_gamma below.
     phys::gamma = cfg.gamma;
+
+    const std::string solver_name =
+        (rc.solver == RiemannSolver::HLL)  ? "hll"  :
+        (rc.solver == RiemannSolver::HLLC) ? "hllc" :
+        (rc.solver == RiemannSolver::HLLD) ? "hlld" : "force";
 
     std::cout << "=== MHD GLM GPU Solver ===\n";
     std::cout << "  Case   : " << rc.case_name << "\n";
@@ -197,14 +209,40 @@ int main(int argc, char** argv) {
     if (rc.write_out)
         write_all_fields(Uold, rc.out_dir, rc.case_name + "_gpu_t0");
 
+    // ---- Diagnostic CSV (--diag-interval N, N=0 disables) ----
+    const bool    diag_on = rc.diag_interval > 0;
+    std::ofstream diag_file;
+    if (diag_on) {
+        namespace fs = std::filesystem;
+        fs::create_directories(rc.diag_dir);
+        const std::string diag_path = rc.diag_dir + "/diag_gpu_" + rc.case_name +
+            "_" + solver_name + "_n" + std::to_string(rc.n_scale) + ".csv";
+        diag_file.open(diag_path);
+        if (!diag_file)
+            throw std::runtime_error("Cannot open diagnostic file: " + diag_path);
+        diag_file << "arch,case,solver,step,t,dt,ch_glm,max_cf_x,max_cf_y,max_speed,"
+                     "max_rho,min_rho,max_p,min_p,max_abs_Bx,max_abs_By,max_abs_Bz,max_abs_psi,"
+                     "divB_L1,divB_max,n_floor_triggered\n";
+        diag_file << std::scientific << std::setprecision(10);
+        std::cout << "  [diag] every " << rc.diag_interval
+                  << " steps -> " << diag_path << "\n" << std::flush;
+    }
+
     const bool has_snaps = !cfg.snapshot_times.empty();
     std::size_t snap_idx = 0;
 
     double t    = 0.0;
     int    step = 0;
+    std::string exit_reason = "reached_t_end";
 
     auto wall_start = std::chrono::steady_clock::now();
 
+    // The whole loop is wrapped in try/catch purely so a diagnostic run can
+    // record exit_reason before an uncaught exception (e.g. compute_dt_gpu's
+    // "workspace not initialised") escapes main() — the exception is always
+    // rethrown afterwards, so crash/exit-code behaviour when --diag-interval
+    // is off (or even on) is unchanged.
+    try {
     while (t < cfg.t_end) {
         // Determine the next time we must not overshoot:
         // either the next snapshot or t_end, whichever is sooner.
@@ -212,13 +250,33 @@ int main(int argc, char** argv) {
         if (has_snaps && snap_idx < cfg.snapshot_times.size())
             t_next = std::min(t_next, cfg.snapshot_times[snap_idx]);
 
-        const double dt_raw = compute_dt_gpu(Uold, ws, cfg.cfl);
+        double max_speed_raw = 0.0;
+        const double dt_raw = compute_dt_gpu(Uold, ws, cfg.cfl, &max_speed_raw);
         const double dt     = std::min(dt_raw, t_next - t);
+
+        // Diagnostic snapshot of the state compute_dt_gpu() just used, taken
+        // *before* advance_second_order_gpu() mutates anything (read-only
+        // download + scan — does not affect dt/flux computation below).
+        const bool do_diag = diag_on && (step % rc.diag_interval == 0);
+        diag::Snapshot snap;
+        if (do_diag) {
+            std::vector<Conserved> host_vec;
+            Uold.download_to_aos(host_vec);
+            const int total_nx = Uold.total_nx();
+            auto accessor = [&](int i, int j) -> Conserved {
+                return host_vec[static_cast<std::size_t>(j) * total_nx + i];
+            };
+            snap = diag::compute_snapshot(
+                accessor,
+                Uold.i_begin(), Uold.i_end(), Uold.j_begin(), Uold.j_end(),
+                Uold.dx(), Uold.dy());
+        }
 
         // Guard against numerical blowup: dt should never be zero or non-finite.
         if (!std::isfinite(dt) || dt <= 0.0) {
             std::cerr << "[ERROR] dt=" << dt << " at step=" << step
                       << " t=" << t << " (dt_raw=" << dt_raw << "). Aborting.\n";
+            exit_reason = "dt_invalid";
             break;
         }
         // Warn if dt is suspiciously tiny relative to t_end (signal speed blowup).
@@ -228,10 +286,25 @@ int main(int argc, char** argv) {
             std::cerr << "[WARN]  dt=" << std::scientific << dt
                       << " (floor=" << dt_floor << ") at step=" << step
                       << " t=" << t << " — numerical blowup, stopping.\n";
+            exit_reason = "dt_floor_breach";
             break;
         }
 
+        if (diag_on) reset_floor_trigger_count_gpu();
         advance_second_order_gpu(Uold, Utmp, Unew, ws, dt, rc.solver, cfg.bc);
+        const unsigned long long n_floor = diag_on ? read_floor_trigger_count_gpu() : 0ULL;
+
+        if (do_diag) {
+            diag_file << "gpu," << rc.case_name << ',' << solver_name << ','
+                      << step << ',' << t << ',' << dt << ',' << phys::ch_glm << ','
+                      << snap.max_cf_x << ',' << snap.max_cf_y << ',' << max_speed_raw << ','
+                      << snap.max_rho << ',' << snap.min_rho << ','
+                      << snap.max_p   << ',' << snap.min_p   << ','
+                      << snap.max_abs_Bx << ',' << snap.max_abs_By << ',' << snap.max_abs_Bz << ','
+                      << snap.max_abs_psi << ','
+                      << snap.divB_L1 << ',' << snap.divB_max << ','
+                      << n_floor << '\n';
+        }
 
         Uold.swap(Unew);
         t    += dt;
@@ -261,6 +334,24 @@ int main(int argc, char** argv) {
                 ++snap_idx;
             }
         }
+    }
+    } catch (const std::exception& e) {
+        exit_reason = std::string("exception:") + e.what();
+        if (diag_on) {
+            diag_file << "# exit_summary: final_step=" << step
+                      << ",final_t=" << t
+                      << ",t_end_target=" << cfg.t_end
+                      << ",exit_reason=" << exit_reason << "\n";
+            diag_file.flush();
+        }
+        throw;
+    }
+
+    if (diag_on) {
+        diag_file << "# exit_summary: final_step=" << step
+                  << ",final_t=" << t
+                  << ",t_end_target=" << cfg.t_end
+                  << ",exit_reason=" << exit_reason << "\n";
     }
 
     auto wall_end = std::chrono::steady_clock::now();

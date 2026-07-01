@@ -35,9 +35,28 @@ void init_gpu_workspace(GpuWorkspace& ws, const Grid2DGPU& grid);
 void free_gpu_workspace(GpuWorkspace& ws);
 
 // ============================================================
-// Time step (also sets device-side ch_glm = max signal speed)
+// Time step (also sets device-side ch_glm = max signal speed).
+//
+// out_max_speed, if non-null, receives the max signal speed computed
+// this step *before* ch_glm is updated (diagnostic use only — passing
+// nullptr, the default, reproduces the exact prior signature/behaviour).
+// Note this is set even when max_speed <= 0.0 (the case where the
+// function falls back to returning a huge dt without touching ch_glm at
+// all), so a diagnostic reader can detect that otherwise-silent path.
 // ============================================================
-double compute_dt_gpu(const Grid2DGPU& grid, GpuWorkspace& ws, double cfl);
+double compute_dt_gpu(const Grid2DGPU& grid, GpuWorkspace& ws, double cfl,
+                       double* out_max_speed = nullptr);
+
+// ============================================================
+// Diagnostic-only counter: how many times safe_prim/safe_cons rejected a
+// reconstructed candidate (is_physical() failed) since the last reset.
+// The device-side atomicAdd that feeds this always runs (cheap: only the
+// rejected-candidate branch pays for it), so it never changes which
+// value safe_prim/safe_cons returns. Meant to be reset once and read
+// once per step, only when the driver's --diag-interval is active.
+// ============================================================
+void reset_floor_trigger_count_gpu();
+unsigned long long read_floor_trigger_count_gpu();
 
 // ============================================================
 // Advance — second-order MUSCL-Hancock (x-then-y splitting)
