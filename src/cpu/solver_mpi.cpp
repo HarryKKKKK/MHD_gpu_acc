@@ -114,12 +114,14 @@ inline void reconstruct_cell_muscl_hancock(
     const Conserved U_left  = phys::prim_to_cons(W_left);
     const Conserved U_right = phys::prim_to_cons(W_right);
 
-    // Half-step in time using the directional physical flux
-    const double ch = phys::ch_glm;
-    const Conserved F_left  = (dir == Direction::X) ? phys::flux_x(U_left,  ch)
-                                                     : phys::flux_y(U_left,  ch);
-    const Conserved F_right = (dir == Direction::X) ? phys::flux_x(U_right, ch)
-                                                     : phys::flux_y(U_right, ch);
+    // Half-step in time using the directional physical flux.
+    // ch=0.0 here (not phys::ch_glm): using the real ch would let the
+    // ch^2 * Bn GLM term blow up the psi predictor (matches GPU behavior
+    // in reconstruct_muscl_hancock, src/gpu/solver_gpu.cu).
+    const Conserved F_left  = (dir == Direction::X) ? phys::flux_x(U_left,  0.0)
+                                                     : phys::flux_y(U_left,  0.0);
+    const Conserved F_right = (dir == Direction::X) ? phys::flux_x(U_right, 0.0)
+                                                     : phys::flux_y(U_right, 0.0);
 
     const Conserved half_update = 0.5 * dt_over_d * (F_right - F_left);
 
@@ -663,8 +665,8 @@ double compute_dt_mpi(const Grid2D& grid, double cfl, MPI_Comm comm) {
             if (!std::isfinite(V.rho) || !std::isfinite(V.p) ||
                 V.rho <= 0.0 || V.p <= 0.0) continue;
 
-            const double sx = phys::max_signal_speed_x(V, phys::ch_glm);
-            const double sy = phys::max_signal_speed_y(V, phys::ch_glm);
+            const double sx = phys::max_signal_speed_x(V, 0.0);
+            const double sy = phys::max_signal_speed_y(V, 0.0);
             if (std::isfinite(sx) && std::isfinite(sy))
                 max_speed = std::max(max_speed, std::max(sx, sy));
         }

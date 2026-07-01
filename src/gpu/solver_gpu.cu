@@ -207,9 +207,13 @@ __global__ void compute_block_max_speed_kernel(
         const Primitive V = phys::cons_to_prim(U);
 
         if (is_physical(V)) {
-            // Use the previous-step ch_glm for the CFL estimate (d_ch_glm = device copy)
-            const double sx = phys::max_signal_speed_x(V, phys::d_ch_glm);
-            const double sy = phys::max_signal_speed_y(V, phys::d_ch_glm);
+            // ch=0.0 here (not d_ch_glm): the max signal speed for this step
+            // must come from the current flow state only, not be floored by
+            // the previous step's ch_glm (that created a ratchet where
+            // ch_glm could only ever grow, permanently crushing dt after any
+            // single transient spike).
+            const double sx = phys::max_signal_speed_x(V, 0.0);
+            const double sy = phys::max_signal_speed_y(V, 0.0);
             if (isfinite(sx) && isfinite(sy))
                 local_speed = fmax(sx, sy);
         }
