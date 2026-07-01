@@ -410,8 +410,7 @@ void advance_second_order(
                     ws.fx_cache[xface_idx(local_j, local_i_face_p, nx_faces)] -
                     ws.fx_cache[xface_idx(local_j, local_i_face_m, nx_faces)]
                 );
-            if (!std::isfinite(Utmp(i,j).rho) || !std::isfinite(Utmp(i,j).E))
-                Utmp(i,j) = Uold(i,j);
+            Utmp(i,j) = enforce_physical_conserved(Utmp(i,j), Uold(i,j));
         }
     }
 
@@ -450,8 +449,7 @@ void advance_second_order(
                     ws.fy_cache[yface_idx(local_j_face_p, local_i, nx_cells)] -
                     ws.fy_cache[yface_idx(local_j_face_m, local_i, nx_cells)]
                 );
-            if (!std::isfinite(Unew(i,j).rho) || !std::isfinite(Unew(i,j).E))
-                Unew(i,j) = Utmp(i,j);
+            Unew(i,j) = enforce_physical_conserved(Unew(i,j), Utmp(i,j));
         }
     }
 

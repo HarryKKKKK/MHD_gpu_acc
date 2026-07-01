@@ -310,14 +310,16 @@ int main(int argc, char** argv) {
         }
 
         // Write snapshots whose time we have just reached
-        if (rc.write_out && has_snaps) {
+        if (has_snaps) {
             while (snap_idx < cfg.snapshot_times.size() &&
                    t >= cfg.snapshot_times[snap_idx] - 1e-12) {
                 std::cout << "  [snap] " << cfg.snapshot_tags[snap_idx]
                           << "  t_phys=" << std::scientific << std::setprecision(6)
                           << t << " s\n";
-                write_all_fields(Uold, rc.out_dir,
-                    rc.case_name + "_cpu_" + cfg.snapshot_tags[snap_idx]);
+                if (rc.write_out) {
+                    write_all_fields(Uold, rc.out_dir,
+                        rc.case_name + "_cpu_" + cfg.snapshot_tags[snap_idx]);
+                }
                 ++snap_idx;
             }
         }
