@@ -84,6 +84,7 @@ void write_all_fields(
     write_field_csv(grid, path("rho"), [](const Conserved& U){ return U.rho; });
     write_field_csv(grid, path("u"),   [](const Conserved& U){ return U.rhou / U.rho; });
     write_field_csv(grid, path("v"),   [](const Conserved& U){ return U.rhov / U.rho; });
+    write_field_csv(grid, path("w"),   [](const Conserved& U){ return U.rhow / U.rho; });
     write_field_csv(grid, path("Bx"),  [](const Conserved& U){ return U.Bx; });
     write_field_csv(grid, path("By"),  [](const Conserved& U){ return U.By; });
     write_field_csv(grid, path("Bz"),  [](const Conserved& U){ return U.Bz; });

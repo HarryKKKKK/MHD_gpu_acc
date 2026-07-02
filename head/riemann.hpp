@@ -323,7 +323,7 @@ HD inline Conserved hlld_flux(
     const double rhoRs = rhoR * (SR - unR) / (SR - SM);
 
     if (rhoLs <= 0.0 || rhoRs <= 0.0 ||
-        !std::isfinite(rhoLs) || !std::isfinite(rhoRs)) {
+        !finite_number(rhoLs) || !finite_number(rhoRs)) {
         return hll_flux(UL, UR, dir, ch);
     }
 
@@ -395,14 +395,7 @@ HD inline Conserved hlld_flux(
         BtLss = BtRss = (sqRhoLs*BtRs + sqRhoRs*BtLs + signBn*sqRhoLs*sqRhoRs*(utRs - utLs)) * inv_d2;
         BwLss = BwRss = (sqRhoLs*BwRs + sqRhoRs*BwLs + signBn*sqRhoLs*sqRhoRs*(uwRs - uwLs)) * inv_d2;
 
-        ELss = ELs - sqRhoLs * signBn *
-               (SM*BtLss + uwLss*BwLss - SM*BtLs - uwLs*BwLs  // approximate
-                + utLss*BtLss - utLs*BtLs);
-        ERss = ERs + sqRhoRs * signBn *
-               (SM*BtRss + uwRss*BwRss - SM*BtRs - uwRs*BwRs
-                + utRss*BtRss - utRs*BtRs);
-
-        // More careful: eqs. 63-64
+        // Energy jump across the rotational (Alfven) discontinuity, eqs. 63-64
         const double BdotULss = BnL*SM + BtLss*utLss + BwLss*uwLss;
         const double BdotULs  = BnL*SM + BtLs *utLs  + BwLs *uwLs;
         ELss = ELs - sqRhoLs*signBn*(BdotULss - BdotULs);
