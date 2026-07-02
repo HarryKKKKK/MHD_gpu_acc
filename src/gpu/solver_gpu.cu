@@ -4,7 +4,6 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
-#include <limits>
 #include <stdexcept>
 
 #include <cuda_runtime.h>
@@ -626,13 +625,11 @@ double compute_dt_gpu(const Grid2DGPU& grid, GpuWorkspace& ws, double cfl,
     CUDA_CHECK(cudaMemcpy(&max_speed, ws.max_speed_d,
                           sizeof(double), cudaMemcpyDeviceToHost));
 
-    // Report the raw value even in the max_speed<=0 branch below, so a
-    // diagnostic reader can see this otherwise-silent fallback (dt is
-    // substituted with DBL_MAX and ch_glm is left untouched in that case).
     if (out_max_speed) *out_max_speed = max_speed;
 
-    if (max_speed <= 0.0)
-        return std::numeric_limits<double>::max();
+    if (max_speed <= 0.0) {
+        throw std::runtime_error("compute_dt_gpu: non-positive maximum wave speed.");
+    }
 
     // Update device-side ch_glm = max signal speed (Dedner Section 4)
     set_gpu_physics_ch(max_speed);

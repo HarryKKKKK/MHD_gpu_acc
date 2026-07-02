@@ -333,8 +333,11 @@ HD inline Conserved hlld_flux(
     // Alfvén speeds in L* and R* states (eq. 51)
     const double sqrtRhoLs = sqrt(rhoLs);
     const double sqrtRhoRs = sqrt(rhoRs);
-    const double SLs = SM - fabs(BnL) / sqrtRhoLs;
-    const double SRs = SM + fabs(BnR) / sqrtRhoRs;
+    // GLM-consistent unified normal B (Florinski et al. 2013, eq. 34;
+    // same formula as apply_glm_flux) — used only for SLs/SRs (eq. 31).
+    const double Bn_star = 0.5*(BnL + BnR) - 0.5/ch*(VR.psi - VL.psi);
+    const double SLs = SM - fabs(Bn_star) / sqrtRhoLs;
+    const double SRs = SM + fabs(Bn_star) / sqrtRhoRs;
 
     // L* state
     double utLs, uwLs, BtLs, BwLs, ELs;
