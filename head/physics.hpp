@@ -4,45 +4,25 @@
 
 #include "types.hpp"
 
-// ============================================================
-// MHD physics for the GLM-MHD system (Dedner et al. 2002).
-//
-// Conservative variables: U = (rho, rho*ux, rho*uy, rho*uz,
-//                               Bx, By, Bz, E, psi)
-//
-// Equation of state (perfect gas, eq. 3):
-//   p = (gamma - 1) * (E - rho|u|^2/2 - |B|^2/2)
-//
-// GLM divergence-cleaning scalar psi propagates div(B) errors
-// out of the domain at speed ch (hyperbolic GLM, Section 2).
-// Mixed GLM adds exponential damping to psi (eq. 19, 45).
-// ============================================================
-
 namespace phys {
 
-// adiabatic exponent — set per test case before initialisation
-// GPU: device copy (d_gamma) set via set_gpu_physics_gamma(); host copy (gamma)
-// kept in sync by the same setter so HD functions can read the right one.
 #ifdef __CUDACC__
-__device__ static double d_gamma = 5.0 / 3.0;  // device copy
-inline double gamma = 5.0 / 3.0;               // host mirror
+__device__ static double d_gamma = 5.0 / 3.0;
+inline double gamma = 5.0 / 3.0;
 #else
 inline double gamma = 5.0 / 3.0;
 #endif
 
-// GLM cleaning speed ch (set each timestep from max signal speed, Section 4)
-// Mixed-GLM damping ratio c_r = c_p^2 / c_h (optimal ~0.18, Fig. 2)
 #ifdef __CUDACC__
-__device__ static double d_ch_glm = 0.0;        // device copy
-__device__ static double d_cr_glm = 0.18;       // device copy
-inline double ch_glm = 0.0;                     // host mirror
-inline double cr_glm = 0.18;                    // host mirror
+__device__ static double d_ch_glm = 0.0;
+__device__ static double d_cr_glm = 0.18;
+inline double ch_glm = 0.0;
+inline double cr_glm = 0.18;
 #else
 inline double ch_glm = 0.0;
 inline double cr_glm = 0.18;
 #endif
 
-// HD accessors — pick device or host copy depending on compilation path.
 #ifdef __CUDACC__
 HD inline double get_gamma() {
 #ifdef __CUDA_ARCH__
@@ -63,9 +43,6 @@ HD inline double get_gamma()  { return gamma; }
 HD inline double get_ch_glm() { return ch_glm; }
 #endif
 
-// ------------------------------------------------------------
-// Conserved → Primitive conversion
-// ------------------------------------------------------------
 HD inline Primitive cons_to_prim(const Conserved& U) {
     const double inv_rho = 1.0 / U.rho;
     const double ux = U.rhou * inv_rho;
@@ -77,9 +54,6 @@ HD inline Primitive cons_to_prim(const Conserved& U) {
     return Primitive(U.rho, ux, uy, uz, U.Bx, U.By, U.Bz, p, U.psi);
 }
 
-// ------------------------------------------------------------
-// Primitive → Conserved conversion
-// ------------------------------------------------------------
 HD inline Conserved prim_to_cons(const Primitive& V) {
     const double Bmag2 = V.Bx*V.Bx + V.By*V.By + V.Bz*V.Bz;
     const double ke    = 0.5 * V.rho * (V.u*V.u + V.v*V.v + V.w*V.w);
@@ -88,20 +62,6 @@ HD inline Conserved prim_to_cons(const Primitive& V) {
                      V.Bx, V.By, V.Bz, E, V.psi);
 }
 
-// ------------------------------------------------------------
-// GLM-MHD flux in x-direction (eqs. 1a-1d with GLM modification,
-// eq. 24a-24e from Dedner et al. 2002).
-//
-// F_x = (rho*ux,
-//         rho*ux^2 + p_tot - Bx^2,
-//         rho*ux*uy - Bx*By,
-//         rho*ux*uz - Bx*Bz,
-//         psi,                      <- GLM: replaces 0
-//         By*ux - Bx*uy,
-//         Bz*ux - Bx*uz,
-//         (E + p_tot)*ux - Bx*(u.B),
-//         ch^2 * Bx)                <- GLM
-// ------------------------------------------------------------
 HD inline Conserved flux_x(const Conserved& U, double ch) {
     const double inv_rho = 1.0 / U.rho;
     const double ux = U.rhou * inv_rho;
@@ -126,19 +86,6 @@ HD inline Conserved flux_x(const Conserved& U, double ch) {
     );
 }
 
-// ------------------------------------------------------------
-// GLM-MHD flux in y-direction
-//
-// F_y = (rho*uy,
-//         rho*ux*uy - Bx*By,
-//         rho*uy^2 + p_tot - By^2,
-//         rho*uy*uz - By*Bz,
-//         Bx*uy - By*ux,
-//         psi,                      <- GLM
-//         Bz*uy - By*uz,
-//         (E + p_tot)*uy - By*(u.B),
-//         ch^2 * By)                <- GLM
-// ------------------------------------------------------------
 HD inline Conserved flux_y(const Conserved& U, double ch) {
     const double inv_rho = 1.0 / U.rho;
     const double ux = U.rhou * inv_rho;
@@ -163,15 +110,6 @@ HD inline Conserved flux_y(const Conserved& U, double ch) {
     );
 }
 
-// ------------------------------------------------------------
-// Fast magnetosonic speed in the x-direction (eqs. 29-32).
-//
-//   a^2  = gamma*p/rho  (sound speed squared)
-//   b^2  = |B|^2/rho    (total Alfvén speed squared)
-//   b_x^2 = Bx^2/rho   (x-Alfvén speed squared)
-//
-//   c_f = sqrt( 1/2 * (a^2 + b^2 + sqrt((a^2+b^2)^2 - 4*a^2*b_x^2)) )
-// ------------------------------------------------------------
 HD inline double fast_speed_x(const Primitive& V) {
     const double a2  = get_gamma() * V.p / V.rho;
     const double b2  = (V.Bx*V.Bx + V.By*V.By + V.Bz*V.Bz) / V.rho;
@@ -180,7 +118,6 @@ HD inline double fast_speed_x(const Primitive& V) {
     return sqrt(0.5 * (a2 + b2 + sqrt(disc > 0.0 ? disc : 0.0)));
 }
 
-// Fast magnetosonic speed in the y-direction (swap Bx ↔ By)
 HD inline double fast_speed_y(const Primitive& V) {
     const double a2  = get_gamma() * V.p / V.rho;
     const double b2  = (V.Bx*V.Bx + V.By*V.By + V.Bz*V.Bz) / V.rho;
@@ -189,16 +126,10 @@ HD inline double fast_speed_y(const Primitive& V) {
     return sqrt(0.5 * (a2 + b2 + sqrt(disc > 0.0 ? disc : 0.0)));
 }
 
-// Sound speed (for reference / diagnostics)
 HD inline double sound_speed(const Primitive& V) {
     return sqrt(get_gamma() * V.p / V.rho);
 }
 
-// ------------------------------------------------------------
-// Maximum signal speed in each direction.
-// Includes GLM waves traveling at ±ch (eigenvalues λ1, λ9 of
-// the GLM-MHD system, eq. 33).
-// ------------------------------------------------------------
 HD inline double max_signal_speed_x(const Primitive& V, double ch) {
     const double cf = fast_speed_x(V);
     return fmax(fabs(V.u) + cf, ch);
@@ -209,7 +140,6 @@ HD inline double max_signal_speed_y(const Primitive& V, double ch) {
     return fmax(fabs(V.v) + cf, ch);
 }
 
-// Thermal pressure from conserved state
 HD inline double pressure(const Conserved& U) {
     return cons_to_prim(U).p;
 }

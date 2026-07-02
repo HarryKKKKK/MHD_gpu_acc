@@ -20,10 +20,6 @@ namespace {
 constexpr double kRhoFloor = 1.0e-12;
 constexpr double kPFloor   = 1.0e-12;
 
-// ============================================================
-// Minmod limiter for scalar and all 9 primitive components
-// ============================================================
-
 inline double minmod_scalar(double a, double b) {
     if (a * b <= 0.0) return 0.0;
     return (a > 0.0) ? std::min(a, b) : std::max(a, b);
@@ -42,10 +38,6 @@ inline Primitive minmod_primitive(const Primitive& a, const Primitive& b) {
         minmod_scalar(a.psi, b.psi)
     );
 }
-
-// ============================================================
-// Physical validity checks for MHD primitive state
-// ============================================================
 
 inline bool is_physical(const Primitive& V) {
     return std::isfinite(V.rho) && V.rho > kRhoFloor &&
@@ -74,10 +66,6 @@ inline Conserved enforce_physical_conserved(
     return fallback;
 }
 
-// ============================================================
-// Minmod slope estimate in the given direction
-// ============================================================
-
 inline Primitive limited_slope(
     const Primitive& Wm,
     const Primitive& Wc,
@@ -85,10 +73,6 @@ inline Primitive limited_slope(
 ) {
     return minmod_primitive(Wc - Wm, Wp - Wc);
 }
-
-// ============================================================
-// MUSCL-Hancock half-step reconstruction for one cell triplet.
-// ============================================================
 
 inline void reconstruct_cell_muscl_hancock(
     const Primitive& Wm,
@@ -110,10 +94,7 @@ inline void reconstruct_cell_muscl_hancock(
     const Conserved U_left  = phys::prim_to_cons(W_left);
     const Conserved U_right = phys::prim_to_cons(W_right);
 
-    // Half-step in time using the directional physical flux.
-    // ch=0.0 here (not phys::ch_glm): using the real ch would let the
-    // ch^2 * Bn GLM term blow up the psi predictor (matches GPU behavior
-    // in reconstruct_muscl_hancock, src/gpu/solver_gpu.cu).
+    // ch=0 here intentionally (matches src/gpu/solver_gpu.cu predictor step)
     const Conserved F_left  = (dir == Direction::X) ? phys::flux_x(U_left,  0.0)
                                                      : phys::flux_y(U_left,  0.0);
     const Conserved F_right = (dir == Direction::X) ? phys::flux_x(U_right, 0.0)
@@ -125,10 +106,6 @@ inline void reconstruct_cell_muscl_hancock(
     U_right_star = enforce_physical_conserved(U_right - half_update, U_right);
 }
 
-// ============================================================
-// Cache index helpers
-// ============================================================
-
 inline int xface_idx(int local_j, int local_i_face, int nx_faces) {
     return local_j * nx_faces + local_i_face;
 }
@@ -136,14 +113,6 @@ inline int xface_idx(int local_j, int local_i_face, int nx_faces) {
 inline int yface_idx(int local_j_face, int local_i, int nx_cells) {
     return local_j_face * nx_cells + local_i;
 }
-
-// ============================================================
-// Reconstruction fill: compute each cell's left/right MUSCL-
-// Hancock face states once, storing them in recon_L / recon_R.
-//
-// X-direction: covers cells i in [ib-1, ie] (all cells adjacent
-// to an interior interface), rows j in [jb, je).
-// ============================================================
 
 void fill_recon_x_cache(
     const std::vector<Primitive>& W,
@@ -170,7 +139,6 @@ void fill_recon_x_cache(
     }
 }
 
-// Y-direction: covers cells j in [jb-1, je], columns i in [ib, ie).
 void fill_recon_y_cache(
     const std::vector<Primitive>& W,
     int ib, int ie, int jb, int je,
@@ -195,13 +163,6 @@ void fill_recon_y_cache(
         }
     }
 }
-
-// ============================================================
-// Fill x-face flux cache using precomputed reconstruction states.
-// recon_R[i,j] is the right-face (i+1/2 left state) of cell (i,j).
-// recon_L[i,j] is the left-face  (i-1/2 right state) of cell (i,j).
-// Face local_i_face = 0 is the left ghost interface at i = ib-1.
-// ============================================================
 
 void fill_x_face_cache(
     const Grid2D& Uin,
@@ -234,13 +195,6 @@ void fill_x_face_cache(
         }
     }
 }
-
-// ============================================================
-// Fill y-face flux cache using precomputed reconstruction states.
-// recon_R[i,j] is the top-face  (j+1/2 bottom state) of cell (i,j).
-// recon_L[i,j] is the bot-face  (j-1/2 top state)    of cell (i,j).
-// Face local_j_face = 0 is the bottom ghost interface at j = jb-1.
-// ============================================================
 
 void fill_y_face_cache(
     const Grid2D& Uin,
@@ -276,7 +230,7 @@ void fill_y_face_cache(
 
 void apply_psi_damping(Grid2D& grid, double dt) {
     const double factor = std::exp(-dt * phys::ch_glm / phys::cr_glm);
-    if (factor >= 1.0) return;  // ch=0 or cr=0: no damping needed
+    if (factor >= 1.0) return;
 
 #ifdef _OPENMP
 #pragma omp parallel for collapse(2) schedule(static)
@@ -290,10 +244,6 @@ void apply_psi_damping(Grid2D& grid, double dt) {
 
 } // namespace
 
-// ============================================================
-// Public API
-// ============================================================
-
 double compute_dt(const Grid2D& grid, double cfl, double* out_max_speed) {
     double max_speed = 0.0;
 
@@ -304,7 +254,6 @@ double compute_dt(const Grid2D& grid, double cfl, double* out_max_speed) {
         for (int i = grid.i_begin(); i < grid.i_end(); ++i) {
             const Primitive V = phys::cons_to_prim(grid(i, j));
 
-            // Skip non-physical cells (shouldn't occur but be safe)
             if (!std::isfinite(V.rho) || !std::isfinite(V.p) ||
                 V.rho <= 0.0 || V.p <= 0.0) continue;
 
@@ -321,24 +270,10 @@ double compute_dt(const Grid2D& grid, double cfl, double* out_max_speed) {
         throw std::runtime_error("compute_dt: non-positive maximum wave speed.");
     }
 
-    // Set GLM cleaning speed = max MHD signal speed (eq. 30 / Section 4)
     phys::ch_glm = max_speed;
 
     return cfl * std::min(grid.dx(), grid.dy()) / max_speed;
 }
-
-// ============================================================
-// Second-order MUSCL-Hancock, x-then-y dimensional splitting.
-//
-// Steps:
-//   1. Fill x-face cache from Uold
-//   2. x-update: Uold → Utmp (interior only)
-//   3. BC on Utmp
-//   4. Fill y-face cache from Utmp
-//   5. y-update: Utmp → Unew (interior only)
-//   6. BC on Unew
-//   7. Mixed-GLM ψ damping on Unew
-// ============================================================
 
 void advance_second_order(
     const Grid2D&        Uold,
@@ -374,12 +309,6 @@ void advance_second_order(
     ws.recon_L_cache.resize(total_cells);
     ws.recon_R_cache.resize(total_cells);
 
-    // ----------------------------------------------------------
-    // Steps 1-2: x-sweep  (Uold → Utmp)
-    // ----------------------------------------------------------
-
-    // Pre-compute all primitives once; reconstruction reads from this cache
-    // instead of calling cons_to_prim per-face.
 #ifdef _OPENMP
 #pragma omp parallel for collapse(2) schedule(static)
 #endif
@@ -388,8 +317,6 @@ void advance_second_order(
             ws.prim_cache[static_cast<std::size_t>(jj) * total_nx + ii] =
                 phys::cons_to_prim(Uold(ii, jj));
 
-    // Reconstruct each cell once; fill_x_face_cache reads from the cache
-    // instead of reconstructing cell i+1 redundantly for interfaces i+1/2 and i+3/2.
     fill_recon_x_cache(ws.prim_cache, ib, ie, jb, je, total_nx, dt_over_dx,
                        ws.recon_L_cache, ws.recon_R_cache);
     fill_x_face_cache(Uold, ws.recon_L_cache, ws.recon_R_cache, ws.fx_cache, solver);
@@ -403,8 +330,6 @@ void advance_second_order(
             const int local_i_face_m = (i - 1) - (ib - 1);
             const int local_i_face_p =  i      - (ib - 1);
 
-            // Safety: one NaN flux can silently corrupt every cell in a column
-            // via the y-sweep, so reset any non-finite cells immediately.
             Utmp(i, j) = Uold(i, j)
                 - dt_over_dx * (
                     ws.fx_cache[xface_idx(local_j, local_i_face_p, nx_faces)] -
@@ -414,15 +339,9 @@ void advance_second_order(
         }
     }
 
-    // Step 3: BC on Utmp — Dirichlet cells come from Uold
     copy_ghost_cells(Uold, Utmp);
     apply_boundary(Utmp, bc);
 
-    // ----------------------------------------------------------
-    // Steps 4-5: y-sweep  (Utmp → Unew)
-    // ----------------------------------------------------------
-
-    // Rebuild primitive cache from Utmp (ghost cells updated by BC above).
 #ifdef _OPENMP
 #pragma omp parallel for collapse(2) schedule(static)
 #endif
@@ -453,15 +372,12 @@ void advance_second_order(
         }
     }
 
-    // Step 6: BC on Unew — Dirichlet cells come from Utmp
     copy_ghost_cells(Utmp, Unew);
     apply_boundary(Unew, bc);
 
-    // Step 7: Mixed-GLM ψ damping (Dedner eq. 45)
     apply_psi_damping(Unew, dt);
 }
 
-// Backward-compatible convenience overload: HLL + all-transmissive
 void advance_second_order(
     const Grid2D& Uold,
     Grid2D&       Utmp,

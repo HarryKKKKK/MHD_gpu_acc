@@ -5,3 +5,7 @@ Test Euler Test - shock bubble
 
 MPI & GPU code - running time
 profile GPU code
+
+fix the bug
+profile
+compare run time

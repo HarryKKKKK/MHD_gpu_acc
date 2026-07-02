@@ -5,39 +5,20 @@
 #include "physics.hpp"
 #include "types.hpp"
 
-// ============================================================
-// Riemann solvers for the 2D GLM-MHD system (Dedner et al. 2002).
-//
-// Supported solvers:
-//   HLL   — HLL with MHD fast magnetosonic + GLM wave speeds
-//   HLLC  — HLLC (Toro et al. 1994); 3-wave, optimal for pure-hydro cases
-//   HLLD  — HLLD (Miyoshi & Kusano 2005); more accurate for MHD
-//   FORCE — Local FORCE (average of Lax-Friedrichs and Richtmyer)
-//
-// All solvers take the global GLM cleaning speed phys::get_ch_glm() which
-// must be set (on CPU) before the flux computation step.
-// ============================================================
-
 enum class Direction { X, Y };
 
 enum class RiemannSolver { HLL, HLLC, HLLD, FORCE };
 
-// ------------------------------------------------------------
-// Physical flux wrapper — uses phys::get_ch_glm() (host: inline double;
-// device: __device__ static double set each step via set_gpu_physics_ch)
-// ------------------------------------------------------------
 HD inline Conserved physical_flux(const Conserved& U, Direction dir) {
     const double ch = phys::get_ch_glm();
     return (dir == Direction::X) ? phys::flux_x(U, ch)
                                  : phys::flux_y(U, ch);
 }
 
-// Normal velocity component
 HD inline double normal_velocity(const Primitive& V, Direction dir) {
     return (dir == Direction::X) ? V.u : V.v;
 }
 
-// Normal magnetic field component
 HD inline double normal_B(const Primitive& V, Direction dir) {
     return (dir == Direction::X) ? V.Bx : V.By;
 }
@@ -50,23 +31,30 @@ HD inline bool finite_number(double x) {
 #endif
 }
 
-// Physical validity check for MHD primitive state
 HD inline bool primitive_is_physical(const Primitive& V) {
     return finite_number(V.rho) && finite_number(V.p) &&
            V.rho > 0.0 && V.p > 0.0;
 }
 
-// ============================================================
-// HLL Riemann solver for the GLM-MHD system.
-//
-// Wave speed estimates include the GLM cleaning waves at ±ch
-// (eigenvalues λ1 = -ch and λ9 = +ch from eq. 33).
-//
-// S_L = min(u_nL - cf_L, u_nR - cf_R, -ch)
-// S_R = max(u_nL + cf_L, u_nR + cf_R,  ch)
-//
-// F_HLL = (S_R*F_L - S_L*F_R + S_L*S_R*(U_R - U_L)) / (S_R - S_L)
-// ============================================================
+struct GlmStar {
+    double Bn;
+    double psi;
+};
+
+HD inline GlmStar glm_resolve(
+    double BnL, double BnR, double psiL, double psiR, double ch
+) {
+    GlmStar s;
+    if (ch > 0.0) {
+        s.Bn  = 0.5*(BnL + BnR) - 0.5/ch*(psiR - psiL);
+        s.psi = 0.5*(psiL + psiR) - 0.5*ch*(BnR - BnL);
+    } else {
+        s.Bn  = 0.5*(BnL + BnR);
+        s.psi = 0.5*(psiL + psiR);
+    }
+    return s;
+}
+
 HD inline Conserved hll_flux(
     const Conserved& UL,
     const Conserved& UR,
@@ -93,7 +81,6 @@ HD inline Conserved hll_flux(
     const double unL = normal_velocity(VL, dir);
     const double unR = normal_velocity(VR, dir);
 
-    // Include GLM wave speeds ±ch in the estimate (eq. 33)
     const double SL = fmin(fmin(unL - cfL, unR - cfR), -ch);
     const double SR = fmax(fmax(unL + cfL, unR + cfR),  ch);
 
@@ -106,19 +93,6 @@ HD inline Conserved hll_flux(
     return (SR * FL - SL * FR + (SL * SR) * (UR - UL)) / denom;
 }
 
-// ============================================================
-// HLLC Riemann solver (Toro et al. 1994).
-//
-// 3-wave solver with a contact wave at SM.  Reduces to the
-// standard hydro HLLC when B = 0 (e.g. shock_bubble test).
-// For the general MHD case the tangential B fields are held
-// fixed across the contact — a valid first approximation when
-// |B| is small, and exact for pure hydro.
-//
-// References:
-//   Toro, Spruce & Speares (1994), Shock Waves 4, 25-34.
-//   Li (2005), J. Comput. Phys. 203, 344-357 (energy formula).
-// ============================================================
 HD inline Conserved hllc_flux(
     const Conserved& UL,
     const Conserved& UR,
@@ -136,20 +110,21 @@ HD inline Conserved hllc_flux(
     const double pL   = VL.p,   pR   = VR.p;
 
     double unL, unR, utL, utR, uwL, uwR;
-    double BnL, BnR, BtL, BtR, BwL, BwR;
+    double BnL_raw, BnR_raw, BtL, BtR, BwL, BwR;
+    const double psiL = VL.psi, psiR = VR.psi;
 
     if (dir == Direction::X) {
         unL = VL.u;  unR = VR.u;
         utL = VL.v;  utR = VR.v;
         uwL = VL.w;  uwR = VR.w;
-        BnL = VL.Bx; BnR = VR.Bx;
+        BnL_raw = VL.Bx; BnR_raw = VR.Bx;
         BtL = VL.By; BtR = VR.By;
         BwL = VL.Bz; BwR = VR.Bz;
     } else {
         unL = VL.v;  unR = VR.v;
         utL = VL.u;  utR = VR.u;
         uwL = VL.w;  uwR = VR.w;
-        BnL = VL.By; BnR = VR.By;
+        BnL_raw = VL.By; BnR_raw = VR.By;
         BtL = VL.Bx; BtR = VR.Bx;
         BwL = VL.Bz; BwR = VR.Bz;
     }
@@ -159,13 +134,6 @@ HD inline Conserved hllc_flux(
     const double cfR = (dir == Direction::X) ? phys::fast_speed_x(VR)
                                              : phys::fast_speed_y(VR);
 
-    // Outer wave speeds — physical fast-magnetosonic bounds only.
-    // Do NOT include ±ch here: ch_glm is a global maximum and using it as a
-    // floor on per-interface bounds adds O(ch/cf - 1) excess dissipation on
-    // every cell whose local speed is below the domain maximum (e.g. the
-    // helium bubble interior in shock_bubble). The ±ch eigenvalues belong
-    // to the psi/GLM sub-system, not to the physical MHD waves, so they
-    // must not corrupt the rho/momentum/energy fluxes.
     const double SL = fmin(unL - cfL, unR - cfR);
     const double SR = fmax(unL + cfL, unR + cfR);
 
@@ -177,18 +145,20 @@ HD inline Conserved hllc_flux(
     if (SL >= 0.0) return FL;
     if (SR <= 0.0) return FR;
 
-    const double BmagL2 = BnL*BnL + BtL*BtL + BwL*BwL;
-    const double BmagR2 = BnR*BnR + BtR*BtR + BwR*BwR;
+    const GlmStar glm  = glm_resolve(BnL_raw, BnR_raw, psiL, psiR, ch);
+    const double  Bn   = glm.Bn;
+    const double  psiM = glm.psi;
+
+    const double BmagL2 = Bn*Bn + BtL*BtL + BwL*BwL;
+    const double BmagR2 = Bn*Bn + BtR*BtR + BwR*BwR;
     const double ptL = pL + 0.5*BmagL2;
     const double ptR = pR + 0.5*BmagR2;
 
-    // Contact wave speed (Miyoshi & Kusano eq. 38)
     const double numerSM = (SR - unR)*rhoR*unR - (SL - unL)*rhoL*unL + ptL - ptR;
     const double denomSM = (SR - unR)*rhoR     - (SL - unL)*rhoL;
     if (fabs(denomSM) < 1.0e-14) return hll_flux(UL, UR, dir, ch);
     const double SM = numerSM / denomSM;
 
-    // Star densities (mass conservation across each outer wave)
     const double rhoLs = rhoL * (SL - unL) / (SL - SM);
     const double rhoRs = rhoR * (SR - unR) / (SR - SM);
     if (rhoLs <= 0.0 || rhoRs <= 0.0 ||
@@ -196,26 +166,24 @@ HD inline Conserved hllc_flux(
         return hll_flux(UL, UR, dir, ch);
     }
 
-    // Total pressure in each star region (momentum conservation)
     const double ptLs = ptL + rhoL*(SL - unL)*(SM - unL);
     const double ptRs = ptR + rhoR*(SR - unR)*(SM - unR);
 
-    // GLM psi: linear interpolation (same treatment as HLLD)
-    const double psiM = 0.5*(VL.psi + VR.psi) - 0.5*ch*(BnR - BnL);
+    const double FtL = unL*BtL - Bn*utL, FtR = unR*BtR - Bn*utR;
+    const double FwL = unL*BwL - Bn*uwL, FwR = unR*BwR - Bn*uwR;
+    const double Bt_star = (SR*BtR - SL*BtL - (FtR - FtL)) / (SR - SL);
+    const double Bw_star = (SR*BwR - SL*BwL - (FwR - FwL)) / (SR - SL);
 
-    // Tangential B unchanged across contact (exact for B=0, HLLC approximation for MHD)
-    // Energy in star states via Li (2005) eq. 17 (generalises Toro to MHD)
-    const double BdotUL  = BnL*unL + BtL*utL + BwL*uwL;
-    const double BdotULs = BnL*SM  + BtL*utL + BwL*uwL;  // un -> SM, tangential unchanged
-    const double BdotUR  = BnR*unR + BtR*utR + BwR*uwR;
-    const double BdotURs = BnR*SM  + BtR*utR + BwR*uwR;
+    const double BdotUL  = Bn*unL + BtL*utL + BwL*uwL;
+    const double BdotULs = Bn*SM  + Bt_star*utL + Bw_star*uwL;
+    const double BdotUR  = Bn*unR + BtR*utR + BwR*uwR;
+    const double BdotURs = Bn*SM  + Bt_star*utR + Bw_star*uwR;
 
     const double ELs = ((SL - unL)*UL.E - ptL*unL + ptLs*SM
-                        + BnL*(BdotULs - BdotUL)) / (SL - SM);
+                        + Bn*(BdotULs - BdotUL)) / (SL - SM);
     const double ERs = ((SR - unR)*UR.E - ptR*unR + ptRs*SM
-                        + BnR*(BdotURs - BdotUR)) / (SR - SM);
+                        + Bn*(BdotURs - BdotUR)) / (SR - SM);
 
-    // Build conserved star state with direction rotation (same lambda pattern as HLLD)
     auto build_conserved = [&](
         double rhos, double uns, double uts, double uws,
         double Bns,  double Bts, double Bws, double Es, double psis
@@ -231,25 +199,21 @@ HD inline Conserved hllc_flux(
 
     if (SM >= 0.0) {
         const Conserved ULs = build_conserved(
-            rhoLs, SM, utL, uwL, BnL, BtL, BwL, ELs, psiM);
+            rhoLs, SM, utL, uwL, Bn, Bt_star, Bw_star, ELs, psiM);
+        if (!primitive_is_physical(phys::cons_to_prim(ULs))) {
+            return hll_flux(UL, UR, dir, ch);
+        }
         return FL + SL * (ULs - UL);
     } else {
         const Conserved URs = build_conserved(
-            rhoRs, SM, utR, uwR, BnR, BtR, BwR, ERs, psiM);
+            rhoRs, SM, utR, uwR, Bn, Bt_star, Bw_star, ERs, psiM);
+        if (!primitive_is_physical(phys::cons_to_prim(URs))) {
+            return hll_flux(UL, UR, dir, ch);
+        }
         return FR + SR * (URs - UR);
     }
 }
 
-// ============================================================
-// HLLD Riemann solver for ideal MHD (Miyoshi & Kusano 2005).
-//
-// This is a more accurate 5-wave solver for MHD. It resolves
-// fast/Alfvén/slow waves and gives better results across
-// discontinuities compared to HLL.
-//
-// Implementation follows the algorithm in Miyoshi & Kusano (2005),
-// J. Comput. Phys. 208, 315-344.
-// ============================================================
 HD inline Conserved hlld_flux(
     const Conserved& UL,
     const Conserved& UR,
@@ -263,26 +227,25 @@ HD inline Conserved hlld_flux(
         return hll_flux(UL, UR, dir, ch);
     }
 
-    // Rotate so the "normal" direction is always x
-    // For Y direction: swap (x↔y) and (Bx↔By) in inputs/outputs
     const double rhoL = VL.rho, rhoR = VR.rho;
     const double pL   = VL.p,   pR   = VR.p;
 
     double unL, unR, utL, utR, uwL, uwR;
-    double BnL, BnR, BtL, BtR, BwL, BwR;
+    double BnL_raw, BnR_raw, BtL, BtR, BwL, BwR;
+    const double psiL = VL.psi, psiR = VR.psi;
 
     if (dir == Direction::X) {
         unL = VL.u;  unR = VR.u;
         utL = VL.v;  utR = VR.v;
         uwL = VL.w;  uwR = VR.w;
-        BnL = VL.Bx; BnR = VR.Bx;
+        BnL_raw = VL.Bx; BnR_raw = VR.Bx;
         BtL = VL.By; BtR = VR.By;
         BwL = VL.Bz; BwR = VR.Bz;
     } else {
         unL = VL.v;  unR = VR.v;
         utL = VL.u;  utR = VR.u;
         uwL = VL.w;  uwR = VR.w;
-        BnL = VL.By; BnR = VR.By;
+        BnL_raw = VL.By; BnR_raw = VR.By;
         BtL = VL.Bx; BtR = VR.Bx;
         BwL = VL.Bz; BwR = VR.Bz;
     }
@@ -292,93 +255,91 @@ HD inline Conserved hlld_flux(
     const double cfR = (dir == Direction::X) ? phys::fast_speed_x(VR)
                                              : phys::fast_speed_y(VR);
 
-    // Outer fast wave speeds — physical bounds only (see hllc_flux comment).
     const double SL = fmin(unL - cfL, unR - cfR);
     const double SR = fmax(unL + cfL, unR + cfR);
 
-    // Fall back to HLL if outer waves degenerate
     const double denom_RL = SR - SL;
     if (fabs(denom_RL) < 1.0e-14) {
-        return hll_flux(UL, UR, dir, ch);
+        return hllc_flux(UL, UR, dir, ch);
     }
 
-    // Total pressure
-    const double BmagL2 = BnL*BnL + BtL*BtL + BwL*BwL;
-    const double BmagR2 = BnR*BnR + BtR*BtR + BwR*BwR;
+    const Conserved FL = (dir == Direction::X) ? phys::flux_x(UL, ch)
+                                               : phys::flux_y(UL, ch);
+    const Conserved FR = (dir == Direction::X) ? phys::flux_x(UR, ch)
+                                               : phys::flux_y(UR, ch);
+
+    if (SL >= 0.0) return FL;
+    if (SR <= 0.0) return FR;
+
+    const GlmStar glm  = glm_resolve(BnL_raw, BnR_raw, psiL, psiR, ch);
+    const double  Bn   = glm.Bn;
+    const double  psiM = glm.psi;
+
+    const double BmagL2 = Bn*Bn + BtL*BtL + BwL*BwL;
+    const double BmagR2 = Bn*Bn + BtR*BtR + BwR*BwR;
     const double ptL = pL + 0.5*BmagL2;
     const double ptR = pR + 0.5*BmagR2;
 
-    // Middle (contact) wave speed SM (eq. 38 in Miyoshi & Kusano)
     const double numerSM = (SR - unR)*rhoR*unR - (SL - unL)*rhoL*unL
                          + ptL - ptR;
     const double denomSM = (SR - unR)*rhoR     - (SL - unL)*rhoL;
 
     if (fabs(denomSM) < 1.0e-14) {
-        return hll_flux(UL, UR, dir, ch);
+        return hllc_flux(UL, UR, dir, ch);
     }
     const double SM = numerSM / denomSM;
 
-    // Density in L* and R* states (eq. 43)
     const double rhoLs = rhoL * (SL - unL) / (SL - SM);
     const double rhoRs = rhoR * (SR - unR) / (SR - SM);
 
     if (rhoLs <= 0.0 || rhoRs <= 0.0 ||
         !finite_number(rhoLs) || !finite_number(rhoRs)) {
-        return hll_flux(UL, UR, dir, ch);
+        return hllc_flux(UL, UR, dir, ch);
     }
 
-    // Total pressure in star region (eq. 41)
     const double ptstar = ptL + rhoL*(SL - unL)*(SM - unL);
 
-    // Alfvén speeds in L* and R* states (eq. 51)
     const double sqrtRhoLs = sqrt(rhoLs);
     const double sqrtRhoRs = sqrt(rhoRs);
-    // GLM-consistent unified normal B (Florinski et al. 2013, eq. 34;
-    // same formula as apply_glm_flux) — used only for SLs/SRs (eq. 31).
-    const double Bn_star = 0.5*(BnL + BnR) - 0.5/ch*(VR.psi - VL.psi);
-    const double SLs = SM - fabs(Bn_star) / sqrtRhoLs;
-    const double SRs = SM + fabs(Bn_star) / sqrtRhoRs;
+    const double SLs = SM - fabs(Bn) / sqrtRhoLs;
+    const double SRs = SM + fabs(Bn) / sqrtRhoRs;
 
-    // L* state
     double utLs, uwLs, BtLs, BwLs, ELs;
     {
-        const double BdotUL = BnL*unL + BtL*utL + BwL*uwL;
-        const double d      = rhoL*(SL - unL)*(SL - SM) - BnL*BnL;
+        const double BdotUL = Bn*unL + BtL*utL + BwL*uwL;
+        const double d      = rhoL*(SL - unL)*(SL - SM) - Bn*Bn;
         if (fabs(d) < 1.0e-14) {
             utLs = utL; uwLs = uwL; BtLs = BtL; BwLs = BwL;
         } else {
-            utLs = utL - BnL*BtL*(SM - unL) / d;
-            uwLs = uwL - BnL*BwL*(SM - unL) / d;
-            BtLs = BtL * (rhoL*(SL-unL)*(SL-unL) - BnL*BnL) / d;
-            BwLs = BwL * (rhoL*(SL-unL)*(SL-unL) - BnL*BnL) / d;
+            utLs = utL - Bn*BtL*(SM - unL) / d;
+            uwLs = uwL - Bn*BwL*(SM - unL) / d;
+            BtLs = BtL * (rhoL*(SL-unL)*(SL-unL) - Bn*Bn) / d;
+            BwLs = BwL * (rhoL*(SL-unL)*(SL-unL) - Bn*Bn) / d;
         }
-        const double BdotULs = BnL*SM + BtLs*utLs + BwLs*uwLs;
+        const double BdotULs = Bn*SM + BtLs*utLs + BwLs*uwLs;
         ELs = (UL.E*(SL - unL) - ptL*unL + ptstar*SM
-               + BnL*(BdotULs - BdotUL)) / (SL - SM);
+               + Bn*(BdotULs - BdotUL)) / (SL - SM);
     }
 
-    // R* state
     double utRs, uwRs, BtRs, BwRs, ERs;
     {
-        const double BdotUR = BnR*unR + BtR*utR + BwR*uwR;
-        const double d      = rhoR*(SR - unR)*(SR - SM) - BnR*BnR;
+        const double BdotUR = Bn*unR + BtR*utR + BwR*uwR;
+        const double d      = rhoR*(SR - unR)*(SR - SM) - Bn*Bn;
         if (fabs(d) < 1.0e-14) {
             utRs = utR; uwRs = uwR; BtRs = BtR; BwRs = BwR;
         } else {
-            utRs = utR - BnR*BtR*(SM - unR) / d;
-            uwRs = uwR - BnR*BwR*(SM - unR) / d;
-            BtRs = BtR * (rhoR*(SR-unR)*(SR-unR) - BnR*BnR) / d;
-            BwRs = BwR * (rhoR*(SR-unR)*(SR-unR) - BnR*BnR) / d;
+            utRs = utR - Bn*BtR*(SM - unR) / d;
+            uwRs = uwR - Bn*BwR*(SM - unR) / d;
+            BtRs = BtR * (rhoR*(SR-unR)*(SR-unR) - Bn*Bn) / d;
+            BwRs = BwR * (rhoR*(SR-unR)*(SR-unR) - Bn*Bn) / d;
         }
-        const double BdotURs = BnR*SM + BtRs*utRs + BwRs*uwRs;
+        const double BdotURs = Bn*SM + BtRs*utRs + BwRs*uwRs;
         ERs = (UR.E*(SR - unR) - ptR*unR + ptstar*SM
-               + BnR*(BdotURs - BdotUR)) / (SR - SM);
+               + Bn*(BdotURs - BdotUR)) / (SR - SM);
     }
 
-    // Sign of Bn determines rotation in double-star states
-    const double signBn = (BnL >= 0.0) ? 1.0 : -1.0;
+    const double signBn = (Bn >= 0.0) ? 1.0 : -1.0;
 
-    // Double-star states (eqs. 59-62)
     const double sqRhoLs = sqrtRhoLs;
     const double sqRhoRs = sqrtRhoRs;
     const double denom2  = sqRhoLs + sqRhoRs;
@@ -388,7 +349,6 @@ HD inline Conserved hlld_flux(
     double ELss, ERss;
 
     if (fabs(denom2) < 1.0e-14) {
-        // Fall back if densities are equal and fields cancel
         utLss = utLs; uwLss = uwLs; BtLss = BtLs; BwLss = BwLs; ELss = ELs;
         utRss = utRs; uwRss = uwRs; BtRss = BtRs; BwRss = BwRs; ERss = ERs;
     } else {
@@ -398,18 +358,15 @@ HD inline Conserved hlld_flux(
         BtLss = BtRss = (sqRhoLs*BtRs + sqRhoRs*BtLs + signBn*sqRhoLs*sqRhoRs*(utRs - utLs)) * inv_d2;
         BwLss = BwRss = (sqRhoLs*BwRs + sqRhoRs*BwLs + signBn*sqRhoLs*sqRhoRs*(uwRs - uwLs)) * inv_d2;
 
-        // Energy jump across the rotational (Alfven) discontinuity, eqs. 63-64
-        const double BdotULss = BnL*SM + BtLss*utLss + BwLss*uwLss;
-        const double BdotULs  = BnL*SM + BtLs *utLs  + BwLs *uwLs;
-        ELss = ELs - sqRhoLs*signBn*(BdotULss - BdotULs);
+        const double BdotULss = Bn*SM + BtLss*utLss + BwLss*uwLss;
+        const double BdotULs_ = Bn*SM + BtLs *utLs  + BwLs *uwLs;
+        ELss = ELs - sqRhoLs*signBn*(BdotULss - BdotULs_);
 
-        const double BdotURss = BnR*SM + BtRss*utRss + BwRss*uwRss;
-        const double BdotURs  = BnR*SM + BtRs *utRs  + BwRs *uwRs;
-        ERss = ERs + sqRhoRs*signBn*(BdotURss - BdotURs);
+        const double BdotURss = Bn*SM + BtRss*utRss + BwRss*uwRss;
+        const double BdotURs_ = Bn*SM + BtRs *utRs  + BwRs *uwRs;
+        ERss = ERs + sqRhoRs*signBn*(BdotURss - BdotURs_);
     }
 
-    // Select which star region we are in and build the flux
-    // via F* = F_side + S * (U* - U_side)
     auto build_conserved = [&](
         double rhos_, double uns_, double uts_, double uws_,
         double Bns_, double Bts_, double Bws_, double Es_,
@@ -432,53 +389,41 @@ HD inline Conserved hlld_flux(
         }
     };
 
-    // psi is handled by the separate GLM system; pass through unchanged
-    const double psiL = VL.psi, psiR = VR.psi;
-    const double psiM = 0.5*(psiL + psiR) - 0.5*ch*(BnR - BnL); // linear GLM
-
-    const Conserved FL = (dir == Direction::X) ? phys::flux_x(UL, ch)
-                                               : phys::flux_y(UL, ch);
-    const Conserved FR = (dir == Direction::X) ? phys::flux_x(UR, ch)
-                                               : phys::flux_y(UR, ch);
-
-    if (SL >= 0.0) return FL;
-    if (SR <= 0.0) return FR;
+    auto state_ok = [&](const Conserved& U) -> bool {
+        return primitive_is_physical(phys::cons_to_prim(U));
+    };
 
     if (SM >= 0.0) {
         if (SLs >= 0.0) {
-            // In L* region
             const Conserved ULs = build_conserved(
-                rhoLs, SM, utLs, uwLs, BnL, BtLs, BwLs, ELs, psiM);
+                rhoLs, SM, utLs, uwLs, Bn, BtLs, BwLs, ELs, psiM);
+            if (!state_ok(ULs)) return hllc_flux(UL, UR, dir, ch);
             return FL + SL * (ULs - UL);
         } else {
-            // In L** region
             const Conserved ULs  = build_conserved(
-                rhoLs, SM, utLs,  uwLs,  BnL, BtLs,  BwLs,  ELs,  psiM);
+                rhoLs, SM, utLs,  uwLs,  Bn, BtLs,  BwLs,  ELs,  psiM);
             const Conserved ULss = build_conserved(
-                rhoLs, SM, utLss, uwLss, BnL, BtLss, BwLss, ELss, psiM);
+                rhoLs, SM, utLss, uwLss, Bn, BtLss, BwLss, ELss, psiM);
+            if (!state_ok(ULss)) return hllc_flux(UL, UR, dir, ch);
             return FL + SL*(ULs - UL) + SLs*(ULss - ULs);
         }
     } else {
         if (SRs <= 0.0) {
-            // In R* region
             const Conserved URs = build_conserved(
-                rhoRs, SM, utRs, uwRs, BnR, BtRs, BwRs, ERs, psiM);
+                rhoRs, SM, utRs, uwRs, Bn, BtRs, BwRs, ERs, psiM);
+            if (!state_ok(URs)) return hllc_flux(UL, UR, dir, ch);
             return FR + SR * (URs - UR);
         } else {
-            // In R** region
             const Conserved URs  = build_conserved(
-                rhoRs, SM, utRs,  uwRs,  BnR, BtRs,  BwRs,  ERs,  psiM);
+                rhoRs, SM, utRs,  uwRs,  Bn, BtRs,  BwRs,  ERs,  psiM);
             const Conserved URss = build_conserved(
-                rhoRs, SM, utRss, uwRss, BnR, BtRss, BwRss, ERss, psiM);
+                rhoRs, SM, utRss, uwRss, Bn, BtRss, BwRss, ERss, psiM);
+            if (!state_ok(URss)) return hllc_flux(UL, UR, dir, ch);
             return FR + SR*(URs - UR) + SRs*(URss - URs);
         }
     }
 }
 
-// ============================================================
-// FORCE Riemann solver — average of Lax-Friedrichs and Richtmyer.
-// Uses local max signal speed estimate (no dt/dx needed).
-// ============================================================
 HD inline Conserved force_flux(
     const Conserved& UL,
     const Conserved& UR,
@@ -520,23 +465,6 @@ HD inline Conserved force_flux(
     return 0.5*(F_lf + F_ri);
 }
 
-// ============================================================
-// GLM (psi-Bn) subsystem flux — exact upwind of the 2x2 linear
-// system with eigenvalues ±ch (Dedner et al. 2002, eq. 41-43).
-//
-//   Bn*  = 1/2 (BnL + BnR) - 1/(2 ch) (psiR - psiL)
-//   psi* = 1/2 (psiL + psiR) - ch/2  (BnR - BnL)
-//   F_Bn  = psi*
-//   F_psi = ch^2 * Bn*
-//
-// The cleaning term -ch/2 (BnR - BnL) in psi* is what transports
-// div(B) error out of the domain. HLLC/HLLD do NOT resolve this
-// pair (their star states pass Bn through and the bounds no longer
-// reach ±ch), so the Bn/psi flux components must be overwritten
-// with this exact value or divergence cleaning silently fails.
-// HLL already reproduces this algebraically (it keeps ±ch in its
-// bounds), so it is left untouched.
-// ============================================================
 HD inline void apply_glm_flux(
     Conserved&       F,
     const Conserved& UL,
@@ -544,23 +472,17 @@ HD inline void apply_glm_flux(
     Direction        dir,
     double           ch
 ) {
-    if (ch <= 0.0) return;  // GLM inactive (e.g. ch not yet set)
+    if (ch <= 0.0) return;
     const double BnL  = (dir == Direction::X) ? UL.Bx : UL.By;
     const double BnR  = (dir == Direction::X) ? UR.Bx : UR.By;
-    const double psiL = UL.psi;
-    const double psiR = UR.psi;
 
-    const double Bn_star  = 0.5*(BnL + BnR) - 0.5/ch*(psiR - psiL);
-    const double psi_star = 0.5*(psiL + psiR) - 0.5*ch*(BnR - BnL);
+    const GlmStar glm = glm_resolve(BnL, BnR, UL.psi, UR.psi, ch);
 
-    if (dir == Direction::X) F.Bx = psi_star;
-    else                     F.By = psi_star;
-    F.psi = ch*ch * Bn_star;
+    if (dir == Direction::X) F.Bx = glm.psi;
+    else                     F.By = glm.psi;
+    F.psi = ch*ch * glm.Bn;
 }
 
-// ============================================================
-// Unified interface — explicit ch form
-// ============================================================
 HD inline Conserved riemann_flux(
     const Conserved& UL,
     const Conserved& UR,
@@ -581,8 +503,6 @@ HD inline Conserved riemann_flux(
         return hll_flux(UL, UR, dir, ch);
     }
 
-    // Overwrite the psi-Bn pair with the exact GLM upwind flux so that
-    // divergence cleaning works with HLLC/HLLD (see apply_glm_flux).
     apply_glm_flux(F, UL, UR, dir, ch);
     return F;
 }
