@@ -582,8 +582,11 @@ void advance_second_order_gpu(
         CUDA_CHECK(cudaMemcpyFromSymbol(&h, phys::d_ch_glm, sizeof(double)));
         return h;
     }();
-    if (ch > 0.0) {
-        const double factor = std::exp(-dt * ch / kCrGlm);
+    // Florinski et al. 2013, Eq. (10) method (b): l_d must be a length
+    // ("several times the smallest linear grid size"), not a bare constant.
+    const double l_d = kCrGlm * std::min(Uold.dx(), Uold.dy());
+    if (ch > 0.0 && l_d > 0.0) {
+        const double factor = std::exp(-dt * ch / l_d);
         apply_psi_damping_kernel<<<blocks, threads>>>(make_view(Unew), factor);
         CUDA_CHECK(cudaGetLastError());
     }

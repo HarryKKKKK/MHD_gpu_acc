@@ -229,8 +229,13 @@ void fill_y_face_cache(
 }
 
 void apply_psi_damping(Grid2D& grid, double dt) {
-    const double factor = std::exp(-dt * phys::ch_glm / phys::cr_glm);
-    if (factor >= 1.0) return;
+    // Florinski et al. 2013, Eq. (10) method (b): l_d must be a length
+    // ("several times the smallest linear grid size"), not a bare constant.
+    const double l_d = phys::cr_glm * std::min(grid.dx(), grid.dy());
+    if (l_d <= 0.0) return;  // cr=0 or degenerate grid: no damping
+
+    const double factor = std::exp(-dt * phys::ch_glm / l_d);
+    if (factor >= 1.0) return;  // ch=0: no damping needed
 
 #ifdef _OPENMP
 #pragma omp parallel for collapse(2) schedule(static)
