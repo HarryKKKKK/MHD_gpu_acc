@@ -229,10 +229,12 @@ void fill_y_face_cache(
 }
 
 void apply_psi_damping(Grid2D& grid, double dt) {
-    // Florinski et al. 2013, Eq. (10) method (b): l_d must be a length
-    // ("several times the smallest linear grid size"), not a bare constant.
-    const double l_d = phys::cr_glm * std::min(grid.dx(), grid.dy());
-    if (l_d <= 0.0) return;  // cr=0 or degenerate grid: no damping
+    // Dedner et al. (2002): c_r := c_p^2/c_h ~= 0.18 gave optimal results
+    // "regardless of the grid resolution" (also confirmed by Bard & Dorelli
+    // 2014, JCP 259, who use the same fixed value in all simulations).
+    // l_d is therefore used directly as this fixed length, not scaled by dx/dy.
+    const double l_d = phys::cr_glm;
+    if (l_d <= 0.0) return;  // cr_glm <= 0: no damping
 
     const double factor = std::exp(-dt * phys::ch_glm / l_d);
     if (factor >= 1.0) return;  // ch=0: no damping needed

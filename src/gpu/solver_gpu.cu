@@ -582,9 +582,11 @@ void advance_second_order_gpu(
         CUDA_CHECK(cudaMemcpyFromSymbol(&h, phys::d_ch_glm, sizeof(double)));
         return h;
     }();
-    // Florinski et al. 2013, Eq. (10) method (b): l_d must be a length
-    // ("several times the smallest linear grid size"), not a bare constant.
-    const double l_d = kCrGlm * std::min(Uold.dx(), Uold.dy());
+    // Dedner et al. (2002): c_r := c_p^2/c_h ~= 0.18 gave optimal results
+    // "regardless of the grid resolution" (also confirmed by Bard & Dorelli
+    // 2014, JCP 259, who use the same fixed value in all simulations).
+    // l_d is therefore used directly as this fixed length, not scaled by dx/dy.
+    const double l_d = kCrGlm;
     if (ch > 0.0 && l_d > 0.0) {
         const double factor = std::exp(-dt * ch / l_d);
         apply_psi_damping_kernel<<<blocks, threads>>>(make_view(Unew), factor);
