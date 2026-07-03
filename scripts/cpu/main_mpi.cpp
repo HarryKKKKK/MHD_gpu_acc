@@ -18,6 +18,7 @@
 #include <cctype>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -267,6 +268,27 @@ int main(int argc, char** argv) {
             std::swap(Uold, Unew);
             t    += dt;
             step += 1;
+
+            // TEMPORARY DEBUG INSTRUMENTATION (env-gated, inert by default):
+            // set MHD_DUMP_STEP=<n> to gather+write full fields right after
+            // step n and exit, for bisecting exactly which step/cell a
+            // multi-rank run first diverges from a single-rank run at.
+            if (const char* dump_env = std::getenv("MHD_DUMP_STEP")) {
+                const int dump_step = std::atoi(dump_env);
+                if (dump_step > 0 && step == dump_step) {
+                    Grid2D globalD = gather_global_grid(dom, Uold, cfg);
+                    if (is_root) {
+                        write_all_fields(globalD, rc.out_dir,
+                            rc.case_name + "_mpi_dbg" + std::to_string(dump_step));
+                        std::cout << "  [debug dump] wrote step " << dump_step
+                                  << " (t=" << std::scientific << t << ") and exiting\n";
+                    }
+                    MPI_Barrier(dom.cart_comm);
+                    mpi_domain_destroy(dom);
+                    MPI_Finalize();
+                    return 0;
+                }
+            }
 
             // Console progress (rank 0 only; local maxima reduced across ranks)
             if (t >= t_print_next || t >= cfg.t_end) {

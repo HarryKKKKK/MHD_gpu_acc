@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <stdexcept>
 #include <vector>
 
@@ -734,6 +736,18 @@ void advance_second_order_mpi(
     const double dt_over_dx = dt / Uold.dx();
     const double dt_over_dy = dt / Uold.dy();
 
+    if (std::getenv("MHD_HALO_DEBUG")) {
+        static int dt_call_count = 0;
+        ++dt_call_count;
+        if (dt_call_count <= 3) {
+            std::fprintf(stderr,
+                "[DT step=%d] rank=%d dt=%.17g dx=%.17g dy=%.17g ch_glm=%.17g gamma=%.17g\n",
+                dt_call_count, dom.rank, dt, Uold.dx(), Uold.dy(),
+                phys::get_ch_glm(), phys::get_gamma());
+            std::fflush(stderr);
+        }
+    }
+
     const int total_nx = Uold.total_nx();
     const int total_ny = Uold.total_ny();
     const std::size_t total_cells = static_cast<std::size_t>(total_nx) * total_ny;
@@ -778,6 +792,33 @@ void advance_second_order_mpi(
     // Step 3: refresh Utmp's ghost cells (halo exchange + local physical BC)
     exchange_halo_full(Utmp, dom, bc, &Uold);
 
+    // TEMPORARY DEBUG INSTRUMENTATION (env-gated, inert by default): dump
+    // raw Conserved values straddling this rank's left/right partition
+    // boundary right after the halo exchange, on the very first call only.
+    {
+        static int call_count = 0;
+        ++call_count;
+        if (call_count <= 2 && std::getenv("MHD_HALO_DEBUG")) {
+            const int j = jb + std::min(50, (je - jb) - 1);
+            std::fprintf(stderr,
+                "[HALO step=%d] rank=%d coords=(%d,%d) i_start=%d nx_local=%d ib=%d ie=%d j=%d\n",
+                call_count, dom.rank, dom.coords[0], dom.coords[1], dom.i_start, dom.nx_local, ib, ie, j);
+            for (int i = ib - dom.ng; i <= ib + 3; ++i) {
+                const Conserved& U = Utmp(i, j);
+                std::fprintf(stderr,
+                    "[HALO step=%d] rank=%d LEFT  local_i=%d global_i=%d  rho=%.17g psi=%.17g Bx=%.17g By=%.17g\n",
+                    call_count, dom.rank, i, dom.i_start + (i - ib), U.rho, U.psi, U.Bx, U.By);
+            }
+            for (int i = ie - 4; i <= ie + 1; ++i) {
+                const Conserved& U = Utmp(i, j);
+                std::fprintf(stderr,
+                    "[HALO step=%d] rank=%d RIGHT local_i=%d global_i=%d  rho=%.17g psi=%.17g Bx=%.17g By=%.17g\n",
+                    call_count, dom.rank, i, dom.i_start + (i - ib), U.rho, U.psi, U.Bx, U.By);
+            }
+            std::fflush(stderr);
+        }
+    }
+
     // ----------------------------------------------------------
     // Steps 4-5: y-sweep  (Utmp -> Unew)
     // ----------------------------------------------------------
@@ -814,6 +855,30 @@ void advance_second_order_mpi(
 
     // Step 6: refresh Unew's ghost cells (halo exchange + local physical BC)
     exchange_halo_full(Unew, dom, bc, &Utmp);
+
+    {
+        static int call_count = 0;
+        ++call_count;
+        if (call_count <= 2 && std::getenv("MHD_HALO_DEBUG")) {
+            const int j = jb + std::min(50, (je - jb) - 1);
+            std::fprintf(stderr,
+                "[HALO2 step=%d] rank=%d coords=(%d,%d) i_start=%d nx_local=%d ib=%d ie=%d j=%d\n",
+                call_count, dom.rank, dom.coords[0], dom.coords[1], dom.i_start, dom.nx_local, ib, ie, j);
+            for (int i = ib - dom.ng; i <= ib + 3; ++i) {
+                const Conserved& U = Unew(i, j);
+                std::fprintf(stderr,
+                    "[HALO2 step=%d] rank=%d LEFT  local_i=%d global_i=%d  rho=%.17g psi=%.17g Bx=%.17g By=%.17g\n",
+                    call_count, dom.rank, i, dom.i_start + (i - ib), U.rho, U.psi, U.Bx, U.By);
+            }
+            for (int i = ie - 4; i <= ie + 1; ++i) {
+                const Conserved& U = Unew(i, j);
+                std::fprintf(stderr,
+                    "[HALO2 step=%d] rank=%d RIGHT local_i=%d global_i=%d  rho=%.17g psi=%.17g Bx=%.17g By=%.17g\n",
+                    call_count, dom.rank, i, dom.i_start + (i - ib), U.rho, U.psi, U.Bx, U.By);
+            }
+            std::fflush(stderr);
+        }
+    }
 
     // Step 7: Mixed-GLM psi damping (Dedner eq. 45)
     apply_psi_damping(Unew, dt);
