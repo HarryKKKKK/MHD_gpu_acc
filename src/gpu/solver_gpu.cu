@@ -184,7 +184,16 @@ __global__ void compute_block_max_speed_kernel(
         const Conserved U = gload(grid, i, j);
         const Primitive V = phys::cons_to_prim(U);
 
-        if (is_physical(V)) {
+        // Validity threshold must match compute_dt() in solver_cpu.cpp
+        // (line ~264) and compute_dt_mpi() in solver_mpi.cpp (line ~674)
+        // exactly: 0.0, not the kRhoFloor/kPFloor (1e-12) used by
+        // is_physical() elsewhere in this file for floor enforcement.
+        // A cell that fails this check must contribute exactly 0.0 to
+        // local_speed (it stays at its initial value below), matching the
+        // effect of the `continue` statement in the CPU/MPI per-cell loop.
+        const bool dt_valid = isfinite(V.rho) && isfinite(V.p) &&
+                               V.rho > 0.0 && V.p > 0.0;
+        if (dt_valid) {
             const double sx = phys::max_signal_speed_x(V, 0.0);
             const double sy = phys::max_signal_speed_y(V, 0.0);
             if (isfinite(sx) && isfinite(sy))
@@ -592,4 +601,13 @@ void advance_second_order_gpu(
         apply_psi_damping_kernel<<<blocks, threads>>>(make_view(Unew), factor);
         CUDA_CHECK(cudaGetLastError());
     }
+
+    // Refresh Unew's ghost cells so they reflect the damped psi values.
+    // Mirrors the unconditional apply_boundary(Unew, bc) call in
+    // src/cpu/solver_cpu.cpp (after apply_psi_damping) and the
+    // unconditional exchange_halo_full(Unew, dom, bc, &Utmp) call in
+    // src/cpu/solver_mpi.cpp (after apply_psi_damping). Without this call,
+    // Unew's ghost cells retain pre-damping psi values, causing GPU results
+    // to diverge from CPU/MPI at domain boundaries on the next step.
+    apply_boundary_gpu(Unew, bc);
 }

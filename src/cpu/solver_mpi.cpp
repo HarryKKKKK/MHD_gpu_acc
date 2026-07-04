@@ -494,17 +494,17 @@ Grid2D make_local_grid(
     // before initialise_grid() evaluates the initial state.
     phys::gamma = cfg.gamma;
 
-    const double dx_global = (cfg.x_max - cfg.x_min) / cfg.nx;
-    const double dy_global = (cfg.y_max - cfg.y_min) / cfg.ny;
-
-    const double x_min_local = cfg.x_min + dom.i_start * dx_global;
-    const double x_max_local = x_min_local + dom.nx_local * dx_global;
-    const double y_min_local = cfg.y_min + dom.j_start * dy_global;
-    const double y_max_local = y_min_local + dom.ny_local * dy_global;
-
+    // Pass the true global domain bounds, the true global cell counts, and
+    // this rank's offset into the global index space (dom.i_start/
+    // dom.j_start). Grid2D computes dx_/dy_ from the global extent and
+    // every cell's physical coordinate via the exact same x_center()/
+    // y_center() formula used by the single-domain CPU/GPU grid in
+    // src/init.cpp, instead of re-deriving a per-rank local x_min/x_max/dx.
     Grid2D grid(
         dom.nx_local, dom.ny_local, dom.ng,
-        x_min_local, x_max_local, y_min_local, y_max_local
+        cfg.x_min, cfg.x_max, cfg.y_min, cfg.y_max,
+        cfg.nx, cfg.ny,
+        dom.i_start, dom.j_start
     );
     initialise_grid(grid, case_name);
     return grid;

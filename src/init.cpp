@@ -7,14 +7,6 @@
 
 namespace {
 
-inline double cell_center_x(const Grid2D& grid, int i) {
-    return grid.x_min() + (static_cast<double>(i - grid.ng()) + 0.5) * grid.dx();
-}
-
-inline double cell_center_y(const Grid2D& grid, int j) {
-    return grid.y_min() + (static_cast<double>(j - grid.ng()) + 0.5) * grid.dy();
-}
-
 Grid2D make_grid_from_config(const CaseConfig& cfg, CaseId case_id) {
     // Set adiabatic exponent for this test case before filling cells
     phys::gamma = cfg.gamma;
@@ -34,8 +26,8 @@ Grid2D make_grid_from_config(const CaseConfig& cfg, CaseId case_id) {
 void initialise_grid(Grid2D& grid, CaseId case_id) {
     for (int j = 0; j < grid.total_ny(); ++j) {
         for (int i = 0; i < grid.total_nx(); ++i) {
-            const double x = cell_center_x(grid, i);
-            const double y = cell_center_y(grid, j);
+            const double x = grid.x_center(i);
+            const double y = grid.y_center(j);
 
             grid(i, j) = initial_state_at(case_id, x, y);
         }
