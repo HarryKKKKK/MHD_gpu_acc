@@ -1,3 +1,21 @@
+unset http_proxy
+unset https_proxy
+unset ftp_proxy
+unset all_proxy
+unset no_proxy
+
+unset HTTP_PROXY
+unset HTTPS_PROXY
+unset FTP_PROXY
+unset ALL_PROXY
+unset NO_PROXY
+
+----------------------
+
+conda activate /aifs4su/hansirui_2nd/harry/envs_qwen3vl
+
+----------------------
+
 Test Euler Test - shock bubble
 1D test: Brio-Wu
 2D test: Orszag–Tang
