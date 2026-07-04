@@ -383,6 +383,7 @@ void advance_second_order(
     apply_boundary(Unew, bc);
 
     apply_psi_damping(Unew, dt);
+    apply_boundary(Unew, bc);
 }
 
 void advance_second_order(

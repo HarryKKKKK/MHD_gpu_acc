@@ -882,4 +882,10 @@ void advance_second_order_mpi(
 
     // Step 7: Mixed-GLM psi damping (Dedner eq. 45)
     apply_psi_damping(Unew, dt);
+
+    // Step 8: refresh ghost/halo cells again so they reflect the damped
+    // psi values (otherwise ghosts carry stale, pre-damping psi until the
+    // next step's exchange, causing rank-dependent inconsistencies at
+    // subdomain boundaries).
+    exchange_halo_full(Unew, dom, bc, &Utmp);
 }
