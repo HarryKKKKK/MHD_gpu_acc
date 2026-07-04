@@ -98,6 +98,7 @@ fi
 echo ""
 
 echo "===== BUILD ====="
+make clean
 make cpu gpu mpi
 
 mkdir -p "$OUT_ROOT"
