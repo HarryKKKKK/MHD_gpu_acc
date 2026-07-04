@@ -11,6 +11,7 @@
 #include <omp.h>
 #endif
 
+#include "diagnostics.hpp"
 #include "init.hpp"
 #include "physics.hpp"
 #include "riemann.hpp"
@@ -28,9 +29,8 @@
 // kernel that a single OpenMP thread would; the optional "mpi_omp"
 // target compiles the same file with -fopenmp, additionally threading
 // each rank's local sweep. Only the ghost-cell handling differs from
-// solver_cpu.cpp (MPI halo exchange instead of copy_ghost_cells() /
-// apply_boundary() on a single self-contained grid) — see
-// exchange_halo_x/y below.
+// solver_cpu.cpp (MPI halo exchange instead of apply_boundary() on a
+// single self-contained grid) — see exchange_halo_x/y below.
 // ============================================================
 
 namespace {
@@ -74,14 +74,18 @@ inline Primitive enforce_physical_primitive(
     const Primitive& candidate,
     const Primitive& fallback
 ) {
-    return is_physical(candidate) ? candidate : fallback;
+    if (is_physical(candidate)) return candidate;
+    diag::count_floor_trigger();
+    return fallback;
 }
 
 inline Conserved enforce_physical_conserved(
     const Conserved& candidate,
     const Conserved& fallback
 ) {
-    return is_physical(phys::cons_to_prim(candidate)) ? candidate : fallback;
+    if (is_physical(phys::cons_to_prim(candidate))) return candidate;
+    diag::count_floor_trigger();
+    return fallback;
 }
 
 // ---- Minmod slope estimate in the given direction ----
@@ -119,7 +123,7 @@ inline void reconstruct_cell_muscl_hancock(
     // Half-step in time using the directional physical flux.
     // ch=0.0 here (not phys::ch_glm): using the real ch would let the
     // ch^2 * Bn GLM term blow up the psi predictor (matches GPU behavior
-    // in reconstruct_muscl_hancock, src/gpu/solver_gpu.cu).
+    // in reconstruct_cell_muscl_hancock, src/gpu/solver_gpu.cu).
     const Conserved F_left  = (dir == Direction::X) ? phys::flux_x(U_left,  0.0)
                                                      : phys::flux_y(U_left,  0.0);
     const Conserved F_right = (dir == Direction::X) ? phys::flux_x(U_right, 0.0)
@@ -286,14 +290,14 @@ void apply_psi_damping(Grid2D& grid, double dt) {
 
 // ============================================================
 // Local (per-rank) physical boundary application. Same formulas as
-// apply_boundary()/copy_ghost_cells() in head/cpu/boundary_cpu.hpp,
-// restricted to one side at a time so exchange_halo_x/y can call them
-// only on ranks that own a genuine global boundary (MPI_PROC_NULL
-// neighbour). Periodic BoundaryType never reaches these functions: a
-// periodic axis is given periods=1 in MPI_Cart_create, so every rank
-// always has a real neighbour (itself, if running on a single rank
-// along that axis) and the wrap-around is handled by the halo exchange
-// itself, exactly reproducing the single-rank periodic case.
+// apply_boundary() in head/cpu/boundary_cpu.hpp, restricted to one side
+// at a time so exchange_halo_x/y can call them only on ranks that own a
+// genuine global boundary (MPI_PROC_NULL neighbour). Periodic
+// BoundaryType never reaches these functions: a periodic axis is given
+// periods=1 in MPI_Cart_create, so every rank always has a real
+// neighbour (itself, if running on a single rank along that axis) and
+// the wrap-around is handled by the halo exchange itself, exactly
+// reproducing the single-rank periodic case.
 // ============================================================
 
 void apply_physical_left(Grid2D& grid, BoundaryType type) {
@@ -304,11 +308,6 @@ void apply_physical_left(Grid2D& grid, BoundaryType type) {
         for (int g = 0; g < ng; ++g) {
             if (type == BoundaryType::Transmissive) {
                 grid(ib - 1 - g, j) = grid(ib, j);
-            } else if (type == BoundaryType::Reflecting) {
-                Conserved m = grid(ib + g, j);
-                m.rhou = -m.rhou;
-                m.Bx   = -m.Bx;
-                grid(ib - 1 - g, j) = m;
             }
         }
     }
@@ -322,11 +321,6 @@ void apply_physical_right(Grid2D& grid, BoundaryType type) {
         for (int g = 0; g < ng; ++g) {
             if (type == BoundaryType::Transmissive) {
                 grid(ie + g, j) = grid(ie - 1, j);
-            } else if (type == BoundaryType::Reflecting) {
-                Conserved m = grid(ie - 1 - g, j);
-                m.rhou = -m.rhou;
-                m.Bx   = -m.Bx;
-                grid(ie + g, j) = m;
             }
         }
     }
@@ -340,11 +334,6 @@ void apply_physical_bottom(Grid2D& grid, BoundaryType type) {
         for (int g = 0; g < ng; ++g) {
             if (type == BoundaryType::Transmissive) {
                 grid(i, jb - 1 - g) = grid(i, jb);
-            } else if (type == BoundaryType::Reflecting) {
-                Conserved m = grid(i, jb + g);
-                m.rhov = -m.rhov;
-                m.By   = -m.By;
-                grid(i, jb - 1 - g) = m;
             }
         }
     }
@@ -358,53 +347,9 @@ void apply_physical_top(Grid2D& grid, BoundaryType type) {
         for (int g = 0; g < ng; ++g) {
             if (type == BoundaryType::Transmissive) {
                 grid(i, je + g) = grid(i, je - 1);
-            } else if (type == BoundaryType::Reflecting) {
-                Conserved m = grid(i, je - 1 - g);
-                m.rhov = -m.rhov;
-                m.By   = -m.By;
-                grid(i, je + g) = m;
             }
         }
     }
-}
-
-// Dirichlet ghost cells: carry forward the previous-step values from a
-// reference grid, exactly like copy_ghost_cells() in boundary_cpu.hpp.
-
-void copy_dirichlet_left(const Grid2D& src, Grid2D& dst) {
-    const int ng = src.ng();
-    const int ib = src.i_begin();
-    const int total_ny = src.total_ny();
-    for (int j = 0; j < total_ny; ++j)
-        for (int g = 0; g < ng; ++g)
-            dst(ib - 1 - g, j) = src(ib - 1 - g, j);
-}
-
-void copy_dirichlet_right(const Grid2D& src, Grid2D& dst) {
-    const int ng = src.ng();
-    const int ie = src.i_end();
-    const int total_ny = src.total_ny();
-    for (int j = 0; j < total_ny; ++j)
-        for (int g = 0; g < ng; ++g)
-            dst(ie + g, j) = src(ie + g, j);
-}
-
-void copy_dirichlet_bottom(const Grid2D& src, Grid2D& dst) {
-    const int ng = src.ng();
-    const int jb = src.j_begin();
-    const int total_nx = src.total_nx();
-    for (int i = 0; i < total_nx; ++i)
-        for (int g = 0; g < ng; ++g)
-            dst(i, jb - 1 - g) = src(i, jb - 1 - g);
-}
-
-void copy_dirichlet_top(const Grid2D& src, Grid2D& dst) {
-    const int ng = src.ng();
-    const int je = src.j_end();
-    const int total_nx = src.total_nx();
-    for (int i = 0; i < total_nx; ++i)
-        for (int g = 0; g < ng; ++g)
-            dst(i, je + g) = src(i, je + g);
 }
 
 // Split n_global as evenly as possible across nparts ranks: the first
@@ -515,8 +460,7 @@ Grid2D make_local_grid(
 // ============================================================
 
 void exchange_halo_x(
-    Grid2D& grid, const MpiDomain& dom, const BoundaryConfig& bc,
-    const Grid2D* dirichlet_src
+    Grid2D& grid, const MpiDomain& dom, const BoundaryConfig& bc
 ) {
     const int ng = dom.ng;
     const int ib = grid.i_begin();
@@ -540,24 +484,15 @@ void exchange_halo_x(
     );
 
     if (dom.nbr_left == MPI_PROC_NULL) {
-        if (bc.left == BoundaryType::Dirichlet) {
-            if (dirichlet_src) copy_dirichlet_left(*dirichlet_src, grid);
-        } else {
-            apply_physical_left(grid, bc.left);
-        }
+        apply_physical_left(grid, bc.left);
     }
     if (dom.nbr_right == MPI_PROC_NULL) {
-        if (bc.right == BoundaryType::Dirichlet) {
-            if (dirichlet_src) copy_dirichlet_right(*dirichlet_src, grid);
-        } else {
-            apply_physical_right(grid, bc.right);
-        }
+        apply_physical_right(grid, bc.right);
     }
 }
 
 void exchange_halo_y(
-    Grid2D& grid, const MpiDomain& dom, const BoundaryConfig& bc,
-    const Grid2D* dirichlet_src
+    Grid2D& grid, const MpiDomain& dom, const BoundaryConfig& bc
 ) {
     const int ng = dom.ng;
     const int jb = grid.j_begin();
@@ -583,18 +518,10 @@ void exchange_halo_y(
     );
 
     if (dom.nbr_down == MPI_PROC_NULL) {
-        if (bc.bottom == BoundaryType::Dirichlet) {
-            if (dirichlet_src) copy_dirichlet_bottom(*dirichlet_src, grid);
-        } else {
-            apply_physical_bottom(grid, bc.bottom);
-        }
+        apply_physical_bottom(grid, bc.bottom);
     }
     if (dom.nbr_up == MPI_PROC_NULL) {
-        if (bc.top == BoundaryType::Dirichlet) {
-            if (dirichlet_src) copy_dirichlet_top(*dirichlet_src, grid);
-        } else {
-            apply_physical_top(grid, bc.top);
-        }
+        apply_physical_top(grid, bc.top);
     }
 }
 
@@ -697,9 +624,8 @@ double compute_dt_mpi(const Grid2D& grid, double cfl, MPI_Comm comm) {
 // ============================================================
 // Second-order MUSCL-Hancock, x-then-y dimensional splitting (MPI).
 //
-// Steps (identical to advance_second_order() in solver_cpu.cpp, except
-// steps 3 and 6 use MPI halo exchange in place of
-// copy_ghost_cells()+apply_boundary()):
+// Steps (identical to advance_cpu() in solver_cpu.cpp, except
+// steps 3 and 6 use MPI halo exchange in place of apply_boundary()):
 //   1. Fill x-face cache from Uold
 //   2. x-update: Uold -> Utmp (interior only)
 //   3. Halo exchange on Utmp
@@ -709,7 +635,7 @@ double compute_dt_mpi(const Grid2D& grid, double cfl, MPI_Comm comm) {
 //   7. Mixed-GLM psi damping on Unew
 // ============================================================
 
-void advance_second_order_mpi(
+void advance_mpi(
     const Grid2D&        Uold,
     Grid2D&              Utmp,
     Grid2D&              Unew,
@@ -721,7 +647,7 @@ void advance_second_order_mpi(
 ) {
     if (!ws.is_initialized()) {
         throw std::runtime_error(
-            "advance_second_order_mpi: MpiWorkspace not initialised. "
+            "advance_mpi: MpiWorkspace not initialised. "
             "Call ws.init(dom.nx_local, dom.ny_local) before the time loop.");
     }
 
@@ -790,7 +716,7 @@ void advance_second_order_mpi(
     }
 
     // Step 3: refresh Utmp's ghost cells (halo exchange + local physical BC)
-    exchange_halo_full(Utmp, dom, bc, &Uold);
+    exchange_halo_full(Utmp, dom, bc);
 
     // TEMPORARY DEBUG INSTRUMENTATION (env-gated, inert by default): dump
     // raw Conserved values straddling this rank's left/right partition
@@ -854,7 +780,7 @@ void advance_second_order_mpi(
     }
 
     // Step 6: refresh Unew's ghost cells (halo exchange + local physical BC)
-    exchange_halo_full(Unew, dom, bc, &Utmp);
+    exchange_halo_full(Unew, dom, bc);
 
     {
         static int call_count = 0;
@@ -887,5 +813,5 @@ void advance_second_order_mpi(
     // psi values (otherwise ghosts carry stale, pre-damping psi until the
     // next step's exchange, causing rank-dependent inconsistencies at
     // subdomain boundaries).
-    exchange_halo_full(Unew, dom, bc, &Utmp);
+    exchange_halo_full(Unew, dom, bc);
 }

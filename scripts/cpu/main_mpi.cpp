@@ -264,7 +264,7 @@ int main(int argc, char** argv) {
                 break;
             }
 
-            advance_second_order_mpi(Uold, Utmp, Unew, dt, ws, rc.solver, cfg.bc, dom);
+            advance_mpi(Uold, Utmp, Unew, dt, ws, rc.solver, cfg.bc, dom);
 
             std::swap(Uold, Unew);
             t    += dt;

@@ -11,7 +11,7 @@
 // ============================================================
 // Pre-allocated workspace for second-order advance.
 // Allocate once before the time loop; pass into every
-// advance_second_order call to avoid per-step heap allocation.
+// advance_cpu call to avoid per-step heap allocation.
 // ============================================================
 struct CpuWorkspace {
     int nx = 0;
@@ -39,7 +39,7 @@ struct CpuWorkspace {
         ny = ny_;
         fx_cache.resize(static_cast<std::size_t>(nx + 1) * ny);
         fy_cache.resize(static_cast<std::size_t>(nx) * (ny + 1));
-        // prim_cache is lazily sized in advance_second_order (needs grid's ng).
+        // prim_cache is lazily sized in advance_cpu (needs grid's ng).
     }
 
     bool is_initialized() const {
@@ -58,13 +58,13 @@ struct CpuWorkspace {
 // only — passing nullptr, the default, reproduces the exact prior
 // signature/behaviour).
 // ============================================================
-double compute_dt(const Grid2D& grid, double cfl, double* out_max_speed = nullptr);
+double compute_dt_cpu(const Grid2D& grid, double cfl, double* out_max_speed = nullptr);
 
 // ============================================================
 // Second-order MUSCL-Hancock with dimensional (Strang) splitting.
 // ws must be initialised with ws.init(cfg.nx, cfg.ny) before the loop.
 // ============================================================
-void advance_second_order(
+void advance_cpu(
     const Grid2D&        Uold,
     Grid2D&              Utmp,
     Grid2D&              Unew,
@@ -75,7 +75,7 @@ void advance_second_order(
 );
 
 // Convenience overload: HLL + all-transmissive BC
-void advance_second_order(
+void advance_cpu(
     const Grid2D& Uold,
     Grid2D&       Utmp,
     Grid2D&       Unew,

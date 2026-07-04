@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "diagnostics.hpp"
-#include "gpu/boundary_gpu.cuh"
 #include "gpu/grid_gpu.cuh"
 #include "gpu/solver_gpu.cuh"
 #include "init.hpp"
@@ -203,9 +202,6 @@ int main(int argc, char** argv) {
     set_gpu_physics_gamma(cfg.gamma);
     set_gpu_physics_ch(0.0);  // ch_glm starts at 0; updated by compute_dt_gpu
 
-    // Apply BCs on the initial data so ghost cells are consistent.
-    apply_boundary_gpu(Uold, cfg.bc);
-
     if (rc.write_out)
         write_all_fields(Uold, rc.out_dir, rc.case_name + "_gpu_t0");
 
@@ -255,7 +251,7 @@ int main(int argc, char** argv) {
         const double dt     = std::min(dt_raw, t_next - t);
 
         // Diagnostic snapshot of the state compute_dt_gpu() just used, taken
-        // *before* advance_second_order_gpu() mutates anything (read-only
+        // *before* advance_gpu() mutates anything (read-only
         // download + scan — does not affect dt/flux computation below).
         const bool do_diag = diag_on && (step % rc.diag_interval == 0);
         diag::Snapshot snap;
@@ -291,7 +287,7 @@ int main(int argc, char** argv) {
         }
 
         if (diag_on) reset_floor_trigger_count_gpu();
-        advance_second_order_gpu(Uold, Utmp, Unew, ws, dt, rc.solver, cfg.bc);
+        advance_gpu(Uold, Utmp, Unew, ws, dt, rc.solver, cfg.bc);
         const unsigned long long n_floor = diag_on ? read_floor_trigger_count_gpu() : 0ULL;
 
         if (do_diag) {

@@ -10,9 +10,7 @@
 // ============================================================
 enum class BoundaryType {
     Periodic,      // periodic wrap-around
-    Transmissive,  // zero-gradient (Neumann) outflow
-    Reflecting,    // symmetry (reflecting) wall
-    Dirichlet      // fixed value from initial data (applied externally)
+    Transmissive   // zero-gradient (Neumann) outflow
 };
 
 struct BoundaryConfig {

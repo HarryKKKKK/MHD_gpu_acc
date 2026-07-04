@@ -15,7 +15,6 @@ inline double gamma = 5.0 / 3.0;
 
 #ifdef __CUDACC__
 __device__ static double d_ch_glm = 0.0;
-__device__ static double d_cr_glm = 0.18;
 inline double ch_glm = 0.0;
 inline double cr_glm = 0.18;
 #else

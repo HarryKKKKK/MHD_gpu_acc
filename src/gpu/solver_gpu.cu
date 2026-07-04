@@ -18,7 +18,6 @@ namespace {
 
 constexpr double kRhoFloor   = 1.0e-12;
 constexpr double kPFloor     = 1.0e-12;
-constexpr double kCrGlm      = 0.18;
 constexpr int    kDtBlockSize = 256;
 
 constexpr int PAD_X = 1;
@@ -37,22 +36,22 @@ __device__ inline int clamp_i(int x, int lo, int hi) {
     return (x < lo) ? lo : ((x > hi) ? hi : x);
 }
 
-__device__ inline double minmod_s(double a, double b) {
+__device__ inline double minmod_scalar(double a, double b) {
     if (a * b <= 0.0) return 0.0;
     return (a > 0.0) ? fmin(a, b) : fmax(a, b);
 }
 
-__device__ inline Primitive minmod9(const Primitive& a, const Primitive& b) {
+__device__ inline Primitive minmod_primitive(const Primitive& a, const Primitive& b) {
     return Primitive(
-        minmod_s(a.rho, b.rho),
-        minmod_s(a.u,   b.u),
-        minmod_s(a.v,   b.v),
-        minmod_s(a.w,   b.w),
-        minmod_s(a.Bx,  b.Bx),
-        minmod_s(a.By,  b.By),
-        minmod_s(a.Bz,  b.Bz),
-        minmod_s(a.p,   b.p),
-        minmod_s(a.psi, b.psi)
+        minmod_scalar(a.rho, b.rho),
+        minmod_scalar(a.u,   b.u),
+        minmod_scalar(a.v,   b.v),
+        minmod_scalar(a.w,   b.w),
+        minmod_scalar(a.Bx,  b.Bx),
+        minmod_scalar(a.By,  b.By),
+        minmod_scalar(a.Bz,  b.Bz),
+        minmod_scalar(a.p,   b.p),
+        minmod_scalar(a.psi, b.psi)
     );
 }
 
@@ -66,13 +65,13 @@ __device__ inline bool is_physical(const Primitive& V) {
 
 __device__ unsigned long long d_floor_trigger_count = 0ULL;
 
-__device__ inline Primitive safe_prim(const Primitive& cand, const Primitive& fb) {
+__device__ inline Primitive enforce_physical_primitive(const Primitive& cand, const Primitive& fb) {
     if (is_physical(cand)) return cand;
     atomicAdd(&d_floor_trigger_count, 1ULL);
     return fb;
 }
 
-__device__ inline Conserved safe_cons(const Conserved& cand, const Conserved& fb) {
+__device__ inline Conserved enforce_physical_conserved(const Conserved& cand, const Conserved& fb) {
     if (is_physical(phys::cons_to_prim(cand))) return cand;
     atomicAdd(&d_floor_trigger_count, 1ULL);
     return fb;
@@ -135,7 +134,7 @@ __device__ inline Tile9 carve(double*& p, int n_doubles) {
     return t;
 }
 
-__device__ inline void reconstruct_muscl_hancock(
+__device__ inline void reconstruct_cell_muscl_hancock(
     const Conserved& Um, const Conserved& Uc, const Conserved& Up,
     double dt_over_d, Direction dir,
     Conserved& UL_star, Conserved& UR_star
@@ -144,10 +143,10 @@ __device__ inline void reconstruct_muscl_hancock(
     const Primitive Wc = phys::cons_to_prim(Uc);
     const Primitive Wp = phys::cons_to_prim(Up);
 
-    const Primitive slope = minmod9(Wc - Wm, Wp - Wc);
+    const Primitive slope = minmod_primitive(Wc - Wm, Wp - Wc);
 
-    const Primitive WL = safe_prim(Wc - 0.5 * slope, Wc);
-    const Primitive WR = safe_prim(Wc + 0.5 * slope, Wc);
+    const Primitive WL = enforce_physical_primitive(Wc - 0.5 * slope, Wc);
+    const Primitive WR = enforce_physical_primitive(Wc + 0.5 * slope, Wc);
 
     const Conserved UL = phys::prim_to_cons(WL);
     const Conserved UR = phys::prim_to_cons(WR);
@@ -159,8 +158,8 @@ __device__ inline void reconstruct_muscl_hancock(
                                                : phys::flux_y(UR, 0.0);
     const Conserved half = 0.5 * dt_over_d * (FR - FL);
 
-    UL_star = safe_cons(UL - half, UL);
-    UR_star = safe_cons(UR - half, UR);
+    UL_star = enforce_physical_conserved(UL - half, UL);
+    UR_star = enforce_physical_conserved(UR - half, UR);
 }
 
 template <int BLOCK_SIZE>
@@ -184,7 +183,7 @@ __global__ void compute_block_max_speed_kernel(
         const Conserved U = gload(grid, i, j);
         const Primitive V = phys::cons_to_prim(U);
 
-        // Validity threshold must match compute_dt() in solver_cpu.cpp
+        // Validity threshold must match compute_dt_cpu() in solver_cpu.cpp
         // (line ~264) and compute_dt_mpi() in solver_mpi.cpp (line ~674)
         // exactly: 0.0, not the kRhoFloor/kPFloor (1e-12) used by
         // is_physical() elsewhere in this file for floor enforcement.
@@ -297,7 +296,7 @@ __global__ void advance_x_kernel(
             const Conserved Up = S.load(sc + 1);
 
             Conserved UL, UR;
-            reconstruct_muscl_hancock(Um, Uc, Up, dt_dx, Direction::X, UL, UR);
+            reconstruct_cell_muscl_hancock(Um, Uc, Up, dt_dx, Direction::X, UL, UR);
             L.store(lin, UL);
             R.store(lin, UR);
         }
@@ -336,7 +335,7 @@ __global__ void advance_x_kernel(
     gstore(Uout,
            Uin.i_begin() + local_i,
            Uin.j_begin() + local_j,
-           safe_cons(Unew_c, Uc));
+           enforce_physical_conserved(Unew_c, Uc));
 }
 
 __global__ void advance_y_kernel(
@@ -404,7 +403,7 @@ __global__ void advance_y_kernel(
             const Conserved Up = S.load(sc + sw);
 
             Conserved UL, UR;
-            reconstruct_muscl_hancock(Um, Uc, Up, dt_dy, Direction::Y, UL, UR);
+            reconstruct_cell_muscl_hancock(Um, Uc, Up, dt_dy, Direction::Y, UL, UR);
             L.store(lin, UL);
             R.store(lin, UR);
         }
@@ -445,7 +444,7 @@ __global__ void advance_y_kernel(
     gstore(Uout,
            Uin.i_begin() + local_i,
            Uin.j_begin() + local_j,
-           safe_cons(Unew_c, Uc));
+           enforce_physical_conserved(Unew_c, Uc));
 }
 
 } // anonymous namespace
@@ -529,7 +528,7 @@ double compute_dt_gpu(const Grid2DGPU& grid, GpuWorkspace& ws, double cfl,
     return cfl * std::min(grid.dx(), grid.dy()) / max_speed;
 }
 
-void advance_second_order_gpu(
+void advance_gpu(
     const Grid2DGPU& Uold,
     Grid2DGPU&       Utmp,
     Grid2DGPU&       Unew,
@@ -539,7 +538,7 @@ void advance_second_order_gpu(
     const BoundaryConfig& bc
 ) {
     if (ws.nx != Uold.nx() || ws.ny != Uold.ny() || !ws.speed_d)
-        throw std::runtime_error("advance_second_order_gpu: workspace not initialised.");
+        throw std::runtime_error("advance_gpu: workspace not initialised.");
 
     const int bx = 16, by = 16;
     const dim3 threads(bx, by);
@@ -595,7 +594,10 @@ void advance_second_order_gpu(
     // "regardless of the grid resolution" (also confirmed by Bard & Dorelli
     // 2014, JCP 259, who use the same fixed value in all simulations).
     // l_d is therefore used directly as this fixed length, not scaled by dx/dy.
-    const double l_d = kCrGlm;
+    // Read from phys::cr_glm (host global, same source of truth as
+    // apply_psi_damping() in solver_cpu.cpp/solver_mpi.cpp) instead of a
+    // separately hardcoded value that could silently drift out of sync.
+    const double l_d = phys::cr_glm;
     if (ch > 0.0 && l_d > 0.0) {
         const double factor = std::exp(-dt * ch / l_d);
         apply_psi_damping_kernel<<<blocks, threads>>>(make_view(Unew), factor);
@@ -605,7 +607,7 @@ void advance_second_order_gpu(
     // Refresh Unew's ghost cells so they reflect the damped psi values.
     // Mirrors the unconditional apply_boundary(Unew, bc) call in
     // src/cpu/solver_cpu.cpp (after apply_psi_damping) and the
-    // unconditional exchange_halo_full(Unew, dom, bc, &Utmp) call in
+    // unconditional exchange_halo_full(Unew, dom, bc) call in
     // src/cpu/solver_mpi.cpp (after apply_psi_damping). Without this call,
     // Unew's ghost cells retain pre-damping psi values, causing GPU results
     // to diverge from CPU/MPI at domain boundaries on the next step.

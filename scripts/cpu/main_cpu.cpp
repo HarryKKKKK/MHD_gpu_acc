@@ -232,7 +232,7 @@ int main(int argc, char** argv) {
     std::cout << "  ----  ----------  ----------  ----------\n";
 
     // The whole loop is wrapped in try/catch purely so a diagnostic run
-    // can record exit_reason before an uncaught exception (e.g. compute_dt's
+    // can record exit_reason before an uncaught exception (e.g. compute_dt_cpu's
     // "non-positive maximum wave speed") escapes main() — the exception is
     // always rethrown afterwards, so the crash/exit-code behaviour when
     // --diag-interval is off (or even on) is unchanged.
@@ -244,11 +244,11 @@ int main(int argc, char** argv) {
             t_next = std::min(t_next, cfg.snapshot_times[snap_idx]);
 
         double max_speed_raw = 0.0;
-        const double dt_raw = compute_dt(Uold, cfg.cfl, &max_speed_raw);
+        const double dt_raw = compute_dt_cpu(Uold, cfg.cfl, &max_speed_raw);
         const double dt     = std::min(dt_raw, t_next - t);
 
-        // Diagnostic snapshot of the state compute_dt() just used, taken
-        // *before* advance_second_order() mutates anything (pure read-only
+        // Diagnostic snapshot of the state compute_dt_cpu() just used, taken
+        // *before* advance_cpu() mutates anything (pure read-only
         // scan — does not affect dt/flux computation below).
         const bool do_diag = diag_on && (step % rc.diag_interval == 0);
         diag::Snapshot snap;
@@ -275,7 +275,7 @@ int main(int argc, char** argv) {
         }
 
         if (diag_on) diag::reset_floor_trigger_count();
-        advance_second_order(Uold, Utmp, Unew, dt, ws, rc.solver, cfg.bc);
+        advance_cpu(Uold, Utmp, Unew, dt, ws, rc.solver, cfg.bc);
         const long long n_floor = diag_on ? diag::floor_trigger_count : 0;
 
         if (do_diag) {

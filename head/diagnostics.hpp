@@ -81,7 +81,7 @@ Snapshot compute_snapshot(
             s.max_abs_Bz  = std::max(s.max_abs_Bz,  std::fabs(V.Bz));
             s.max_abs_psi = std::max(s.max_abs_psi, std::fabs(V.psi));
 
-            // Same admissibility test compute_dt()/compute_dt_gpu() use
+            // Same admissibility test compute_dt_cpu()/compute_dt_gpu() use
             // before calling fast_speed_x/y, so max_cf_x/y only reflect
             // cells that actually contribute to the real CFL reduction.
             if (std::isfinite(V.rho) && V.rho > 0.0 &&

@@ -22,14 +22,14 @@
 //
 // The only difference from the OpenMP version is *how ghost cells are
 // filled*: instead of a single self-contained grid whose ghosts are
-// refreshed via copy_ghost_cells()/apply_boundary(), the global grid is
-// split into a 2D Cartesian grid of MPI ranks. Each rank owns a Grid2D
-// covering its own sub-domain plus an ng-wide ghost border, and ghost
-// cells are filled either by halo-exchanging with a real neighbour rank
-// (interior partition boundary, or periodic wrap-around handled by the
-// Cartesian communicator itself) or, on ranks that sit on the true
-// global domain edge, by applying the case's physical boundary
-// condition locally (identical formulas to boundary_cpu.hpp).
+// refreshed via apply_boundary(), the global grid is split into a 2D
+// Cartesian grid of MPI ranks. Each rank owns a Grid2D covering its own
+// sub-domain plus an ng-wide ghost border, and ghost cells are filled
+// either by halo-exchanging with a real neighbour rank (interior
+// partition boundary, or periodic wrap-around handled by the Cartesian
+// communicator itself) or, on ranks that sit on the true global domain
+// edge, by applying the case's physical boundary condition locally
+// (identical formulas to boundary_cpu.hpp).
 //
 // This file intentionally does not depend on solver_cpu.hpp/.cpp so it
 // can be built and reasoned about on its own (see Makefile: the `mpi`
@@ -90,22 +90,18 @@ Grid2D make_local_grid(
 // Exchange the ng-wide left/right (x) or bottom/top (y) ghost layers with
 // real neighbour ranks. On ranks that sit on the true global boundary in
 // that direction (neighbour == MPI_PROC_NULL), apply the physical BC
-// locally instead; Dirichlet ghosts are copied from dirichlet_src
-// (mirroring copy_ghost_cells() in boundary_cpu.hpp).
+// locally instead.
 void exchange_halo_x(
-    Grid2D& grid, const MpiDomain& dom, const BoundaryConfig& bc,
-    const Grid2D* dirichlet_src = nullptr
+    Grid2D& grid, const MpiDomain& dom, const BoundaryConfig& bc
 );
 void exchange_halo_y(
-    Grid2D& grid, const MpiDomain& dom, const BoundaryConfig& bc,
-    const Grid2D* dirichlet_src = nullptr
+    Grid2D& grid, const MpiDomain& dom, const BoundaryConfig& bc
 );
 inline void exchange_halo_full(
-    Grid2D& grid, const MpiDomain& dom, const BoundaryConfig& bc,
-    const Grid2D* dirichlet_src = nullptr
+    Grid2D& grid, const MpiDomain& dom, const BoundaryConfig& bc
 ) {
-    exchange_halo_x(grid, dom, bc, dirichlet_src);
-    exchange_halo_y(grid, dom, bc, dirichlet_src);
+    exchange_halo_x(grid, dom, bc);
+    exchange_halo_y(grid, dom, bc);
 }
 
 // Gather every rank's interior cells into a full [nx_global x ny_global]
@@ -148,7 +144,7 @@ struct MpiWorkspace {
 // ============================================================
 // CFL timestep, MPI-reduced.
 // Each rank computes its own local maximum signal speed over its
-// interior cells (identical loop/formula to compute_dt() in
+// interior cells (identical loop/formula to compute_dt_cpu() in
 // solver_cpu.cpp), then MPI_Allreduce(MAX) gives every rank the same
 // global maximum, which is used to set phys::ch_glm identically
 // everywhere before flux computation.
@@ -157,11 +153,11 @@ double compute_dt_mpi(const Grid2D& grid, double cfl, MPI_Comm comm);
 
 // ============================================================
 // Second-order MUSCL-Hancock, x-then-y dimensional splitting.
-// Identical algorithm/caching structure to advance_second_order() in
+// Identical algorithm/caching structure to advance_cpu() in
 // solver_cpu.cpp; ghost cells are refreshed via MPI halo exchange
-// instead of copy_ghost_cells()/apply_boundary().
+// instead of apply_boundary().
 // ============================================================
-void advance_second_order_mpi(
+void advance_mpi(
     const Grid2D&         Uold,
     Grid2D&                Utmp,
     Grid2D&                Unew,

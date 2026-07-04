@@ -251,7 +251,7 @@ void apply_psi_damping(Grid2D& grid, double dt) {
 
 } // namespace
 
-double compute_dt(const Grid2D& grid, double cfl, double* out_max_speed) {
+double compute_dt_cpu(const Grid2D& grid, double cfl, double* out_max_speed) {
     double max_speed = 0.0;
 
 #ifdef _OPENMP
@@ -274,7 +274,7 @@ double compute_dt(const Grid2D& grid, double cfl, double* out_max_speed) {
     if (out_max_speed) *out_max_speed = max_speed;
 
     if (max_speed <= 0.0) {
-        throw std::runtime_error("compute_dt: non-positive maximum wave speed.");
+        throw std::runtime_error("compute_dt_cpu: non-positive maximum wave speed.");
     }
 
     phys::ch_glm = max_speed;
@@ -282,7 +282,7 @@ double compute_dt(const Grid2D& grid, double cfl, double* out_max_speed) {
     return cfl * std::min(grid.dx(), grid.dy()) / max_speed;
 }
 
-void advance_second_order(
+void advance_cpu(
     const Grid2D&        Uold,
     Grid2D&              Utmp,
     Grid2D&              Unew,
@@ -293,7 +293,7 @@ void advance_second_order(
 ) {
     if (!ws.is_initialized()) {
         throw std::runtime_error(
-            "advance_second_order: CpuWorkspace not initialised. "
+            "advance_cpu: CpuWorkspace not initialised. "
             "Call ws.init(cfg.nx, cfg.ny) before the time loop."
         );
     }
@@ -346,7 +346,6 @@ void advance_second_order(
         }
     }
 
-    copy_ghost_cells(Uold, Utmp);
     apply_boundary(Utmp, bc);
 
 #ifdef _OPENMP
@@ -379,14 +378,13 @@ void advance_second_order(
         }
     }
 
-    copy_ghost_cells(Utmp, Unew);
     apply_boundary(Unew, bc);
 
     apply_psi_damping(Unew, dt);
     apply_boundary(Unew, bc);
 }
 
-void advance_second_order(
+void advance_cpu(
     const Grid2D& Uold,
     Grid2D&       Utmp,
     Grid2D&       Unew,
@@ -394,5 +392,5 @@ void advance_second_order(
     CpuWorkspace& ws
 ) {
     static const BoundaryConfig all_transmissive{};
-    advance_second_order(Uold, Utmp, Unew, dt, ws, RiemannSolver::HLL, all_transmissive);
+    advance_cpu(Uold, Utmp, Unew, dt, ws, RiemannSolver::HLL, all_transmissive);
 }

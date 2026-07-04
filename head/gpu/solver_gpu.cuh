@@ -29,7 +29,7 @@ double compute_dt_gpu(const Grid2DGPU& grid, GpuWorkspace& ws, double cfl,
 void reset_floor_trigger_count_gpu();
 unsigned long long read_floor_trigger_count_gpu();
 
-void advance_second_order_gpu(
+void advance_gpu(
     const Grid2DGPU& Uold,
     Grid2DGPU&       Utmp,
     Grid2DGPU&       Unew,
