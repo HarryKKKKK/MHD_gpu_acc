@@ -23,11 +23,7 @@ void set_gpu_physics_ch(double ch);
 void init_gpu_workspace(GpuWorkspace& ws, const Grid2DGPU& grid);
 void free_gpu_workspace(GpuWorkspace& ws);
 
-double compute_dt_gpu(const Grid2DGPU& grid, GpuWorkspace& ws, double cfl,
-                       double* out_max_speed = nullptr);
-
-void reset_floor_trigger_count_gpu();
-unsigned long long read_floor_trigger_count_gpu();
+double compute_dt_gpu(const Grid2DGPU& grid, GpuWorkspace& ws, double cfl);
 
 void advance_gpu(
     const Grid2DGPU& Uold,

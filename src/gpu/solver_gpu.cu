@@ -63,17 +63,13 @@ __device__ inline bool is_physical(const Primitive& V) {
         && isfinite(V.psi);
 }
 
-__device__ unsigned long long d_floor_trigger_count = 0ULL;
-
 __device__ inline Primitive enforce_physical_primitive(const Primitive& cand, const Primitive& fb) {
     if (is_physical(cand)) return cand;
-    atomicAdd(&d_floor_trigger_count, 1ULL);
     return fb;
 }
 
 __device__ inline Conserved enforce_physical_conserved(const Conserved& cand, const Conserved& fb) {
     if (is_physical(phys::cons_to_prim(cand))) return cand;
-    atomicAdd(&d_floor_trigger_count, 1ULL);
     return fb;
 }
 
@@ -459,17 +455,6 @@ void set_gpu_physics_ch(double ch) {
     phys::ch_glm = ch;
 }
 
-void reset_floor_trigger_count_gpu() {
-    const unsigned long long zero = 0ULL;
-    CUDA_CHECK(cudaMemcpyToSymbol(d_floor_trigger_count, &zero, sizeof(zero)));
-}
-
-unsigned long long read_floor_trigger_count_gpu() {
-    unsigned long long value = 0ULL;
-    CUDA_CHECK(cudaMemcpyFromSymbol(&value, d_floor_trigger_count, sizeof(value)));
-    return value;
-}
-
 void init_gpu_workspace(GpuWorkspace& ws, const Grid2DGPU& grid) {
     free_gpu_workspace(ws);
     ws.nx = grid.nx();
@@ -496,8 +481,7 @@ void free_gpu_workspace(GpuWorkspace& ws) {
     ws = GpuWorkspace{};
 }
 
-double compute_dt_gpu(const Grid2DGPU& grid, GpuWorkspace& ws, double cfl,
-                       double* out_max_speed) {
+double compute_dt_gpu(const Grid2DGPU& grid, GpuWorkspace& ws, double cfl) {
     if (ws.nx != grid.nx() || ws.ny != grid.ny() || !ws.speed_d)
         throw std::runtime_error("compute_dt_gpu: workspace not initialised.");
 
@@ -516,8 +500,6 @@ double compute_dt_gpu(const Grid2DGPU& grid, GpuWorkspace& ws, double cfl,
     double max_speed = 0.0;
     CUDA_CHECK(cudaMemcpy(&max_speed, ws.max_speed_d,
                           sizeof(double), cudaMemcpyDeviceToHost));
-
-    if (out_max_speed) *out_max_speed = max_speed;
 
     if (max_speed <= 0.0) {
         throw std::runtime_error("compute_dt_gpu: non-positive maximum wave speed.");
