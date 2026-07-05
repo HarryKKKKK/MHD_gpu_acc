@@ -1,0 +1,3 @@
+case,solver,n,threads,nx,ny,total_cells,steps,elapsed_s,steps_per_s,Mcell_updates_s,real_s,user_s,sys_s,max_rss_kb,git_branch,git_commit
+brio_wu,hlld,2,48,1600,8,12800,1957,1.2655,1546.42,19.8,1.75,60.88,0.07,9984,cpu_opt,3635fd4
+orszag_tang,hlld,2,48,384,384,147456,2792,8.4587,330.07,48.7,9.01,344.83,0.30,66816,cpu_opt,3635fd4

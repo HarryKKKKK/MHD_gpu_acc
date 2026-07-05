@@ -4,7 +4,6 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
-#include <limits>
 #include <stdexcept>
 
 #include <cuda_runtime.h>
@@ -19,16 +18,11 @@ namespace {
 
 constexpr double kRhoFloor   = 1.0e-12;
 constexpr double kPFloor     = 1.0e-12;
-constexpr double kCrGlm      = 0.18;    // host-side copy of cr_glm for psi damping
 constexpr int    kDtBlockSize = 256;
 
-// Shared-memory bank-conflict padding for x-kernel and y-kernel tiles.
 constexpr int PAD_X = 1;
 constexpr int PAD_Y = 1;
 
-// ============================================================
-// CUDA error check
-// ============================================================
 inline void check_cuda(cudaError_t err, const char* call, const char* file, int line) {
     if (err != cudaSuccess) {
         std::cerr << "CUDA error at " << file << ":" << line
@@ -38,31 +32,26 @@ inline void check_cuda(cudaError_t err, const char* call, const char* file, int 
 }
 #define CUDA_CHECK(call) check_cuda((call), #call, __FILE__, __LINE__)
 
-// ============================================================
-// Device helpers
-// ============================================================
-
 __device__ inline int clamp_i(int x, int lo, int hi) {
     return (x < lo) ? lo : ((x > hi) ? hi : x);
 }
 
-__device__ inline double minmod_s(double a, double b) {
+__device__ inline double minmod_scalar(double a, double b) {
     if (a * b <= 0.0) return 0.0;
     return (a > 0.0) ? fmin(a, b) : fmax(a, b);
 }
 
-// 9-component minmod limiter on primitive state
-__device__ inline Primitive minmod9(const Primitive& a, const Primitive& b) {
+__device__ inline Primitive minmod_primitive(const Primitive& a, const Primitive& b) {
     return Primitive(
-        minmod_s(a.rho, b.rho),
-        minmod_s(a.u,   b.u),
-        minmod_s(a.v,   b.v),
-        minmod_s(a.w,   b.w),
-        minmod_s(a.Bx,  b.Bx),
-        minmod_s(a.By,  b.By),
-        minmod_s(a.Bz,  b.Bz),
-        minmod_s(a.p,   b.p),
-        minmod_s(a.psi, b.psi)
+        minmod_scalar(a.rho, b.rho),
+        minmod_scalar(a.u,   b.u),
+        minmod_scalar(a.v,   b.v),
+        minmod_scalar(a.w,   b.w),
+        minmod_scalar(a.Bx,  b.Bx),
+        minmod_scalar(a.By,  b.By),
+        minmod_scalar(a.Bz,  b.Bz),
+        minmod_scalar(a.p,   b.p),
+        minmod_scalar(a.psi, b.psi)
     );
 }
 
@@ -74,17 +63,15 @@ __device__ inline bool is_physical(const Primitive& V) {
         && isfinite(V.psi);
 }
 
-__device__ inline Primitive safe_prim(const Primitive& cand, const Primitive& fb) {
-    return is_physical(cand) ? cand : fb;
+__device__ inline Primitive enforce_physical_primitive(const Primitive& cand, const Primitive& fb) {
+    if (is_physical(cand)) return cand;
+    return fb;
 }
 
-__device__ inline Conserved safe_cons(const Conserved& cand, const Conserved& fb) {
-    return is_physical(phys::cons_to_prim(cand)) ? cand : fb;
+__device__ inline Conserved enforce_physical_conserved(const Conserved& cand, const Conserved& fb) {
+    if (is_physical(phys::cons_to_prim(cand))) return cand;
+    return fb;
 }
-
-// ============================================================
-// Global-memory load / store helpers (9 fields)
-// ============================================================
 
 __device__ inline Conserved gload(const ConstGrid2DGPUView& U, int i, int j) {
     const int idx = U.flat_index(i, j);
@@ -108,10 +95,6 @@ __device__ inline void gstore(Grid2DGPUView& U, int i, int j, const Conserved& C
     U.psi[idx]  = C.psi;
 }
 
-// ============================================================
-// Shared-memory tile accessor (9-field SoA)
-// Wraps 9 raw pointers for a single tile (state / L-recon / R-recon / flux).
-// ============================================================
 struct Tile9 {
     double *rho, *rhou, *rhov, *rhow, *Bx, *By, *Bz, *E, *psi;
 
@@ -133,7 +116,6 @@ struct Tile9 {
     }
 };
 
-// Carve 9 consecutive blocks of size n_doubles out of *p and advance p.
 __device__ inline Tile9 carve(double*& p, int n_doubles) {
     Tile9 t;
     t.rho  = p; p += n_doubles;
@@ -148,10 +130,7 @@ __device__ inline Tile9 carve(double*& p, int n_doubles) {
     return t;
 }
 
-// ============================================================
-// MUSCL-Hancock half-step reconstruction (device, 9-component)
-// ============================================================
-__device__ inline void reconstruct_muscl_hancock(
+__device__ inline void reconstruct_cell_muscl_hancock(
     const Conserved& Um, const Conserved& Uc, const Conserved& Up,
     double dt_over_d, Direction dir,
     Conserved& UL_star, Conserved& UR_star
@@ -160,31 +139,25 @@ __device__ inline void reconstruct_muscl_hancock(
     const Primitive Wc = phys::cons_to_prim(Uc);
     const Primitive Wp = phys::cons_to_prim(Up);
 
-    const Primitive slope = minmod9(Wc - Wm, Wp - Wc);
+    const Primitive slope = minmod_primitive(Wc - Wm, Wp - Wc);
 
-    const Primitive WL = safe_prim(Wc - 0.5 * slope, Wc);
-    const Primitive WR = safe_prim(Wc + 0.5 * slope, Wc);
+    const Primitive WL = enforce_physical_primitive(Wc - 0.5 * slope, Wc);
+    const Primitive WR = enforce_physical_primitive(Wc + 0.5 * slope, Wc);
 
     const Conserved UL = phys::prim_to_cons(WL);
     const Conserved UR = phys::prim_to_cons(WR);
 
-    // Half-step predictor: use ch=0 so the ch²*Bₙ GLM term does not appear.
-    // With ch set to max signal speed (possibly large), including it here causes
-    // the psi predictor correction to blow up.  GLM cleaning still happens in the
-    // Riemann (corrector) step via phys::d_ch_glm.
+    // ch=0 here intentionally (matches predictor step in solver_cpu.cpp)
     const Conserved FL = (dir == Direction::X) ? phys::flux_x(UL, 0.0)
                                                : phys::flux_y(UL, 0.0);
     const Conserved FR = (dir == Direction::X) ? phys::flux_x(UR, 0.0)
                                                : phys::flux_y(UR, 0.0);
     const Conserved half = 0.5 * dt_over_d * (FR - FL);
 
-    UL_star = safe_cons(UL - half, UL);
-    UR_star = safe_cons(UR - half, UR);
+    UL_star = enforce_physical_conserved(UL - half, UL);
+    UR_star = enforce_physical_conserved(UR - half, UR);
 }
 
-// ============================================================
-// CFL: per-block max wave speed
-// ============================================================
 template <int BLOCK_SIZE>
 __global__ void compute_block_max_speed_kernel(
     ConstGrid2DGPUView grid,
@@ -206,10 +179,18 @@ __global__ void compute_block_max_speed_kernel(
         const Conserved U = gload(grid, i, j);
         const Primitive V = phys::cons_to_prim(U);
 
-        if (is_physical(V)) {
-            // Use the previous-step ch_glm for the CFL estimate (d_ch_glm = device copy)
-            const double sx = phys::max_signal_speed_x(V, phys::d_ch_glm);
-            const double sy = phys::max_signal_speed_y(V, phys::d_ch_glm);
+        // Validity threshold must match compute_dt_cpu() in solver_cpu.cpp
+        // (line ~264) and compute_dt_mpi() in solver_mpi.cpp (line ~674)
+        // exactly: 0.0, not the kRhoFloor/kPFloor (1e-12) used by
+        // is_physical() elsewhere in this file for floor enforcement.
+        // A cell that fails this check must contribute exactly 0.0 to
+        // local_speed (it stays at its initial value below), matching the
+        // effect of the `continue` statement in the CPU/MPI per-cell loop.
+        const bool dt_valid = isfinite(V.rho) && isfinite(V.p) &&
+                               V.rho > 0.0 && V.p > 0.0;
+        if (dt_valid) {
+            const double sx = phys::max_signal_speed_x(V, 0.0);
+            const double sy = phys::max_signal_speed_y(V, 0.0);
             if (isfinite(sx) && isfinite(sy))
                 local_speed = fmax(sx, sy);
         }
@@ -238,10 +219,6 @@ __global__ void compute_block_max_speed_kernel(
     }
 }
 
-// ============================================================
-// GLM psi damping kernel
-// factor = exp(-dt * ch / cr_glm), applied to every active cell.
-// ============================================================
 __global__ void apply_psi_damping_kernel(Grid2DGPUView grid, double factor) {
     const int i = blockIdx.x * blockDim.x + threadIdx.x + grid.i_begin();
     const int j = blockIdx.y * blockDim.y + threadIdx.y + grid.j_begin();
@@ -250,18 +227,6 @@ __global__ void apply_psi_damping_kernel(Grid2DGPUView grid, double factor) {
     grid.psi[idx] *= factor;
 }
 
-// ============================================================
-// Second-order x-sweep kernel — smem-fused, 9-component MHD.
-//
-// Shared-memory layout (field-major, each field is a contiguous tile):
-//   State  tile: 9 × state_tile_n  (BLOCK_X+4+PAD_X) × BLOCK_Y
-//   L-recon tile: 9 × recon_tile_n  (BLOCK_X+2+PAD_X) × BLOCK_Y
-//   R-recon tile: 9 × recon_tile_n
-//   Flux   tile: 9 × flux_tile_n   (BLOCK_X+1)        × BLOCK_Y
-//
-// Total ≈ 9 × (336+304+304+272) × 8 ≈ 87 KB for 16×16 blocks.
-// Requires cudaFuncAttributeMaxDynamicSharedMemorySize to be set.
-// ============================================================
 __global__ void advance_x_kernel(
     ConstGrid2DGPUView Uin,
     Grid2DGPUView      Uout,
@@ -277,10 +242,9 @@ __global__ void advance_x_kernel(
     const int by = blockDim.y;
     const int block_i_start = blockIdx.x * bx;
 
-    // Tile dimensions
-    const int sw = bx + 4 + PAD_X;   // state_tile_w   (21 for bx=16)
-    const int rw = bx + 2 + PAD_X;   // recon_tile_w   (19)
-    const int fw = bx + 1;            // flux_tile_w    (17, no pad needed)
+    const int sw = bx + 4 + PAD_X;
+    const int rw = bx + 2 + PAD_X;
+    const int fw = bx + 1;
     const int sn = sw * by;
     const int rn = rw * by;
     const int fn = fw * by;
@@ -288,17 +252,11 @@ __global__ void advance_x_kernel(
     extern __shared__ double smem[];
     double* ptr = smem;
 
-    Tile9 S  = carve(ptr, sn);  // state
-    Tile9 L  = carve(ptr, rn);  // left  reconstructed
-    Tile9 R  = carve(ptr, rn);  // right reconstructed
-    Tile9 F  = carve(ptr, fn);  // face flux
+    Tile9 S  = carve(ptr, sn);
+    Tile9 L  = carve(ptr, rn);
+    Tile9 R  = carve(ptr, rn);
+    Tile9 F  = carve(ptr, fn);
 
-    // ----------------------------------------------------------
-    // 1. Load state tile (bx+4 columns, by rows) from global mem.
-    //    local_i_raw ∈ [block_i_start-2 .. block_i_start+bx+1].
-    //    Clamped to [-ng .. nx+ng-1] so we can read ghost cells
-    //    that were filled by apply_boundary_gpu.
-    // ----------------------------------------------------------
     for (int lin = tid; lin < sn; lin += block_threads) {
         const int sj = lin / sw;
         const int si = lin - sj * sw;
@@ -316,10 +274,6 @@ __global__ void advance_x_kernel(
     }
     __syncthreads();
 
-    // ----------------------------------------------------------
-    // 2. MUSCL-Hancock reconstruction for each "recon cell"
-    //    (one extra column on each side of the block).
-    // ----------------------------------------------------------
     const double dt_dx = dt / Uin.dx;
 
     for (int lin = tid; lin < rn; lin += block_threads) {
@@ -332,25 +286,19 @@ __global__ void advance_x_kernel(
         if (lj < Uin.ny && sr < bx + 2
             && li_recon >= -1 && li_recon <= Uin.nx)
         {
-            // state_center maps recon column sr to state column sr+1
-            // (state tile has 2 extra ghost cols on the left)
             const int sc = sj * sw + (sr + 1);
             const Conserved Um = S.load(sc - 1);
             const Conserved Uc = S.load(sc);
             const Conserved Up = S.load(sc + 1);
 
             Conserved UL, UR;
-            reconstruct_muscl_hancock(Um, Uc, Up, dt_dx, Direction::X, UL, UR);
+            reconstruct_cell_muscl_hancock(Um, Uc, Up, dt_dx, Direction::X, UL, UR);
             L.store(lin, UL);
             R.store(lin, UR);
         }
     }
     __syncthreads();
 
-    // ----------------------------------------------------------
-    // 3. Compute x-face fluxes.
-    //    Face sf is between recon cell sf and sf+1.
-    // ----------------------------------------------------------
     for (int lin = tid; lin < fn; lin += block_threads) {
         const int sj = lin / fw;
         const int sf = lin - sj * fw;
@@ -362,24 +310,20 @@ __global__ void advance_x_kernel(
             const int left_idx  = sj * rw + sf;
             const int right_idx = sj * rw + sf + 1;
 
-            const Conserved UL = R.load(left_idx);   // right-biased state of left cell
-            const Conserved UR = L.load(right_idx);  // left-biased  state of right cell
+            const Conserved UL = R.load(left_idx);
+            const Conserved UR = L.load(right_idx);
 
             F.store(lin, riemann_flux(UL, UR, Direction::X, solver));
         }
     }
     __syncthreads();
 
-    // ----------------------------------------------------------
-    // 4. Update active cells.
-    // ----------------------------------------------------------
     if (local_i >= Uin.nx || local_j >= Uin.ny) return;
 
     const int sj = threadIdx.y;
     const int fm = sj * fw + threadIdx.x;
     const int fp = sj * fw + threadIdx.x + 1;
 
-    // state tile index: threadIdx.x+2 skips the 2 left ghost cols
     const int sc = sj * sw + threadIdx.x + 2;
     const Conserved Uc     = S.load(sc);
     const Conserved Unew_c = Uc - dt_dx * (F.load(fp) - F.load(fm));
@@ -387,20 +331,9 @@ __global__ void advance_x_kernel(
     gstore(Uout,
            Uin.i_begin() + local_i,
            Uin.j_begin() + local_j,
-           safe_cons(Unew_c, Uc));
+           enforce_physical_conserved(Unew_c, Uc));
 }
 
-// ============================================================
-// Second-order y-sweep kernel — smem-fused, 9-component MHD.
-//
-// Shared-memory layout:
-//   State  tile: 9 × (BLOCK_X+PAD_Y) × (BLOCK_Y+4)
-//   L-recon: 9 × (BLOCK_X+PAD_Y) × (BLOCK_Y+2)
-//   R-recon: 9 × same
-//   Flux: 9 × (BLOCK_X+PAD_Y) × (BLOCK_Y+1)
-//
-// Total ≈ 9 × (340+306+306+289) × 8 ≈ 89 KB for 16×16 blocks.
-// ============================================================
 __global__ void advance_y_kernel(
     ConstGrid2DGPUView Uin,
     Grid2DGPUView      Uout,
@@ -416,10 +349,9 @@ __global__ void advance_y_kernel(
     const int by = blockDim.y;
     const int block_j_start = blockIdx.y * by;
 
-    // Tile dimensions (padded in x to break bank conflicts on row-stride access)
-    const int sw  = bx + PAD_Y;     // state_tile_w (17)
-    const int rw  = bx + PAD_Y;     // recon_tile_w (17)
-    const int fw  = bx + PAD_Y;     // flux_tile_w  (17)
+    const int sw  = bx + PAD_Y;
+    const int rw  = bx + PAD_Y;
+    const int fw  = bx + PAD_Y;
     const int sn  = sw * (by + 4);
     const int rn  = rw * (by + 2);
     const int fn_ = fw * (by + 1);
@@ -432,11 +364,6 @@ __global__ void advance_y_kernel(
     Tile9 R = carve(ptr, rn);
     Tile9 F = carve(ptr, fn_);
 
-    // ----------------------------------------------------------
-    // 1. Load state tile ((by+4) rows, bx columns).
-    //    local_j_raw ∈ [block_j_start-2 .. block_j_start+by+1].
-    //    Clamped to [-ng .. ny+ng-1].
-    // ----------------------------------------------------------
     for (int lin = tid; lin < sn; lin += block_threads) {
         const int sj = lin / sw;
         const int si = lin - sj * sw;
@@ -454,9 +381,6 @@ __global__ void advance_y_kernel(
     }
     __syncthreads();
 
-    // ----------------------------------------------------------
-    // 2. Reconstruction (one extra row on each side).
-    // ----------------------------------------------------------
     const double dt_dy = dt / Uin.dy;
 
     for (int lin = tid; lin < rn; lin += block_threads) {
@@ -469,23 +393,19 @@ __global__ void advance_y_kernel(
         if (li < Uin.nx && si < bx
             && lj_recon >= -1 && lj_recon <= Uin.ny)
         {
-            // state_center: row sr+1 skips 2 top ghost rows in state tile
             const int sc = (sr + 1) * sw + si;
             const Conserved Um = S.load(sc - sw);
             const Conserved Uc = S.load(sc);
             const Conserved Up = S.load(sc + sw);
 
             Conserved UL, UR;
-            reconstruct_muscl_hancock(Um, Uc, Up, dt_dy, Direction::Y, UL, UR);
+            reconstruct_cell_muscl_hancock(Um, Uc, Up, dt_dy, Direction::Y, UL, UR);
             L.store(lin, UL);
             R.store(lin, UR);
         }
     }
     __syncthreads();
 
-    // ----------------------------------------------------------
-    // 3. Compute y-face fluxes.
-    // ----------------------------------------------------------
     for (int lin = tid; lin < fn_; lin += block_threads) {
         const int sf = lin / fw;
         const int si = lin - sf * fw;
@@ -499,24 +419,20 @@ __global__ void advance_y_kernel(
             const int lower = sf       * rw + si;
             const int upper = (sf + 1) * rw + si;
 
-            const Conserved UL = R.load(lower);  // right-biased of lower cell
-            const Conserved UR = L.load(upper);  // left-biased  of upper cell
+            const Conserved UL = R.load(lower);
+            const Conserved UR = L.load(upper);
 
             F.store(lin, riemann_flux(UL, UR, Direction::Y, solver));
         }
     }
     __syncthreads();
 
-    // ----------------------------------------------------------
-    // 4. Update active cells.
-    // ----------------------------------------------------------
     if (local_i >= Uin.nx || local_j >= Uin.ny) return;
 
     const int si  = threadIdx.x;
     const int fm  = threadIdx.y       * fw + si;
     const int fp  = (threadIdx.y + 1) * fw + si;
 
-    // state tile index: (threadIdx.y+2)*sw skips 2 top ghost rows
     const int sc  = (threadIdx.y + 2) * sw + si;
     const Conserved Uc     = S.load(sc);
     const Conserved Unew_c = Uc - dt_dy * (F.load(fp) - F.load(fm));
@@ -524,28 +440,21 @@ __global__ void advance_y_kernel(
     gstore(Uout,
            Uin.i_begin() + local_i,
            Uin.j_begin() + local_j,
-           safe_cons(Unew_c, Uc));
+           enforce_physical_conserved(Unew_c, Uc));
 }
 
 } // anonymous namespace
 
-// ============================================================
-// Host-side physics setters (cudaMemcpyToSymbol into this TU's
-// __device__ static copies of phys::gamma / phys::ch_glm)
-// ============================================================
 void set_gpu_physics_gamma(double g) {
     CUDA_CHECK(cudaMemcpyToSymbol(phys::d_gamma, &g, sizeof(double)));
-    phys::gamma = g;   // keep host mirror in sync for HD functions on host path
+    phys::gamma = g;
 }
 
 void set_gpu_physics_ch(double ch) {
     CUDA_CHECK(cudaMemcpyToSymbol(phys::d_ch_glm, &ch, sizeof(double)));
-    phys::ch_glm = ch; // keep host mirror in sync
+    phys::ch_glm = ch;
 }
 
-// ============================================================
-// Workspace
-// ============================================================
 void init_gpu_workspace(GpuWorkspace& ws, const Grid2DGPU& grid) {
     free_gpu_workspace(ws);
     ws.nx = grid.nx();
@@ -572,9 +481,6 @@ void free_gpu_workspace(GpuWorkspace& ws) {
     ws = GpuWorkspace{};
 }
 
-// ============================================================
-// Time step — computes max wave speed, sets device ch_glm, returns dt.
-// ============================================================
 double compute_dt_gpu(const Grid2DGPU& grid, GpuWorkspace& ws, double cfl) {
     if (ws.nx != grid.nx() || ws.ny != grid.ny() || !ws.speed_d)
         throw std::runtime_error("compute_dt_gpu: workspace not initialised.");
@@ -595,26 +501,16 @@ double compute_dt_gpu(const Grid2DGPU& grid, GpuWorkspace& ws, double cfl) {
     CUDA_CHECK(cudaMemcpy(&max_speed, ws.max_speed_d,
                           sizeof(double), cudaMemcpyDeviceToHost));
 
-    if (max_speed <= 0.0)
-        return std::numeric_limits<double>::max();
+    if (max_speed <= 0.0) {
+        throw std::runtime_error("compute_dt_gpu: non-positive maximum wave speed.");
+    }
 
-    // Update device-side ch_glm = max signal speed (Dedner Section 4)
     set_gpu_physics_ch(max_speed);
 
     return cfl * std::min(grid.dx(), grid.dy()) / max_speed;
 }
 
-// ============================================================
-// Second-order MUSCL-Hancock advance (x-then-y splitting).
-//
-// Steps:
-//   1. x-kernel:   Uold → Utmp (interior)
-//   2. BC on Utmp
-//   3. y-kernel:   Utmp → Unew (interior)
-//   4. BC on Unew
-//   5. psi damping on Unew
-// ============================================================
-void advance_second_order_gpu(
+void advance_gpu(
     const Grid2DGPU& Uold,
     Grid2DGPU&       Utmp,
     Grid2DGPU&       Unew,
@@ -624,7 +520,7 @@ void advance_second_order_gpu(
     const BoundaryConfig& bc
 ) {
     if (ws.nx != Uold.nx() || ws.ny != Uold.ny() || !ws.speed_d)
-        throw std::runtime_error("advance_second_order_gpu: workspace not initialised.");
+        throw std::runtime_error("advance_gpu: workspace not initialised.");
 
     const int bx = 16, by = 16;
     const dim3 threads(bx, by);
@@ -633,26 +529,23 @@ void advance_second_order_gpu(
         (Uold.ny() + by - 1) / by
     );
 
-    // ---- x-sweep smem sizes ----
-    const int x_sw = bx + 4 + PAD_X;   // 21
-    const int x_rw = bx + 2 + PAD_X;   // 19
-    const int x_fw = bx + 1;            // 17
+    const int x_sw = bx + 4 + PAD_X;
+    const int x_rw = bx + 2 + PAD_X;
+    const int x_fw = bx + 1;
     const std::size_t x_smem =
         9 * static_cast<std::size_t>(
             x_sw * by + 2 * x_rw * by + x_fw * by
-        ) * sizeof(double);             // ≈ 87 KB
+        ) * sizeof(double);
 
-    // ---- y-sweep smem sizes ----
-    const int y_sw = bx + PAD_Y;        // 17
-    const int y_sh = by + 4;            // 20
-    const int y_rh = by + 2;            // 18
-    const int y_fh = by + 1;            // 17
+    const int y_sw = bx + PAD_Y;
+    const int y_sh = by + 4;
+    const int y_rh = by + 2;
+    const int y_fh = by + 1;
     const std::size_t y_smem =
         9 * static_cast<std::size_t>(
             y_sw * y_sh + 2 * y_sw * y_rh + y_sw * y_fh
-        ) * sizeof(double);             // ≈ 89 KB
+        ) * sizeof(double);
 
-    // Request extended shared memory (required for > 48 KB per block)
     CUDA_CHECK(cudaFuncSetAttribute(
         advance_x_kernel,
         cudaFuncAttributeMaxDynamicSharedMemorySize,
@@ -662,29 +555,43 @@ void advance_second_order_gpu(
         cudaFuncAttributeMaxDynamicSharedMemorySize,
         static_cast<int>(y_smem)));
 
-    // 1 & 2: x-sweep then BC
     advance_x_kernel<<<blocks, threads, x_smem>>>(
         make_view(static_cast<const Grid2DGPU&>(Uold)),
         make_view(Utmp), dt, solver);
     CUDA_CHECK(cudaGetLastError());
     apply_boundary_gpu(Utmp, bc);
 
-    // 3 & 4: y-sweep then BC
     advance_y_kernel<<<blocks, threads, y_smem>>>(
         make_view(static_cast<const Grid2DGPU&>(Utmp)),
         make_view(Unew), dt, solver);
     CUDA_CHECK(cudaGetLastError());
     apply_boundary_gpu(Unew, bc);
 
-    // 5: mixed-GLM psi damping (Dedner eq. 45)
     const double ch = [&]() {
         double h = 0.0;
         CUDA_CHECK(cudaMemcpyFromSymbol(&h, phys::d_ch_glm, sizeof(double)));
         return h;
     }();
-    if (ch > 0.0) {
-        const double factor = std::exp(-dt * ch / kCrGlm);
+    // Dedner et al. (2002): c_r := c_p^2/c_h ~= 0.18 gave optimal results
+    // "regardless of the grid resolution" (also confirmed by Bard & Dorelli
+    // 2014, JCP 259, who use the same fixed value in all simulations).
+    // l_d is therefore used directly as this fixed length, not scaled by dx/dy.
+    // Read from phys::cr_glm (host global, same source of truth as
+    // apply_psi_damping() in solver_cpu.cpp/solver_mpi.cpp) instead of a
+    // separately hardcoded value that could silently drift out of sync.
+    const double l_d = phys::cr_glm;
+    if (ch > 0.0 && l_d > 0.0) {
+        const double factor = std::exp(-dt * ch / l_d);
         apply_psi_damping_kernel<<<blocks, threads>>>(make_view(Unew), factor);
         CUDA_CHECK(cudaGetLastError());
     }
+
+    // Refresh Unew's ghost cells so they reflect the damped psi values.
+    // Mirrors the unconditional apply_boundary(Unew, bc) call in
+    // src/cpu/solver_cpu.cpp (after apply_psi_damping) and the
+    // unconditional exchange_halo_full(Unew, dom, bc) call in
+    // src/cpu/solver_mpi.cpp (after apply_psi_damping). Without this call,
+    // Unew's ghost cells retain pre-damping psi values, causing GPU results
+    // to diverge from CPU/MPI at domain boundaries on the next step.
+    apply_boundary_gpu(Unew, bc);
 }

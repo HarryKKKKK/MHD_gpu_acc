@@ -47,14 +47,6 @@ __global__ void apply_lr_bc_kernel(
                 copy9(g, gL, src);
                 break;
             }
-            case BoundaryType::Reflecting: {
-                const int src = g.flat_index(ib + k, j);
-                copy9(g, gL, src);
-                g.rhou[gL] = -g.rhou[src];   // negate x-momentum
-                g.Bx[gL]   = -g.Bx[src];     // negate normal B
-                break;
-            }
-            default: break;  // Dirichlet: caller manages ghost cells
         }
 
         // ----- Right ghost cell at ie+k -----
@@ -71,14 +63,6 @@ __global__ void apply_lr_bc_kernel(
                 copy9(g, gR, src);
                 break;
             }
-            case BoundaryType::Reflecting: {
-                const int src = g.flat_index(ie - 1 - k, j);
-                copy9(g, gR, src);
-                g.rhou[gR] = -g.rhou[src];
-                g.Bx[gR]   = -g.Bx[src];
-                break;
-            }
-            default: break;
         }
     }
 }
@@ -116,14 +100,6 @@ __global__ void apply_bt_bc_kernel(
                 copy9(g, gB, src);
                 break;
             }
-            case BoundaryType::Reflecting: {
-                const int src = g.flat_index(i, jb + k);
-                copy9(g, gB, src);
-                g.rhov[gB] = -g.rhov[src];   // negate y-momentum
-                g.By[gB]   = -g.By[src];     // negate normal B
-                break;
-            }
-            default: break;
         }
 
         // ----- Top ghost cell at je+k -----
@@ -140,14 +116,6 @@ __global__ void apply_bt_bc_kernel(
                 copy9(g, gT, src);
                 break;
             }
-            case BoundaryType::Reflecting: {
-                const int src = g.flat_index(i, je - 1 - k);
-                copy9(g, gT, src);
-                g.rhov[gT] = -g.rhov[src];
-                g.By[gT]   = -g.By[src];
-                break;
-            }
-            default: break;
         }
     }
 }

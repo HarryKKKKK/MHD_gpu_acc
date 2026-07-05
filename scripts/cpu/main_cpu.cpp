@@ -2,9 +2,9 @@
 // Implements GLM-MHD following Dedner et al. (2002), J. Comput. Phys. 175, 645-673.
 //
 // Usage:
-//   ./main_cpu [case_name] [--n N] [--solver hll|hlld|force] [--out output_dir] [--no-out]
+//   ./main_cpu [case_name] [--n N] [--solver hll|hllc|hlld|force] [--out output_dir] [--no-out]
 //
-// --n N  : weak-scaling factor; scales the base grid by N in each dimension (default 1)
+// --n N : weak-scaling factor; scales the base grid by N in each dimension (default 1)
 //
 // Output: one CSV file per field at t_end (rho, p, Bx, By, Bz, psi, u, v, E)
 // written to output_dir (default: "output/").
@@ -77,6 +77,7 @@ void write_all_fields(
     write_field_csv(grid, path("rho"), [](const Conserved& U){ return U.rho; });
     write_field_csv(grid, path("u"),   [](const Conserved& U){ return U.rhou / U.rho; });
     write_field_csv(grid, path("v"),   [](const Conserved& U){ return U.rhov / U.rho; });
+    write_field_csv(grid, path("w"),   [](const Conserved& U){ return U.rhow / U.rho; });
     write_field_csv(grid, path("Bx"),  [](const Conserved& U){ return U.Bx; });
     write_field_csv(grid, path("By"),  [](const Conserved& U){ return U.By; });
     write_field_csv(grid, path("Bz"),  [](const Conserved& U){ return U.Bz; });
@@ -143,6 +144,11 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    const std::string solver_name =
+        (rc.solver == RiemannSolver::HLL)  ? "hll"  :
+        (rc.solver == RiemannSolver::HLLC) ? "hllc" :
+        (rc.solver == RiemannSolver::HLLD) ? "hlld" : "force";
+
     std::cout << "=== MHD GLM Solver (Dedner et al. 2002) ===\n";
     std::cout << "  Case      : " << rc.case_name << "\n";
     std::cout << "  Scale (n) : " << rc.n_scale << "\n";
@@ -199,7 +205,7 @@ int main(int argc, char** argv) {
         if (has_snaps && snap_idx < cfg.snapshot_times.size())
             t_next = std::min(t_next, cfg.snapshot_times[snap_idx]);
 
-        const double dt_raw = compute_dt(Uold, cfg.cfl);
+        const double dt_raw = compute_dt_cpu(Uold, cfg.cfl);
         const double dt     = std::min(dt_raw, t_next - t);
 
         if (!std::isfinite(dt) || dt <= 0.0) {
@@ -215,7 +221,7 @@ int main(int argc, char** argv) {
             break;
         }
 
-        advance_second_order(Uold, Utmp, Unew, dt, ws, rc.solver, cfg.bc);
+        advance_cpu(Uold, Utmp, Unew, dt, ws, rc.solver, cfg.bc);
 
         std::swap(Uold, Unew);
         t    += dt;
@@ -238,14 +244,16 @@ int main(int argc, char** argv) {
         }
 
         // Write snapshots whose time we have just reached
-        if (rc.write_out && has_snaps) {
+        if (has_snaps) {
             while (snap_idx < cfg.snapshot_times.size() &&
                    t >= cfg.snapshot_times[snap_idx] - 1e-12) {
                 std::cout << "  [snap] " << cfg.snapshot_tags[snap_idx]
                           << "  t_phys=" << std::scientific << std::setprecision(6)
                           << t << " s\n";
-                write_all_fields(Uold, rc.out_dir,
-                    rc.case_name + "_cpu_" + cfg.snapshot_tags[snap_idx]);
+                if (rc.write_out) {
+                    write_all_fields(Uold, rc.out_dir,
+                        rc.case_name + "_cpu_" + cfg.snapshot_tags[snap_idx]);
+                }
                 ++snap_idx;
             }
         }

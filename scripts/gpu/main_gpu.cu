@@ -10,7 +10,6 @@
 #include <string>
 #include <vector>
 
-#include "gpu/boundary_gpu.cuh"
 #include "gpu/grid_gpu.cuh"
 #include "gpu/solver_gpu.cuh"
 #include "init.hpp"
@@ -95,11 +94,11 @@ static void write_all_fields(
 // ============================================================
 
 struct RunConfig {
-    std::string   case_name = "kelvin_helmholtz";
-    int           n_scale   = 1;
-    RiemannSolver solver    = RiemannSolver::HLLD;
-    std::string   out_dir   = "output";
-    bool          write_out = false;
+    std::string   case_name     = "kelvin_helmholtz";
+    int           n_scale       = 1;
+    RiemannSolver solver        = RiemannSolver::HLLD;
+    std::string   out_dir       = "output";
+    bool          write_out     = false;
 };
 
 static RunConfig parse_args(int argc, char** argv) {
@@ -191,9 +190,6 @@ int main(int argc, char** argv) {
     set_gpu_physics_gamma(cfg.gamma);
     set_gpu_physics_ch(0.0);  // ch_glm starts at 0; updated by compute_dt_gpu
 
-    // Apply BCs on the initial data so ghost cells are consistent.
-    apply_boundary_gpu(Uold, cfg.bc);
-
     if (rc.write_out)
         write_all_fields(Uold, rc.out_dir, rc.case_name + "_gpu_t0");
 
@@ -231,7 +227,7 @@ int main(int argc, char** argv) {
             break;
         }
 
-        advance_second_order_gpu(Uold, Utmp, Unew, ws, dt, rc.solver, cfg.bc);
+        advance_gpu(Uold, Utmp, Unew, ws, dt, rc.solver, cfg.bc);
 
         Uold.swap(Unew);
         t    += dt;
@@ -250,14 +246,16 @@ int main(int argc, char** argv) {
         }
 
         // Write any snapshots whose time we have just reached.
-        if (rc.write_out && has_snaps) {
+        if (has_snaps) {
             while (snap_idx < cfg.snapshot_times.size() &&
                    t >= cfg.snapshot_times[snap_idx] - 1e-12) {
                 std::cout << "  [snap] " << cfg.snapshot_tags[snap_idx]
                           << "  t_phys=" << std::scientific << std::setprecision(6)
                           << t << " s\n";
-                write_all_fields(Uold, rc.out_dir,
-                    rc.case_name + "_gpu_" + cfg.snapshot_tags[snap_idx]);
+                if (rc.write_out) {
+                    write_all_fields(Uold, rc.out_dir,
+                        rc.case_name + "_gpu_" + cfg.snapshot_tags[snap_idx]);
+                }
                 ++snap_idx;
             }
         }
