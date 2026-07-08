@@ -219,10 +219,16 @@ __global__ void compute_block_max_speed_kernel(
     }
 }
 
+// Covers the FULL domain (interior + ghost cells), not just the interior.
+// Periodic/transmissive ghost cells are exact copies of their source cell
+// before damping (ghost == source); multiplying every cell — ghost and
+// source alike — by the same `factor` preserves that equality exactly, so
+// there is no need to re-run apply_boundary_gpu() after this kernel (see
+// advance_gpu below).
 __global__ void apply_psi_damping_kernel(Grid2DGPUView grid, double factor) {
-    const int i = blockIdx.x * blockDim.x + threadIdx.x + grid.i_begin();
-    const int j = blockIdx.y * blockDim.y + threadIdx.y + grid.j_begin();
-    if (i >= grid.i_end() || j >= grid.j_end()) return;
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    const int j = blockIdx.y * blockDim.y + threadIdx.y;
+    if (i >= grid.total_nx() || j >= grid.total_ny()) return;
     const int idx = grid.flat_index(i, j);
     grid.psi[idx] *= factor;
 }
@@ -546,14 +552,22 @@ void advance_gpu(
             y_sw * y_sh + 2 * y_sw * y_rh + y_sw * y_fh
         ) * sizeof(double);
 
-    CUDA_CHECK(cudaFuncSetAttribute(
-        advance_x_kernel,
-        cudaFuncAttributeMaxDynamicSharedMemorySize,
-        static_cast<int>(x_smem)));
-    CUDA_CHECK(cudaFuncSetAttribute(
-        advance_y_kernel,
-        cudaFuncAttributeMaxDynamicSharedMemorySize,
-        static_cast<int>(y_smem)));
+    // advance_x/y_kernel's dynamic shared memory size depends only on the
+    // fixed bx/by tile above, never on the grid or the current step, so the
+    // attribute only needs to be set once per process rather than on every
+    // single call (this used to run twice per timestep).
+    static bool smem_attrs_set = false;
+    if (!smem_attrs_set) {
+        CUDA_CHECK(cudaFuncSetAttribute(
+            advance_x_kernel,
+            cudaFuncAttributeMaxDynamicSharedMemorySize,
+            static_cast<int>(x_smem)));
+        CUDA_CHECK(cudaFuncSetAttribute(
+            advance_y_kernel,
+            cudaFuncAttributeMaxDynamicSharedMemorySize,
+            static_cast<int>(y_smem)));
+        smem_attrs_set = true;
+    }
 
     advance_x_kernel<<<blocks, threads, x_smem>>>(
         make_view(static_cast<const Grid2DGPU&>(Uold)),
@@ -567,11 +581,12 @@ void advance_gpu(
     CUDA_CHECK(cudaGetLastError());
     apply_boundary_gpu(Unew, bc);
 
-    const double ch = [&]() {
-        double h = 0.0;
-        CUDA_CHECK(cudaMemcpyFromSymbol(&h, phys::d_ch_glm, sizeof(double)));
-        return h;
-    }();
+    // ch was already computed as `max_speed` by compute_dt_gpu() this same
+    // step and pushed to both phys::d_ch_glm (device) and phys::ch_glm
+    // (host) via set_gpu_physics_ch(). Reading the host copy back here
+    // avoids a synchronous device->host round trip that just re-fetches a
+    // value the host already has.
+    const double ch = phys::get_ch_glm();
     // Dedner et al. (2002): c_r := c_p^2/c_h ~= 0.18 gave optimal results
     // "regardless of the grid resolution" (also confirmed by Bard & Dorelli
     // 2014, JCP 259, who use the same fixed value in all simulations).
@@ -582,16 +597,14 @@ void advance_gpu(
     const double l_d = phys::cr_glm;
     if (ch > 0.0 && l_d > 0.0) {
         const double factor = std::exp(-dt * ch / l_d);
-        apply_psi_damping_kernel<<<blocks, threads>>>(make_view(Unew), factor);
+        // Full-domain launch (ghost cells included) — see comment on
+        // apply_psi_damping_kernel for why this makes the boundary refresh
+        // that used to follow this call unnecessary.
+        const dim3 psi_blocks(
+            (Uold.total_nx() + bx - 1) / bx,
+            (Uold.total_ny() + by - 1) / by
+        );
+        apply_psi_damping_kernel<<<psi_blocks, threads>>>(make_view(Unew), factor);
         CUDA_CHECK(cudaGetLastError());
     }
-
-    // Refresh Unew's ghost cells so they reflect the damped psi values.
-    // Mirrors the unconditional apply_boundary(Unew, bc) call in
-    // src/cpu/solver_cpu.cpp (after apply_psi_damping) and the
-    // unconditional exchange_halo_full(Unew, dom, bc) call in
-    // src/cpu/solver_mpi.cpp (after apply_psi_damping). Without this call,
-    // Unew's ghost cells retain pre-damping psi values, causing GPU results
-    // to diverge from CPU/MPI at domain boundaries on the next step.
-    apply_boundary_gpu(Unew, bc);
 }
