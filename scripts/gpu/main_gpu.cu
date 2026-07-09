@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -31,7 +32,10 @@ static void write_field_csv(
 ) {
     std::ofstream f(path);
     if (!f) throw std::runtime_error("Cannot open output file: " + path);
-    f << std::scientific << std::setprecision(8);
+    // max_digits10 (17): enough decimal digits to round-trip a double exactly,
+    // so CPU/GPU/MPI CSV diffs reflect the true underlying bit pattern instead
+    // of being masked by output rounding.
+    f << std::scientific << std::setprecision(std::numeric_limits<double>::max_digits10);
     for (int j = ng + ny - 1; j >= ng; --j) {
         for (int i = ng; i < ng + nx; ++i) {
             if (i > ng) f << ',';

@@ -17,6 +17,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -48,7 +49,10 @@ void write_field_csv(
         const int ib = grid.i_begin(), ie = grid.i_end();
         const int jb = grid.j_begin(), je = grid.j_end();
 
-        f << std::scientific << std::setprecision(8);
+        // max_digits10 (17): enough decimal digits to round-trip a double
+        // exactly, so CPU/GPU/MPI CSV diffs reflect the true underlying bit
+        // pattern instead of being masked by output rounding.
+        f << std::scientific << std::setprecision(std::numeric_limits<double>::max_digits10);
         for (int j = je - 1; j >= jb; --j) {        // top row first (conventional image layout)
             for (int i = ib; i < ie; ++i) {
                 if (i > ib) f << ',';
