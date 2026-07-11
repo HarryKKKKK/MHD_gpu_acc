@@ -174,9 +174,9 @@ HD inline Conserved hllc_flux(
     const double Bt_star = (SR*BtR - SL*BtL - (FtR - FtL)) / (SR - SL);
     const double Bw_star = (SR*BwR - SL*BwL - (FwR - FwL)) / (SR - SL);
 
-    const double BdotUL  = Bn*unL + BtL*utL + BwL*uwL;
+    const double BdotUL  = BnL_raw*unL + BtL*utL + BwL*uwL;
     const double BdotULs = Bn*SM  + Bt_star*utL + Bw_star*uwL;
-    const double BdotUR  = Bn*unR + BtR*utR + BwR*uwR;
+    const double BdotUR  = BnR_raw*unR + BtR*utR + BwR*uwR;
     const double BdotURs = Bn*SM  + Bt_star*utR + Bw_star*uwR;
 
     const double ELs = ((SL - unL)*UL.E - ptL*unL + ptLs*SM

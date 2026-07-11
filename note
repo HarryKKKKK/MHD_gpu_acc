@@ -27,3 +27,25 @@ profile GPU code
 fix the bug
 profile
 compare run time
+
+| case         | solver | CPU time | GPU time |   Speedup |
+| ------------ | ------ | -------: | -------: | --------: |
+| shock_bubble | hll    | 23.137 s |  6.343 s | **3.65×** |
+| shock_bubble | hllc   | 27.341 s |  7.571 s | **3.61×** |
+| shock_bubble | hlld   | 30.715 s |  9.544 s | **3.22×** |
+| shock_bubble | force  | 23.623 s | 10.083 s | **2.34×** |
+| brio_wu      | hll    |  0.172 s |  0.130 s | **1.33×** |
+| brio_wu      | hllc   |  0.192 s |  0.141 s | **1.36×** |
+| brio_wu      | hlld   |  0.205 s |  0.156 s | **1.31×** |
+| brio_wu      | force  |  0.185 s |  0.132 s | **1.40×** |
+| orszag_tang  | hll    |  1.735 s |  0.700 s | **2.48×** |
+| orszag_tang  | hllc   |  2.195 s |  0.875 s | **2.51×** |
+| orszag_tang  | hlld   |  2.394 s |  1.013 s | **2.36×** |
+| orszag_tang  | force  |  2.130 s |  0.761 s | **2.80×** |
+| rotor        | hll    |  2.536 s |  0.454 s | **5.58×** |
+| rotor        | hllc   |  3.304 s |  0.603 s | **5.48×** |
+| rotor        | hlld   |  3.646 s |  0.716 s | **5.09×** |
+| rotor        | force  |  3.381 s |  0.527 s | **6.42×** |
+
+
+Use density to limit on the momentum

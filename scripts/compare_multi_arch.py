@@ -146,6 +146,9 @@ def main():
     parser.add_argument("--rtol", type=float, default=1e-5)
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--report", default=None)
+    parser.add_argument("--report-full", default=None,
+                         help="Per-field (not just worst-field) report CSV path "
+                              "(default: <outputs_root>/comparison_report_full.csv)")
     args = parser.parse_args()
 
     root = Path(args.outputs_root)
@@ -162,6 +165,7 @@ def main():
             sys.exit(2)
     arch_pairs = list(itertools.combinations(archs, 2))
     report_path = Path(args.report) if args.report else root / "comparison_report.csv"
+    report_full_path = Path(args.report_full) if args.report_full else root / "comparison_report_full.csv"
 
     print(f"\n{'='*100}")
     print(f"  Multi-arch field comparison — root: {root}")
@@ -176,6 +180,7 @@ def main():
     print("  " + "-" * (len(col) - 2))
 
     summary_rows = []
+    full_rows = []
     any_fail = False
 
     for case in cases:
@@ -205,6 +210,17 @@ def main():
 
                 shape_fail = [k for k, s, err in rows if s is None]
                 valid = [(k, s) for k, s, err in rows if s is not None]
+
+                # Every matched field (not just the worst one) goes into the
+                # full per-field report, regardless of --verbose.
+                for k, s in valid:
+                    field_passed = (s["max_abs"] <= args.tol) or (s["max_rel"] <= args.rtol)
+                    field_name = k.rsplit("_", 1)[-1].replace(".csv", "")
+                    full_rows.append([
+                        case, solver, pair_label, field_name,
+                        s["max_abs"], s["mean_abs"], s["max_rel"], s["l2_abs"],
+                        "PASS" if field_passed else "FAIL"
+                    ])
 
                 if args.verbose:
                     for k, s in valid:
@@ -248,7 +264,13 @@ def main():
         w = csv.writer(f)
         w.writerow(["case", "solver", "arch_pair", "n_files", "worst_field", "max_abs", "max_rel", "l2_abs", "result"])
         w.writerows(summary_rows)
-    print(f"  Report written to: {report_path}\n")
+    print(f"  Summary report (worst field per combo) written to: {report_path}")
+
+    with open(report_full_path, "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["case", "solver", "arch_pair", "field", "max_abs", "mean_abs", "max_rel", "l2_abs", "result"])
+        w.writerows(full_rows)
+    print(f"  Full per-field report written to: {report_full_path}\n")
 
     sys.exit(1 if any_fail else 0)
 
