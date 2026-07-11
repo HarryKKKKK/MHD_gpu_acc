@@ -42,8 +42,9 @@ cd "$WORKDIR"
 
 GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
 GIT_COMMIT=$(git rev-parse --short HEAD   2>/dev/null || echo "unknown")
+GIT_COMMIT_MSG=$(git log -1 --pretty=%s 2>/dev/null || echo "unknown")
 
-mkdir -p logs validation outputs
+mkdir -p logs timing/gpu_timing outputs
 
 module load cuda/12.2
 
@@ -90,8 +91,9 @@ echo "===== BUILD ====="
 # target — safe to build concurrently with the CPU/MPI sbatch scripts.
 make gpu
 
-SUMMARY="validation/gpu_${SLURM_JOB_ID}.csv"
-echo "arch,case,solver,n,nx,ny,total_cells,total_steps,real_seconds,user_seconds,sys_seconds,max_rss_kb,git_branch,git_commit,cuda_arch" > "$SUMMARY"
+SUMMARY="timing/gpu_timing/gpu_${SLURM_JOB_ID}.csv"
+echo "# commit_message: ${GIT_COMMIT_MSG}" > "$SUMMARY"
+echo "arch,case,solver,n,nx,ny,total_cells,total_steps,real_seconds,user_seconds,sys_seconds,max_rss_kb,git_branch,cuda_arch" >> "$SUMMARY"
 
 run_and_record() {
     local case_name="$1" solver="$2" n_scale="$3"
@@ -120,7 +122,7 @@ run_and_record() {
     echo "[TIMING RECORDED] Real: ${real}s | User: ${user}s | Sys: ${sys}s | Max RSS: ${rss} KB"
     echo "------------------------------------------------------------"
 
-    echo "gpu,${case_name},${solver},${n_scale},${nx},${ny},${cells},${steps},${real},${user},${sys},${rss},${GIT_BRANCH},${GIT_COMMIT},${MAKEFILE_CUDA_ARCH}" >> "$SUMMARY"
+    echo "gpu,${case_name},${solver},${n_scale},${nx},${ny},${cells},${steps},${real},${user},${sys},${rss},${GIT_BRANCH},${MAKEFILE_CUDA_ARCH}" >> "$SUMMARY"
 
     rm -f "$temp_log" "$temp_time"
 }

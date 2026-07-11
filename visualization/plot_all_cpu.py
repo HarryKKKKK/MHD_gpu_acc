@@ -8,7 +8,7 @@ e.g. outputs/201502/cpu_brio_wu_hlld, matching the layout produced by
 scripts/dgx_slurm/slurm_all_compare.sh / scripts/compare_multi_arch.py.
 
 Usage:
-  python plot_all_cpu.py [--root outputs/201502] [--out-dir figs/201502]
+  python visualization/plot_all_cpu.py [--root outputs/201502] [--out-dir figs/201502]
                           [--cases brio_wu,orszag_tang,rotor,shock_bubble]
                           [--solvers force,hll,hllc,hlld]
 """

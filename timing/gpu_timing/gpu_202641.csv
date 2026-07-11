@@ -1,0 +1,26 @@
+# commit_message: Merge pull request #2 from HarryKKKKK/debug_cpu
+arch,case,solver,n,nx,ny,total_cells,total_steps,real_seconds,user_seconds,sys_seconds,max_rss_kb,git_branch,cuda_arch
+gpu,orszag_tang,hll,1,192,192,36864,1249,1.11,0.54,0.39,115984,main,-arch=sm_90
+gpu,orszag_tang,hllc,1,192,192,36864,1413,1.31,0.70,0.34,115820,main,-arch=sm_90
+gpu,orszag_tang,hlld,1,192,192,36864,1417,1.25,0.85,0.30,115968,main,-arch=sm_90
+gpu,orszag_tang,force,1,192,192,36864,1279,0.93,0.58,0.29,115820,main,-arch=sm_90
+gpu,rotor,hll,1,400,400,160000,516,0.80,0.46,0.30,130704,main,-arch=sm_90
+gpu,rotor,hllc,1,400,400,160000,573,1.00,0.61,0.31,130704,main,-arch=sm_90
+gpu,rotor,hlld,1,400,400,160000,572,1.18,0.74,0.32,130704,main,-arch=sm_90
+gpu,rotor,force,1,400,400,160000,538,0.95,0.55,0.31,130704,main,-arch=sm_90
+gpu,orszag_tang,hll,2,384,384,147456,2606,2.67,2.33,0.30,129076,main,-arch=sm_90
+gpu,orszag_tang,hllc,2,384,384,147456,2933,3.59,3.12,0.33,129076,main,-arch=sm_90
+gpu,orszag_tang,hlld,2,384,384,147456,3170,4.45,4.14,0.28,129076,main,-arch=sm_90
+gpu,orszag_tang,force,2,384,384,147456,2683,3.03,2.66,0.33,129076,main,-arch=sm_90
+gpu,rotor,hll,2,800,800,640000,1099,3.85,3.40,0.35,198824,main,-arch=sm_90
+gpu,rotor,hllc,2,800,800,640000,1453,6.04,5.39,0.42,198824,main,-arch=sm_90
+gpu,rotor,hlld,2,800,800,640000,1171,5.64,5.23,0.33,198824,main,-arch=sm_90
+gpu,rotor,force,2,800,800,640000,1124,4.34,3.90,0.33,198824,main,-arch=sm_90
+gpu,orszag_tang,hll,4,768,768,589824,5409,16.39,15.88,0.38,191756,main,-arch=sm_90
+gpu,orszag_tang,hllc,4,768,768,589824,20288,74.31,73.40,0.40,191804,main,-arch=sm_90
+gpu,orszag_tang,hlld,4,768,768,589824,8054,35.22,34.68,0.39,191804,main,-arch=sm_90
+gpu,orszag_tang,force,4,768,768,589824,5560,18.75,18.34,0.36,191804,main,-arch=sm_90
+gpu,rotor,hll,4,1600,1600,2560000,2274,27.69,27.10,0.55,469500,main,-arch=sm_90
+gpu,rotor,hllc,4,1600,1600,2560000,3358,48.78,48.26,0.50,469500,main,-arch=sm_90
+gpu,rotor,hlld,4,1600,1600,2560000,2371,41.13,40.55,0.52,469500,main,-arch=sm_90
+gpu,rotor,force,4,1600,1600,2560000,2308,31.50,30.95,0.50,469500,main,-arch=sm_90
