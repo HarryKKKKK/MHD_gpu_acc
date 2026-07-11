@@ -99,6 +99,14 @@ HD inline Conserved hllc_flux(
     Direction        dir,
     double           ch
 ) {
+    // HLLC-L implementation following:
+    // F. Zhang et al., "On energy consistency of intermediate states in
+    // HLL-type MHD Riemann solvers" (2025): Eq. (18), Eq. (20), Eq. (28),
+    // and Appendix B, Eqs. (B.1)-(B.5).
+    //
+    // The hyperbolic-divergence-cleaning subsystem is kept separate. Its
+    // numerical flux is imposed by apply_glm_flux() using Eq. (16).
+
     const Primitive VL = phys::cons_to_prim(UL);
     const Primitive VR = phys::cons_to_prim(UR);
 
@@ -106,25 +114,26 @@ HD inline Conserved hllc_flux(
         return hll_flux(UL, UR, dir, ch);
     }
 
-    const double rhoL = VL.rho, rhoR = VR.rho;
-    const double pL   = VL.p,   pR   = VR.p;
+    const double rhoL = VL.rho;
+    const double rhoR = VR.rho;
+    const double pL   = VL.p;
+    const double pR   = VR.p;
 
     double unL, unR, utL, utR, uwL, uwR;
-    double BnL_raw, BnR_raw, BtL, BtR, BwL, BwR;
-    const double psiL = VL.psi, psiR = VR.psi;
+    double BnL, BnR, BtL, BtR, BwL, BwR;
 
     if (dir == Direction::X) {
         unL = VL.u;  unR = VR.u;
         utL = VL.v;  utR = VR.v;
         uwL = VL.w;  uwR = VR.w;
-        BnL_raw = VL.Bx; BnR_raw = VR.Bx;
+        BnL = VL.Bx; BnR = VR.Bx;
         BtL = VL.By; BtR = VR.By;
         BwL = VL.Bz; BwR = VR.Bz;
     } else {
         unL = VL.v;  unR = VR.v;
         utL = VL.u;  utR = VR.u;
         uwL = VL.w;  uwR = VR.w;
-        BnL_raw = VL.By; BnR_raw = VR.By;
+        BnL = VL.By; BnR = VR.By;
         BtL = VL.Bx; BtR = VR.Bx;
         BwL = VL.Bz; BwR = VR.Bz;
     }
@@ -134,8 +143,14 @@ HD inline Conserved hllc_flux(
     const double cfR = (dir == Direction::X) ? phys::fast_speed_x(VR)
                                              : phys::fast_speed_y(VR);
 
+    // Eq. (18): estimates of the fastest left- and right-going MHD waves.
     const double SL = fmin(unL - cfL, unR - cfR);
     const double SR = fmax(unL + cfL, unR + cfR);
+
+    const double denomLR = SR - SL;
+    if (fabs(denomLR) < 1.0e-14) {
+        return hll_flux(UL, UR, dir, ch);
+    }
 
     const Conserved FL = (dir == Direction::X) ? phys::flux_x(UL, ch)
                                                : phys::flux_y(UL, ch);
@@ -145,73 +160,152 @@ HD inline Conserved hllc_flux(
     if (SL >= 0.0) return FL;
     if (SR <= 0.0) return FR;
 
-    const GlmStar glm  = glm_resolve(BnL_raw, BnR_raw, psiL, psiR, ch);
-    const double  Bn   = glm.Bn;
-    const double  psiM = glm.psi;
+    const double BnL2 = BnL * BnL;
+    const double BnR2 = BnR * BnR;
 
-    const double BmagL2 = Bn*Bn + BtL*BtL + BwL*BwL;
-    const double BmagR2 = Bn*Bn + BtR*BtR + BwR*BwR;
-    const double ptL = pL + 0.5*BmagL2;
-    const double ptR = pR + 0.5*BmagR2;
+    const double BmagL2 = BnL2 + BtL*BtL + BwL*BwL;
+    const double BmagR2 = BnR2 + BtR*BtR + BwR*BwR;
+    const double PL = pL + 0.5 * BmagL2;
+    const double PR = pR + 0.5 * BmagR2;
 
-    const double numerSM = (SR - unR)*rhoR*unR - (SL - unL)*rhoL*unL + ptL - ptR;
-    const double denomSM = (SR - unR)*rhoR     - (SL - unL)*rhoL;
-    if (fabs(denomSM) < 1.0e-14) return hll_flux(UL, UR, dir, ch);
-    const double SM = numerSM / denomSM;
+    // Eq. (28): longitudinal magnetic field used inside the MHD Riemann fan.
+    // The GLM/HDC flux itself is imposed separately by apply_glm_flux().
+    const double BnM  = 0.5 * (BnL + BnR);
+    const double BnM2 = BnM * BnM;
 
+    const double AL = rhoL * (SL - unL);
+    const double AR = rhoR * (SR - unR);
+    const double denomSM = AR - AL;
+    if (fabs(denomSM) < 1.0e-14) {
+        return hll_flux(UL, UR, dir, ch);
+    }
+
+    // Eq. (B.1): speed of the middle entropy/contact wave.
+    const double SM =
+        (AR*unR - PR + BnR2 - (AL*unL - PL + BnL2)) / denomSM;
+
+    if (!finite_number(SM) ||
+        fabs(SL - SM) < 1.0e-14 ||
+        fabs(SR - SM) < 1.0e-14) {
+        return hll_flux(UL, UR, dir, ch);
+    }
+
+    // Eq. (B.2): one HLL-averaged tangential magnetic field throughout
+    // the complete intermediate region.  The induction fluxes use the
+    // original left/right longitudinal fields, as in Eq. (13).
+    const double FBtL = unL*BtL - BnL*utL;
+    const double FBtR = unR*BtR - BnR*utR;
+    const double FBwL = unL*BwL - BnL*uwL;
+    const double FBwR = unR*BwR - BnR*uwR;
+
+    const double BtM =
+        (SR*BtR - SL*BtL - (FBtR - FBtL)) / denomLR;
+    const double BwM =
+        (SR*BwR - SL*BwL - (FBwR - FBwL)) / denomLR;
+
+    if (!finite_number(BtM) || !finite_number(BwM)) {
+        return hll_flux(UL, UR, dir, ch);
+    }
+
+    // Eq. (B.4): total pressure in the intermediate region.
+    const double PM =
+        (AR*(PL - BnL2)
+         - AL*(PR - BnR2)
+         + AL*AR*(unR - unL)) / denomSM
+        + BnM2;
+
+    if (!finite_number(PM)) {
+        return hll_flux(UL, UR, dir, ch);
+    }
+
+    // Eq. (B.5): left and right intermediate densities.
     const double rhoLs = rhoL * (SL - unL) / (SL - SM);
     const double rhoRs = rhoR * (SR - unR) / (SR - SM);
-    if (rhoLs <= 0.0 || rhoRs <= 0.0 ||
+
+    if (!(rhoLs > 0.0) || !(rhoRs > 0.0) ||
         !finite_number(rhoLs) || !finite_number(rhoRs)) {
         return hll_flux(UL, UR, dir, ch);
     }
 
-    const double ptLs = ptL + rhoL*(SL - unL)*(SM - unL);
-    const double ptRs = ptR + rhoR*(SR - unR)*(SM - unR);
+    // Eq. (B.5): tangential momenta.  These must not be replaced by the
+    // original tangential velocities when Bt/Bw change in the star region.
+    const double mtLs =
+        (rhoL*utL*(SL - unL) - (BnM*BtM - BnL*BtL)) / (SL - SM);
+    const double mwLs =
+        (rhoL*uwL*(SL - unL) - (BnM*BwM - BnL*BwL)) / (SL - SM);
+    const double mtRs =
+        (rhoR*utR*(SR - unR) - (BnM*BtM - BnR*BtR)) / (SR - SM);
+    const double mwRs =
+        (rhoR*uwR*(SR - unR) - (BnM*BwM - BnR*BwR)) / (SR - SM);
 
-    const double FtL = unL*BtL - Bn*utL, FtR = unR*BtR - Bn*utR;
-    const double FwL = unL*BwL - Bn*uwL, FwR = unR*BwR - Bn*uwR;
-    const double Bt_star = (SR*BtR - SL*BtL - (FtR - FtL)) / (SR - SL);
-    const double Bw_star = (SR*BwR - SL*BwL - (FwR - FwL)) / (SR - SL);
+    const double utLs = mtLs / rhoLs;
+    const double uwLs = mwLs / rhoLs;
+    const double utRs = mtRs / rhoRs;
+    const double uwRs = mwRs / rhoRs;
 
-    const double BdotUL  = BnL_raw*unL + BtL*utL + BwL*uwL;
-    const double BdotULs = Bn*SM  + Bt_star*utL + Bw_star*uwL;
-    const double BdotUR  = BnR_raw*unR + BtR*utR + BwR*uwR;
-    const double BdotURs = Bn*SM  + Bt_star*utR + Bw_star*uwR;
+    if (!finite_number(utLs) || !finite_number(uwLs) ||
+        !finite_number(utRs) || !finite_number(uwRs)) {
+        return hll_flux(UL, UR, dir, ch);
+    }
 
-    const double ELs = ((SL - unL)*UL.E - ptL*unL + ptLs*SM
-                        + Bn*(BdotULs - BdotUL)) / (SL - SM);
-    const double ERs = ((SR - unR)*UR.E - ptR*unR + ptRs*SM
-                        + Bn*(BdotURs - BdotUR)) / (SR - SM);
+    const double BdotVL  = BnL*unL + BtL*utL + BwL*uwL;
+    const double BdotVR  = BnR*unR + BtR*utR + BwR*uwR;
+    const double BdotVLs = BnM*SM  + BtM*utLs + BwM*uwLs;
+    const double BdotVRs = BnM*SM  + BtM*utRs + BwM*uwRs;
 
-    auto build_conserved = [&](
+    // Eq. (B.5): intermediate total energies.  In particular, the magnetic
+    // work term is -(BnM * BdotV_star - Bn_side * BdotV_side).
+    const double ELs =
+        (UL.E*(SL - unL)
+         + PM*SM
+         - PL*unL
+         - (BnM*BdotVLs - BnL*BdotVL)) / (SL - SM);
+
+    const double ERs =
+        (UR.E*(SR - unR)
+         + PM*SM
+         - PR*unR
+         - (BnM*BdotVRs - BnR*BdotVR)) / (SR - SM);
+
+    if (!finite_number(ELs) || !finite_number(ERs)) {
+        return hll_flux(UL, UR, dir, ch);
+    }
+
+    // psi belongs to the separately solved HDC subsystem.  Its star value
+    // is used only to build a complete Conserved object for the existing
+    // code interface; apply_glm_flux() replaces the Bn and psi fluxes.
+    const double psiM = glm_resolve(BnL, BnR, VL.psi, VR.psi, ch).psi;
+
+    auto build_conserved = [&] (
         double rhos, double uns, double uts, double uws,
         double Bns,  double Bts, double Bws, double Es, double psis
     ) -> Conserved {
         if (dir == Direction::X) {
             return Conserved(rhos, rhos*uns, rhos*uts, rhos*uws,
                              Bns, Bts, Bws, Es, psis);
-        } else {
-            return Conserved(rhos, rhos*uts, rhos*uns, rhos*uws,
-                             Bts, Bns, Bws, Es, psis);
         }
+        return Conserved(rhos, rhos*uts, rhos*uns, rhos*uws,
+                         Bts, Bns, Bws, Es, psis);
     };
 
+    const Conserved ULs = build_conserved(
+        rhoLs, SM, utLs, uwLs, BnM, BtM, BwM, ELs, psiM);
+    const Conserved URs = build_conserved(
+        rhoRs, SM, utRs, uwRs, BnM, BtM, BwM, ERs, psiM);
+
     if (SM >= 0.0) {
-        const Conserved ULs = build_conserved(
-            rhoLs, SM, utL, uwL, Bn, Bt_star, Bw_star, ELs, psiM);
         if (!primitive_is_physical(phys::cons_to_prim(ULs))) {
             return hll_flux(UL, UR, dir, ch);
         }
+        // Eq. (20), left star branch.
         return FL + SL * (ULs - UL);
-    } else {
-        const Conserved URs = build_conserved(
-            rhoRs, SM, utR, uwR, Bn, Bt_star, Bw_star, ERs, psiM);
-        if (!primitive_is_physical(phys::cons_to_prim(URs))) {
-            return hll_flux(UL, UR, dir, ch);
-        }
-        return FR + SR * (URs - UR);
     }
+
+    if (!primitive_is_physical(phys::cons_to_prim(URs))) {
+        return hll_flux(UL, UR, dir, ch);
+    }
+    // Eq. (20), right star branch.
+    return FR + SR * (URs - UR);
 }
 
 HD inline Conserved hlld_flux(

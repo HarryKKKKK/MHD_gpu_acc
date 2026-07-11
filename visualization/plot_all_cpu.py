@@ -26,9 +26,9 @@ ALL_SOLVERS = ["force", "hll", "hllc", "hlld"]
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--root",    default="outputs/201502",
+    p.add_argument("--root",    default="outputs/203090",
                     help="Root directory containing cpu_<case>_<solver> folders.")
-    p.add_argument("--out-dir", default="figs/201502",
+    p.add_argument("--out-dir", default="figs/203090",
                     help="Directory to write the generated figures into.")
     p.add_argument("--cases",   default=",".join(ALL_CASES))
     p.add_argument("--solvers", default=",".join(ALL_SOLVERS))
