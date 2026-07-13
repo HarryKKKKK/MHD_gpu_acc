@@ -1,0 +1,18 @@
+Branch: occupancy-variant-a
+
+Changes made in src/gpu/solver_gpu.cu:
+
+1. advance_x_kernel (line 236): function signature changed from
+   `__global__ void advance_x_kernel(` to
+   `__global__ __launch_bounds__(256, 2) void advance_x_kernel(`
+
+2. advance_y_kernel (line 343): function signature changed from
+   `__global__ void advance_y_kernel(` to
+   `__global__ __launch_bounds__(256, 2) void advance_y_kernel(`
+
+Nothing else was touched: kernel bodies, advance_gpu()'s bx/by (still 16x16),
+x_smem/y_smem shared-memory size formulas, cudaFuncSetAttribute calls, Riemann
+solver code, reconstruct_cell_muscl_hancock, is_physical/enforce_physical_*,
+the Makefile, and all other .cu/.cpp/.hpp files are unchanged.
+
+No compilation, profiling, or correctness testing was performed, per instructions.
