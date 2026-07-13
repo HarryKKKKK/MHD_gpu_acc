@@ -21,7 +21,8 @@ NVCCFLAGS_BASE    := -std=c++17 -O3 -Ihead -Xcompiler="-Wall -Wextra" --fmad=fal
 NVCC_EXTRA_FLAGS  ?=
 MPICXXFLAGS_BASE  := -std=c++17 -O3 -Wall -Wextra -pedantic -Ihead -DOMPI_SKIP_MPICXX -ffp-contract=off
 
-CUDA_ARCH := -arch=sm_90
+# CUDA_ARCH := -arch=sm_90
+CUDA_ARCH := -arch=sm_80
 NVCCFLAGS_BASE += $(CUDA_ARCH)
 
 # =========================
