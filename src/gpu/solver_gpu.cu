@@ -528,7 +528,7 @@ void advance_gpu(
     if (ws.nx != Uold.nx() || ws.ny != Uold.ny() || !ws.speed_d)
         throw std::runtime_error("advance_gpu: workspace not initialised.");
 
-    const int bx = 16, by = 16;
+    const int bx = 16, by = 8;
     const dim3 threads(bx, by);
     const dim3 blocks(
         (Uold.nx() + bx - 1) / bx,

@@ -1,0 +1,18 @@
+Branch: occupancy-variant-b (based on main)
+
+Change made in src/gpu/solver_gpu.cu, function advance_gpu():
+
+    const int bx = 16, by = 16;      ->      const int bx = 16, by = 8;
+    const dim3 threads(bx, by);              const dim3 threads(bx, by);
+
+Only the `by` value changed (16 -> 8); `bx` stays 16. No other line was
+touched. x_smem/y_smem, grid/blocks dimensions, and cudaFuncSetAttribute
+calls all derive from bx/by at runtime and were left as formulas (not
+hand-edited) — they will recompute automatically for the new block shape.
+
+Not touched: advance_x_kernel / advance_y_kernel bodies and signatures (no
+__launch_bounds__ or other attributes added), Riemann solver,
+reconstruct_cell_muscl_hancock, is_physical/enforce_physical_*, Makefile,
+and all other .cu/.cpp/.hpp files.
+
+No compilation, profiling, or correctness testing was performed, per instructions.
