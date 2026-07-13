@@ -1,20 +1,20 @@
 ===== DATE =====
-2026-07-13T22:09:34+01:00
+2026-07-13T22:54:02+01:00
 
 ===== HOST =====
-gpu-q-24
-Linux gpu-q-24 4.18.0-553.141.2.el8_10.x86_64 #1 SMP Thu Jul 9 21:49:12 BST 2026 x86_64 x86_64 x86_64 GNU/Linux
+gpu-q-35
+Linux gpu-q-35 4.18.0-553.141.2.el8_10.x86_64 #1 SMP Thu Jul 9 21:49:12 BST 2026 x86_64 x86_64 x86_64 GNU/Linux
 
 ===== SLURM =====
-SLURM_JOB_ID=31177361
+SLURM_JOB_ID=31178452
 SLURM_JOB_PARTITION=ampere
 SLURM_CPUS_PER_TASK=32
 CUDA_VISIBLE_DEVICES=0
 
 ===== PROFILE CONFIGURATION =====
 N=8
-CASE=shock_bubble
-SOLVER=hllc
+CASE=orszag_tang
+SOLVER=hlld
 NCU_KERNEL_REGEX=
 NCU_LAUNCH_SKIP=0
 NCU_LAUNCH_COUNT=12
@@ -35,7 +35,7 @@ CPU family:          25
 Model:               1
 Model name:          AMD EPYC 7763 64-Core Processor
 Stepping:            1
-CPU MHz:             2445.441
+CPU MHz:             3352.385
 BogoMIPS:            4890.88
 Virtualization:      AMD-V
 L1d cache:           32K
@@ -53,7 +53,7 @@ NUMA node7 CPU(s):   112-127
 Flags:               fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl nonstop_tsc cpuid extd_apicid aperfmperf pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpb cat_l3 cdp_l3 invpcid_single hw_pstate ssbd mba ibrs ibpb stibp vmmcall fsgsbase bmi1 avx2 smep bmi2 invpcid cqm rdt_a rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local clzero irperf xsaveerptr wbnoinvd amd_ppin brs arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold v_vmsave_vmload vgif v_spec_ctrl umip pku ospke vaes vpclmulqdq rdpid overflow_recov succor smca
 
 ===== GPU =====
-Mon Jul 13 22:09:34 2026       
+Mon Jul 13 22:54:02 2026       
 +-----------------------------------------------------------------------------------------+
 | NVIDIA-SMI 595.71.05              Driver Version: 595.71.05      CUDA Version: 13.2     |
 +-----------------------------------------+------------------------+----------------------+
@@ -61,8 +61,8 @@ Mon Jul 13 22:09:34 2026
 | Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
 |                                         |                        |               MIG M. |
 |=========================================+========================+======================|
-|   0  NVIDIA A100-SXM4-80GB          On  |   00000000:01:00.0 Off |                    0 |
-| N/A   36C    P0             66W /  500W |       0MiB /  81920MiB |      0%      Default |
+|   0  NVIDIA A100-SXM4-80GB          On  |   00000000:41:00.0 Off |                    0 |
+| N/A   32C    P0             66W /  500W |       0MiB /  81920MiB |      0%      Default |
 |                                         |                        |             Disabled |
 +-----------------------------------------+------------------------+----------------------+
 
@@ -76,7 +76,7 @@ Mon Jul 13 22:09:34 2026
 
 ===== GPU QUERY =====
 index, name, uuid, driver_version, pstate, temperature.gpu, power.draw [W], power.limit [W], clocks.current.sm [MHz], clocks.current.memory [MHz], memory.total [MiB], memory.used [MiB]
-0, NVIDIA A100-SXM4-80GB, GPU-c1214fc2-067c-dc6d-6fb2-cda3fc8f04ca, 595.71.05, P0, 37, 66.07 W, 500.00 W, 1155 MHz, 1593 MHz, 81920 MiB, 0 MiB
+0, NVIDIA A100-SXM4-80GB, GPU-b0f5caa0-d92c-06d0-80c1-d53f19d49f51, 595.71.05, P0, 32, 66.54 W, 500.00 W, 1155 MHz, 1593 MHz, 81920 MiB, 0 MiB
 
 ===== MODULES =====
 Currently Loaded Modulefiles:
@@ -122,4 +122,6 @@ Version 2021.2.0.0 (build 30066266) (public-release)
 ===== GIT =====
 /rds/user/hk597/hpc-work/MHD_gpu_acc
 main
-294c630b63276b9d2fab93517062863e59d52758
+1ce3850fea3f703b789a888150e75c12583cef83
+ M scripts/csd3_slurm/profile_gpu.sh
+?? profiling/31178452_orszag_tang_hlld_n8/

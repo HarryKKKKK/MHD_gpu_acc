@@ -1,0 +1,900 @@
+[76247] main_gpu@127.0.0.1
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_x_kernelE18ConstGrid2DGPUView13Grid2DGPUViewd13RiemannSolver, Block Size 256, Grid Size 9216, Device 0, 1 invocations 
+    Section: Compute Workload Analysis
+    Metric Name                                                 Metric Unit Minimum   Maximum   Average  
+    ----------------------------------------------------------- ----------- --------- --------- ---------
+    sm__inst_executed.avg.per_cycle_active                      inst/cycle  0.803720  0.803720  0.803720 
+    sm__inst_executed.avg.per_cycle_elapsed                     inst/cycle  0.793500  0.793500  0.793500 
+    sm__inst_issued.avg.pct_of_peak_sustained_active            %           20.128614 20.128614 20.128614
+    sm__inst_issued.avg.per_cycle_active                        inst/cycle  0.805145  0.805145  0.805145 
+    sm__instruction_throughput.avg.pct_of_peak_sustained_active %           33.222688 33.222688 33.222688
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_x_kernelE18ConstGrid2DGPUView13Grid2DGPUViewd13RiemannSolver, Block Size 256, Grid Size 9216, Device 0, 1 invocations 
+    Section: GPU Speed Of Light Roofline Chart
+    Metric Name Metric Unit Minimum Maximum Average
+    ----------- ----------- ------- ------- -------
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_x_kernelE18ConstGrid2DGPUView13Grid2DGPUViewd13RiemannSolver, Block Size 256, Grid Size 9216, Device 0, 1 invocations 
+    Section: GPU Speed Of Light Throughput
+    Metric Name                                                      Metric Unit   Minimum        Maximum        Average       
+    ---------------------------------------------------------------- ------------- -------------- -------------- --------------
+    dram__cycles_elapsed.avg.per_second                              cycle/nsecond 1.586727       1.586727       1.586727      
+    gpc__cycles_elapsed.avg.per_second                               cycle/nsecond 1.269013       1.269013       1.269013      
+    gpc__cycles_elapsed.max                                          cycle         2489173.000000 2489173.000000 2489173.000000
+    gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed %             12.332405      12.332405      12.332405     
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %             8.327301       8.327301       8.327301      
+    gpu__time_duration.sum                                           msecond       1.960608       1.960608       1.960608      
+    l1tex__throughput.avg.pct_of_peak_sustained_active               %             12.122797      12.122797      12.122797     
+    lts__throughput.avg.pct_of_peak_sustained_elapsed                %             18.087953      18.087953      18.087953     
+    sm__cycles_active.avg                                            cycle         2456394.898148 2456394.898148 2456394.898148
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %             32.800240      32.800240      32.800240     
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_x_kernelE18ConstGrid2DGPUView13Grid2DGPUViewd13RiemannSolver, Block Size 256, Grid Size 9216, Device 0, 1 invocations 
+    Section: Instruction Statistics
+    Metric Name             Metric Unit Minimum          Maximum          Average         
+    ----------------------- ----------- ---------------- ---------------- ----------------
+    smsp__inst_executed.avg inst        493563.263889    493563.263889    493563.263889   
+    smsp__inst_executed.sum inst        213219330.000000 213219330.000000 213219330.000000
+    smsp__inst_issued.avg   inst        494438.254630    494438.254630    494438.254630   
+    smsp__inst_issued.sum   inst        213597326.000000 213597326.000000 213597326.000000
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_x_kernelE18ConstGrid2DGPUView13Grid2DGPUViewd13RiemannSolver, Block Size 256, Grid Size 9216, Device 0, 1 invocations 
+    Section: Launch Statistics
+    Metric Name                          Metric Unit     Minimum        Maximum        Average       
+    ------------------------------------ --------------- -------------- -------------- --------------
+    launch__block_size                                   256.000000     256.000000     256.000000    
+    launch__grid_size                                    9216.000000    9216.000000    9216.000000   
+    launch__registers_per_thread         register/thread 255.000000     255.000000     255.000000    
+    launch__shared_mem_config_size       Kbyte           102.400000     102.400000     102.400000    
+    launch__shared_mem_per_block_driver  Kbyte/block     1.024000       1.024000       1.024000      
+    launch__shared_mem_per_block_dynamic Kbyte/block     87.552000      87.552000      87.552000     
+    launch__shared_mem_per_block_static  byte/block      0.000000       0.000000       0.000000      
+    launch__thread_count                 thread          2359296.000000 2359296.000000 2359296.000000
+    launch__waves_per_multiprocessor                     85.333333      85.333333      85.333333     
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_x_kernelE18ConstGrid2DGPUView13Grid2DGPUViewd13RiemannSolver, Block Size 256, Grid Size 9216, Device 0, 1 invocations 
+    Section: Memory Workload Analysis
+    Metric Name                                                              Metric Unit  Minimum    Maximum    Average   
+    ------------------------------------------------------------------------ ------------ ---------- ---------- ----------
+    dram__bytes.sum.per_second                                               Gbyte/second 169.128401 169.128401 169.128401
+    gpu__compute_memory_access_throughput.avg.pct_of_peak_sustained_elapsed  %            11.968648  11.968648  11.968648 
+    gpu__compute_memory_request_throughput.avg.pct_of_peak_sustained_elapsed %            12.332405  12.332405  12.332405 
+    l1tex__t_sector_hit_rate.pct                                             %            27.930101  27.930101  27.930101 
+    lts__average_gcomp_input_sector_success_rate.pct                         %            0.000000   0.000000   0.000000  
+    lts__average_gcomp_output_sector_compression_achieved_rate.ratio                      0.000000   0.000000   0.000000  
+    lts__t_sector_hit_rate.pct                                               %            83.203118  83.203118  83.203118 
+    sm__memory_throughput.avg.pct_of_peak_sustained_elapsed                  %            5.000579   5.000579   5.000579  
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_x_kernelE18ConstGrid2DGPUView13Grid2DGPUViewd13RiemannSolver, Block Size 256, Grid Size 9216, Device 0, 1 invocations 
+    Section: Memory Workload Analysis Chart
+    Metric Name Metric Unit Minimum Maximum Average
+    ----------- ----------- ------- ------- -------
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_x_kernelE18ConstGrid2DGPUView13Grid2DGPUViewd13RiemannSolver, Block Size 256, Grid Size 9216, Device 0, 1 invocations 
+    Section: Occupancy
+    Metric Name                                       Metric Unit Minimum   Maximum   Average  
+    ------------------------------------------------- ----------- --------- --------- ---------
+    launch__occupancy_limit_blocks                    block       32.000000 32.000000 32.000000
+    launch__occupancy_limit_registers                 block       1.000000  1.000000  1.000000 
+    launch__occupancy_limit_shared_mem                block       1.000000  1.000000  1.000000 
+    launch__occupancy_limit_warps                     block       8.000000  8.000000  8.000000 
+    sm__maximum_warps_avg_per_active_cycle            warp        8.000000  8.000000  8.000000 
+    sm__maximum_warps_per_active_cycle_pct            %           12.500000 12.500000 12.500000
+    sm__warps_active.avg.pct_of_peak_sustained_active %           12.359162 12.359162 12.359162
+    sm__warps_active.avg.per_cycle_active             warp        7.909864  7.909864  7.909864 
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_x_kernelE18ConstGrid2DGPUView13Grid2DGPUViewd13RiemannSolver, Block Size 256, Grid Size 9216, Device 0, 1 invocations 
+    Section: Scheduler Statistics
+    Metric Name                                         Metric Unit Minimum   Maximum   Average  
+    --------------------------------------------------- ----------- --------- --------- ---------
+    smsp__issue_active.avg.pct_of_peak_sustained_active %           20.162359 20.162359 20.162359
+    smsp__issue_active.avg.per_cycle_active                         0.201624  0.201624  0.201624 
+    smsp__issue_inst0.avg.pct_of_peak_sustained_active  %           79.837641 79.837641 79.837641
+    smsp__warps_active.avg.per_cycle_active             warp        1.982818  1.982818  1.982818 
+    smsp__warps_eligible.avg.per_cycle_active           warp        0.252804  0.252804  0.252804 
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_x_kernelE18ConstGrid2DGPUView13Grid2DGPUViewd13RiemannSolver, Block Size 256, Grid Size 9216, Device 0, 1 invocations 
+    Section: Source Counters
+    Metric Name                                           Metric Unit Minimum         Maximum         Average        
+    ----------------------------------------------------- ----------- --------------- --------------- ---------------
+    derived__smsp__inst_executed_op_branch_pct            %           0.083857        0.083857        0.083857       
+    smsp__inst_executed_op_branch.sum                     inst        17879902.000000 17879902.000000 17879902.000000
+    smsp__sass_average_branch_targets_threads_uniform.pct %           97.269510       97.269510       97.269510      
+    smsp__sass_branch_targets_threads_divergent.avg                   705.995370      705.995370      705.995370     
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_x_kernelE18ConstGrid2DGPUView13Grid2DGPUViewd13RiemannSolver, Block Size 256, Grid Size 9216, Device 0, 1 invocations 
+    Section: Warp State Statistics
+    Metric Name                                                Metric Unit Minimum   Maximum   Average  
+    ---------------------------------------------------------- ----------- --------- --------- ---------
+    smsp__average_warp_latency_per_inst_issued.ratio           cycle       9.834258  9.834258  9.834258 
+    smsp__average_warps_active_per_inst_executed.ratio         cycle       9.851692  9.851692  9.851692 
+    smsp__thread_inst_executed_per_inst_executed.ratio                     29.686963 29.686963 29.686963
+    smsp__thread_inst_executed_pred_on_per_inst_executed.ratio             28.124830 28.124830 28.124830
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_y_kernelE18ConstGrid2DGPUView13Grid2DGPUViewd13RiemannSolver, Block Size 256, Grid Size 9216, Device 0, 1 invocations 
+    Section: Compute Workload Analysis
+    Metric Name                                                 Metric Unit Minimum   Maximum   Average  
+    ----------------------------------------------------------- ----------- --------- --------- ---------
+    sm__inst_executed.avg.per_cycle_active                      inst/cycle  0.807865  0.807865  0.807865 
+    sm__inst_executed.avg.per_cycle_elapsed                     inst/cycle  0.794835  0.794835  0.794835 
+    sm__inst_issued.avg.pct_of_peak_sustained_active            %           20.229203 20.229203 20.229203
+    sm__inst_issued.avg.per_cycle_active                        inst/cycle  0.809168  0.809168  0.809168 
+    sm__instruction_throughput.avg.pct_of_peak_sustained_active %           32.915685 32.915685 32.915685
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_y_kernelE18ConstGrid2DGPUView13Grid2DGPUViewd13RiemannSolver, Block Size 256, Grid Size 9216, Device 0, 1 invocations 
+    Section: GPU Speed Of Light Roofline Chart
+    Metric Name Metric Unit Minimum Maximum Average
+    ----------- ----------- ------- ------- -------
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_y_kernelE18ConstGrid2DGPUView13Grid2DGPUViewd13RiemannSolver, Block Size 256, Grid Size 9216, Device 0, 1 invocations 
+    Section: GPU Speed Of Light Throughput
+    Metric Name                                                      Metric Unit   Minimum        Maximum        Average       
+    ---------------------------------------------------------------- ------------- -------------- -------------- --------------
+    dram__cycles_elapsed.avg.per_second                              cycle/nsecond 1.581253       1.581253       1.581253      
+    gpc__cycles_elapsed.avg.per_second                               cycle/nsecond 1.264618       1.264618       1.264618      
+    gpc__cycles_elapsed.max                                          cycle         2577045.000000 2577045.000000 2577045.000000
+    gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed %             14.053119      14.053119      14.053119     
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %             8.100032       8.100032       8.100032      
+    gpu__time_duration.sum                                           msecond       2.036768       2.036768       2.036768      
+    l1tex__throughput.avg.pct_of_peak_sustained_active               %             10.251939      10.251939      10.251939     
+    lts__throughput.avg.pct_of_peak_sustained_elapsed                %             18.878549      18.878549      18.878549     
+    sm__cycles_active.avg                                            cycle         2534189.509259 2534189.509259 2534189.509259
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %             32.384802      32.384802      32.384802     
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_y_kernelE18ConstGrid2DGPUView13Grid2DGPUViewd13RiemannSolver, Block Size 256, Grid Size 9216, Device 0, 1 invocations 
+    Section: Instruction Statistics
+    Metric Name             Metric Unit Minimum          Maximum          Average         
+    ----------------------- ----------- ---------------- ---------------- ----------------
+    smsp__inst_executed.avg inst        511820.576389    511820.576389    511820.576389   
+    smsp__inst_executed.sum inst        221106489.000000 221106489.000000 221106489.000000
+    smsp__inst_issued.avg   inst        512646.344907    512646.344907    512646.344907   
+    smsp__inst_issued.sum   inst        221463221.000000 221463221.000000 221463221.000000
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_y_kernelE18ConstGrid2DGPUView13Grid2DGPUViewd13RiemannSolver, Block Size 256, Grid Size 9216, Device 0, 1 invocations 
+    Section: Launch Statistics
+    Metric Name                          Metric Unit     Minimum        Maximum        Average       
+    ------------------------------------ --------------- -------------- -------------- --------------
+    launch__block_size                                   256.000000     256.000000     256.000000    
+    launch__grid_size                                    9216.000000    9216.000000    9216.000000   
+    launch__registers_per_thread         register/thread 255.000000     255.000000     255.000000    
+    launch__shared_mem_config_size       Kbyte           102.400000     102.400000     102.400000    
+    launch__shared_mem_per_block_driver  Kbyte/block     1.024000       1.024000       1.024000      
+    launch__shared_mem_per_block_dynamic Kbyte/block     89.352000      89.352000      89.352000     
+    launch__shared_mem_per_block_static  byte/block      0.000000       0.000000       0.000000      
+    launch__thread_count                 thread          2359296.000000 2359296.000000 2359296.000000
+    launch__waves_per_multiprocessor                     85.333333      85.333333      85.333333     
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_y_kernelE18ConstGrid2DGPUView13Grid2DGPUViewd13RiemannSolver, Block Size 256, Grid Size 9216, Device 0, 1 invocations 
+    Section: Memory Workload Analysis
+    Metric Name                                                              Metric Unit  Minimum    Maximum    Average   
+    ------------------------------------------------------------------------ ------------ ---------- ---------- ----------
+    dram__bytes.sum.per_second                                               Gbyte/second 163.945011 163.945011 163.945011
+    gpu__compute_memory_access_throughput.avg.pct_of_peak_sustained_elapsed  %            11.960288  11.960288  11.960288 
+    gpu__compute_memory_request_throughput.avg.pct_of_peak_sustained_elapsed %            14.053119  14.053119  14.053119 
+    l1tex__t_sector_hit_rate.pct                                             %            25.737862  25.737862  25.737862 
+    lts__average_gcomp_input_sector_success_rate.pct                         %            0.000000   0.000000   0.000000  
+    lts__average_gcomp_output_sector_compression_achieved_rate.ratio                      0.000000   0.000000   0.000000  
+    lts__t_sector_hit_rate.pct                                               %            83.167657  83.167657  83.167657 
+    sm__memory_throughput.avg.pct_of_peak_sustained_elapsed                  %            4.830316   4.830316   4.830316  
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_y_kernelE18ConstGrid2DGPUView13Grid2DGPUViewd13RiemannSolver, Block Size 256, Grid Size 9216, Device 0, 1 invocations 
+    Section: Memory Workload Analysis Chart
+    Metric Name Metric Unit Minimum Maximum Average
+    ----------- ----------- ------- ------- -------
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_y_kernelE18ConstGrid2DGPUView13Grid2DGPUViewd13RiemannSolver, Block Size 256, Grid Size 9216, Device 0, 1 invocations 
+    Section: Occupancy
+    Metric Name                                       Metric Unit Minimum   Maximum   Average  
+    ------------------------------------------------- ----------- --------- --------- ---------
+    launch__occupancy_limit_blocks                    block       32.000000 32.000000 32.000000
+    launch__occupancy_limit_registers                 block       1.000000  1.000000  1.000000 
+    launch__occupancy_limit_shared_mem                block       1.000000  1.000000  1.000000 
+    launch__occupancy_limit_warps                     block       8.000000  8.000000  8.000000 
+    sm__maximum_warps_avg_per_active_cycle            warp        8.000000  8.000000  8.000000 
+    sm__maximum_warps_per_active_cycle_pct            %           12.500000 12.500000 12.500000
+    sm__warps_active.avg.pct_of_peak_sustained_active %           12.371999 12.371999 12.371999
+    sm__warps_active.avg.per_cycle_active             warp        7.918079  7.918079  7.918079 
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_y_kernelE18ConstGrid2DGPUView13Grid2DGPUViewd13RiemannSolver, Block Size 256, Grid Size 9216, Device 0, 1 invocations 
+    Section: Scheduler Statistics
+    Metric Name                                         Metric Unit Minimum   Maximum   Average  
+    --------------------------------------------------- ----------- --------- --------- ---------
+    smsp__issue_active.avg.pct_of_peak_sustained_active %           20.312578 20.312578 20.312578
+    smsp__issue_active.avg.per_cycle_active                         0.203126  0.203126  0.203126 
+    smsp__issue_inst0.avg.pct_of_peak_sustained_active  %           79.687422 79.687422 79.687422
+    smsp__warps_active.avg.per_cycle_active             warp        1.986016  1.986016  1.986016 
+    smsp__warps_eligible.avg.per_cycle_active           warp        0.256736  0.256736  0.256736 
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_y_kernelE18ConstGrid2DGPUView13Grid2DGPUViewd13RiemannSolver, Block Size 256, Grid Size 9216, Device 0, 1 invocations 
+    Section: Source Counters
+    Metric Name                                           Metric Unit Minimum         Maximum         Average        
+    ----------------------------------------------------- ----------- --------------- --------------- ---------------
+    derived__smsp__inst_executed_op_branch_pct            %           0.081203        0.081203        0.081203       
+    smsp__inst_executed_op_branch.sum                     inst        17954605.000000 17954605.000000 17954605.000000
+    smsp__sass_average_branch_targets_threads_uniform.pct %           97.036808       97.036808       97.036808      
+    smsp__sass_branch_targets_threads_divergent.avg                   768.743056      768.743056      768.743056     
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_y_kernelE18ConstGrid2DGPUView13Grid2DGPUViewd13RiemannSolver, Block Size 256, Grid Size 9216, Device 0, 1 invocations 
+    Section: Warp State Statistics
+    Metric Name                                                Metric Unit Minimum   Maximum   Average  
+    ---------------------------------------------------------- ----------- --------- --------- ---------
+    smsp__average_warp_latency_per_inst_issued.ratio           cycle       9.777272  9.777272  9.777272 
+    smsp__average_warps_active_per_inst_executed.ratio         cycle       9.793047  9.793047  9.793047 
+    smsp__thread_inst_executed_per_inst_executed.ratio                     29.741110 29.741110 29.741110
+    smsp__thread_inst_executed_pred_on_per_inst_executed.ratio             27.952290 27.952290 27.952290
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a24apply_psi_damping_kernelE13Grid2DGPUViewd, Block Size 256, Grid Size 9409, Device 0, 1 invocations 
+    Section: Compute Workload Analysis
+    Metric Name                                                 Metric Unit Minimum   Maximum   Average  
+    ----------------------------------------------------------- ----------- --------- --------- ---------
+    sm__inst_executed.avg.per_cycle_active                      inst/cycle  0.724468  0.724468  0.724468 
+    sm__inst_executed.avg.per_cycle_elapsed                     inst/cycle  0.615161  0.615161  0.615161 
+    sm__inst_issued.avg.pct_of_peak_sustained_active            %           18.537273 18.537273 18.537273
+    sm__inst_issued.avg.per_cycle_active                        inst/cycle  0.741491  0.741491  0.741491 
+    sm__instruction_throughput.avg.pct_of_peak_sustained_active %           18.537273 18.537273 18.537273
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a24apply_psi_damping_kernelE13Grid2DGPUViewd, Block Size 256, Grid Size 9409, Device 0, 1 invocations 
+    Section: GPU Speed Of Light Roofline Chart
+    Metric Name Metric Unit Minimum Maximum Average
+    ----------- ----------- ------- ------- -------
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a24apply_psi_damping_kernelE13Grid2DGPUViewd, Block Size 256, Grid Size 9409, Device 0, 1 invocations 
+    Section: GPU Speed Of Light Throughput
+    Metric Name                                                      Metric Unit   Minimum      Maximum      Average     
+    ---------------------------------------------------------------- ------------- ------------ ------------ ------------
+    dram__cycles_elapsed.avg.per_second                              cycle/nsecond 1.520000     1.520000     1.520000    
+    gpc__cycles_elapsed.avg.per_second                               cycle/nsecond 1.210765     1.210765     1.210765    
+    gpc__cycles_elapsed.max                                          cycle         27152.000000 27152.000000 27152.000000
+    gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed %             52.383094    52.383094    52.383094   
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %             45.191494    45.191494    45.191494   
+    gpu__time_duration.sum                                           usecond       22.400000    22.400000    22.400000   
+    l1tex__throughput.avg.pct_of_peak_sustained_active               %             31.008747    31.008747    31.008747   
+    lts__throughput.avg.pct_of_peak_sustained_elapsed                %             70.982661    70.982661    70.982661   
+    sm__cycles_active.avg                                            cycle         23029.314815 23029.314815 23029.314815
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %             15.740402    15.740402    15.740402   
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a24apply_psi_damping_kernelE13Grid2DGPUViewd, Block Size 256, Grid Size 9409, Device 0, 1 invocations 
+    Section: Instruction Statistics
+    Metric Name             Metric Unit Minimum        Maximum        Average       
+    ----------------------- ----------- -------------- -------------- --------------
+    smsp__inst_executed.avg inst        4171.000000    4171.000000    4171.000000   
+    smsp__inst_executed.sum inst        1801872.000000 1801872.000000 1801872.000000
+    smsp__inst_issued.avg   inst        4269.006944    4269.006944    4269.006944   
+    smsp__inst_issued.sum   inst        1844211.000000 1844211.000000 1844211.000000
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a24apply_psi_damping_kernelE13Grid2DGPUViewd, Block Size 256, Grid Size 9409, Device 0, 1 invocations 
+    Section: Launch Statistics
+    Metric Name                          Metric Unit     Minimum        Maximum        Average       
+    ------------------------------------ --------------- -------------- -------------- --------------
+    launch__block_size                                   256.000000     256.000000     256.000000    
+    launch__grid_size                                    9409.000000    9409.000000    9409.000000   
+    launch__registers_per_thread         register/thread 16.000000      16.000000      16.000000     
+    launch__shared_mem_config_size       Kbyte           32.768000      32.768000      32.768000     
+    launch__shared_mem_per_block_driver  Kbyte/block     1.024000       1.024000       1.024000      
+    launch__shared_mem_per_block_dynamic byte/block      0.000000       0.000000       0.000000      
+    launch__shared_mem_per_block_static  byte/block      0.000000       0.000000       0.000000      
+    launch__thread_count                 thread          2408704.000000 2408704.000000 2408704.000000
+    launch__waves_per_multiprocessor                     10.890046      10.890046      10.890046     
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a24apply_psi_damping_kernelE13Grid2DGPUViewd, Block Size 256, Grid Size 9409, Device 0, 1 invocations 
+    Section: Memory Workload Analysis
+    Metric Name                                                              Metric Unit  Minimum    Maximum    Average   
+    ------------------------------------------------------------------------ ------------ ---------- ---------- ----------
+    dram__bytes.sum.per_second                                               Gbyte/second 879.245714 879.245714 879.245714
+    gpu__compute_memory_access_throughput.avg.pct_of_peak_sustained_elapsed  %            52.383094  52.383094  52.383094 
+    gpu__compute_memory_request_throughput.avg.pct_of_peak_sustained_elapsed %            45.191494  45.191494  45.191494 
+    l1tex__t_sector_hit_rate.pct                                             %            49.463135  49.463135  49.463135 
+    lts__average_gcomp_input_sector_success_rate.pct                         %            0.000000   0.000000   0.000000  
+    lts__average_gcomp_output_sector_compression_achieved_rate.ratio                      0.000000   0.000000   0.000000  
+    lts__t_sector_hit_rate.pct                                               %            62.280732  62.280732  62.280732 
+    sm__memory_throughput.avg.pct_of_peak_sustained_elapsed                  %            10.279184  10.279184  10.279184 
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a24apply_psi_damping_kernelE13Grid2DGPUViewd, Block Size 256, Grid Size 9409, Device 0, 1 invocations 
+    Section: Memory Workload Analysis Chart
+    Metric Name Metric Unit Minimum Maximum Average
+    ----------- ----------- ------- ------- -------
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a24apply_psi_damping_kernelE13Grid2DGPUViewd, Block Size 256, Grid Size 9409, Device 0, 1 invocations 
+    Section: Occupancy
+    Metric Name                                       Metric Unit Minimum    Maximum    Average   
+    ------------------------------------------------- ----------- ---------- ---------- ----------
+    launch__occupancy_limit_blocks                    block       32.000000  32.000000  32.000000 
+    launch__occupancy_limit_registers                 block       16.000000  16.000000  16.000000 
+    launch__occupancy_limit_shared_mem                block       164.000000 164.000000 164.000000
+    launch__occupancy_limit_warps                     block       8.000000   8.000000   8.000000  
+    sm__maximum_warps_avg_per_active_cycle            warp        64.000000  64.000000  64.000000 
+    sm__maximum_warps_per_active_cycle_pct            %           100.000000 100.000000 100.000000
+    sm__warps_active.avg.pct_of_peak_sustained_active %           80.627066  80.627066  80.627066 
+    sm__warps_active.avg.per_cycle_active             warp        51.601322  51.601322  51.601322 
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a24apply_psi_damping_kernelE13Grid2DGPUViewd, Block Size 256, Grid Size 9409, Device 0, 1 invocations 
+    Section: Scheduler Statistics
+    Metric Name                                         Metric Unit Minimum   Maximum   Average  
+    --------------------------------------------------- ----------- --------- --------- ---------
+    smsp__issue_active.avg.pct_of_peak_sustained_active %           20.292569 20.292569 20.292569
+    smsp__issue_active.avg.per_cycle_active                         0.202926  0.202926  0.202926 
+    smsp__issue_inst0.avg.pct_of_peak_sustained_active  %           79.707431 79.707431 79.707431
+    smsp__warps_active.avg.per_cycle_active             warp        12.789283 12.789283 12.789283
+    smsp__warps_eligible.avg.per_cycle_active           warp        0.358358  0.358358  0.358358 
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a24apply_psi_damping_kernelE13Grid2DGPUViewd, Block Size 256, Grid Size 9409, Device 0, 1 invocations 
+    Section: Source Counters
+    Metric Name                                           Metric Unit Minimum       Maximum       Average      
+    ----------------------------------------------------- ----------- ------------- ------------- -------------
+    derived__smsp__inst_executed_op_branch_pct            %           0.125000      0.125000      0.125000     
+    smsp__inst_executed_op_branch.sum                     inst        225234.000000 225234.000000 225234.000000
+    smsp__sass_average_branch_targets_threads_uniform.pct %           0.000000      0.000000      0.000000     
+    smsp__sass_branch_targets_threads_divergent.avg                   0.000000      0.000000      0.000000     
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a24apply_psi_damping_kernelE13Grid2DGPUViewd, Block Size 256, Grid Size 9409, Device 0, 1 invocations 
+    Section: Warp State Statistics
+    Metric Name                                                Metric Unit Minimum   Maximum   Average  
+    ---------------------------------------------------------- ----------- --------- --------- ---------
+    smsp__average_warp_latency_per_inst_issued.ratio           cycle       63.024465 63.024465 63.024465
+    smsp__average_warps_active_per_inst_executed.ratio         cycle       64.505365 64.505365 64.505365
+    smsp__thread_inst_executed_per_inst_executed.ratio                     31.866272 31.866272 31.866272
+    smsp__thread_inst_executed_pred_on_per_inst_executed.ratio             29.223643 29.223643 29.223643
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a30compute_block_max_speed_kernelILi256EEEv18ConstGrid2DGPUViewPd, Block Size 256, Grid Size 9216, Device 0, 2 invocations 
+    Section: Compute Workload Analysis
+    Metric Name                                                 Metric Unit Minimum   Maximum   Average  
+    ----------------------------------------------------------- ----------- --------- --------- ---------
+    sm__inst_executed.avg.per_cycle_active                      inst/cycle  2.162183  2.165039  2.163611 
+    sm__inst_executed.avg.per_cycle_elapsed                     inst/cycle  2.086165  2.090629  2.088397 
+    sm__inst_issued.avg.pct_of_peak_sustained_active            %           54.157269 54.228857 54.193063
+    sm__inst_issued.avg.per_cycle_active                        inst/cycle  2.166291  2.169154  2.167723 
+    sm__instruction_throughput.avg.pct_of_peak_sustained_active %           66.987404 67.075889 67.031647
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a30compute_block_max_speed_kernelILi256EEEv18ConstGrid2DGPUViewPd, Block Size 256, Grid Size 9216, Device 0, 2 invocations 
+    Section: GPU Speed Of Light Roofline Chart
+    Metric Name Metric Unit Minimum Maximum Average
+    ----------- ----------- ------- ------- -------
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a30compute_block_max_speed_kernelILi256EEEv18ConstGrid2DGPUViewPd, Block Size 256, Grid Size 9216, Device 0, 2 invocations 
+    Section: GPU Speed Of Light Throughput
+    Metric Name                                                      Metric Unit   Minimum       Maximum       Average      
+    ---------------------------------------------------------------- ------------- ------------- ------------- -------------
+    dram__cycles_elapsed.avg.per_second                              cycle/nsecond 1.544560      1.546537      1.545549     
+    gpc__cycles_elapsed.avg.per_second                               cycle/nsecond 1.233991      1.235769      1.234880     
+    gpc__cycles_elapsed.max                                          cycle         114003.000000 114252.000000 114127.500000
+    gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed %             82.855110     83.017066     82.936088    
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %             82.855110     83.017066     82.936088    
+    gpu__time_duration.sum                                           usecond       92.352000     92.416000     92.384000    
+    l1tex__throughput.avg.pct_of_peak_sustained_active               %             21.592015     21.604928     21.598471    
+    lts__throughput.avg.pct_of_peak_sustained_elapsed                %             76.719349     76.936372     76.827860    
+    sm__cycles_active.avg                                            cycle         110044.509259 110189.870370 110117.189815
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %             64.632271     64.770570     64.701421    
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a30compute_block_max_speed_kernelILi256EEEv18ConstGrid2DGPUViewPd, Block Size 256, Grid Size 9216, Device 0, 2 invocations 
+    Section: Instruction Statistics
+    Metric Name             Metric Unit Minimum         Maximum         Average        
+    ----------------------- ----------- --------------- --------------- ---------------
+    smsp__inst_executed.avg inst        59562.666667    59562.666667    59562.666667   
+    smsp__inst_executed.sum inst        25731072.000000 25731072.000000 25731072.000000
+    smsp__inst_issued.avg   inst        59675.824074    59675.879630    59675.851852   
+    smsp__inst_issued.sum   inst        25779956.000000 25779980.000000 25779968.000000
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a30compute_block_max_speed_kernelILi256EEEv18ConstGrid2DGPUViewPd, Block Size 256, Grid Size 9216, Device 0, 2 invocations 
+    Section: Launch Statistics
+    Metric Name                          Metric Unit     Minimum        Maximum        Average       
+    ------------------------------------ --------------- -------------- -------------- --------------
+    launch__block_size                                   256.000000     256.000000     256.000000    
+    launch__grid_size                                    9216.000000    9216.000000    9216.000000   
+    launch__registers_per_thread         register/thread 40.000000      40.000000      40.000000     
+    launch__shared_mem_config_size       Kbyte           16.384000      16.384000      16.384000     
+    launch__shared_mem_per_block_driver  Kbyte/block     1.024000       1.024000       1.024000      
+    launch__shared_mem_per_block_dynamic byte/block      0.000000       0.000000       0.000000      
+    launch__shared_mem_per_block_static  byte/block      64.000000      64.000000      64.000000     
+    launch__thread_count                 thread          2359296.000000 2359296.000000 2359296.000000
+    launch__waves_per_multiprocessor                     14.222222      14.222222      14.222222     
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a30compute_block_max_speed_kernelILi256EEEv18ConstGrid2DGPUViewPd, Block Size 256, Grid Size 9216, Device 0, 2 invocations 
+    Section: Memory Workload Analysis
+    Metric Name                                                              Metric Unit  Minimum   Maximum   Average  
+    ------------------------------------------------------------------------ ------------ --------- --------- ---------
+    dram__bytes.sum.per_second                                               Tbyte/second 1.640173  1.641278  1.640726 
+    gpu__compute_memory_access_throughput.avg.pct_of_peak_sustained_elapsed  %            55.220080 55.403059 55.311570
+    gpu__compute_memory_request_throughput.avg.pct_of_peak_sustained_elapsed %            82.855110 83.017066 82.936088
+    l1tex__t_sector_hit_rate.pct                                             %            11.381975 11.383656 11.382815
+    lts__average_gcomp_input_sector_success_rate.pct                         %            0.000000  0.000000  0.000000 
+    lts__average_gcomp_output_sector_compression_achieved_rate.ratio                      0.000000  0.000000  0.000000 
+    lts__t_sector_hit_rate.pct                                               %            29.076196 29.153875 29.115036
+    sm__memory_throughput.avg.pct_of_peak_sustained_elapsed                  %            13.449490 13.478269 13.463879
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a30compute_block_max_speed_kernelILi256EEEv18ConstGrid2DGPUViewPd, Block Size 256, Grid Size 9216, Device 0, 2 invocations 
+    Section: Memory Workload Analysis Chart
+    Metric Name Metric Unit Minimum Maximum Average
+    ----------- ----------- ------- ------- -------
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a30compute_block_max_speed_kernelILi256EEEv18ConstGrid2DGPUViewPd, Block Size 256, Grid Size 9216, Device 0, 2 invocations 
+    Section: Occupancy
+    Metric Name                                       Metric Unit Minimum    Maximum    Average   
+    ------------------------------------------------- ----------- ---------- ---------- ----------
+    launch__occupancy_limit_blocks                    block       32.000000  32.000000  32.000000 
+    launch__occupancy_limit_registers                 block       6.000000   6.000000   6.000000  
+    launch__occupancy_limit_shared_mem                block       145.000000 145.000000 145.000000
+    launch__occupancy_limit_warps                     block       8.000000   8.000000   8.000000  
+    sm__maximum_warps_avg_per_active_cycle            warp        48.000000  48.000000  48.000000 
+    sm__maximum_warps_per_active_cycle_pct            %           75.000000  75.000000  75.000000 
+    sm__warps_active.avg.pct_of_peak_sustained_active %           67.968809  67.994483  67.981646 
+    sm__warps_active.avg.per_cycle_active             warp        43.500037  43.516469  43.508253 
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a30compute_block_max_speed_kernelILi256EEEv18ConstGrid2DGPUViewPd, Block Size 256, Grid Size 9216, Device 0, 2 invocations 
+    Section: Scheduler Statistics
+    Metric Name                                         Metric Unit Minimum   Maximum   Average  
+    --------------------------------------------------- ----------- --------- --------- ---------
+    smsp__issue_active.avg.pct_of_peak_sustained_active %           54.210489 54.341438 54.275963
+    smsp__issue_active.avg.per_cycle_active                         0.542105  0.543414  0.542760 
+    smsp__issue_inst0.avg.pct_of_peak_sustained_active  %           45.658562 45.789511 45.724037
+    smsp__warps_active.avg.per_cycle_active             warp        10.873218 10.874743 10.873981
+    smsp__warps_eligible.avg.per_cycle_active           warp        1.694887  1.703740  1.699314 
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a30compute_block_max_speed_kernelILi256EEEv18ConstGrid2DGPUViewPd, Block Size 256, Grid Size 9216, Device 0, 2 invocations 
+    Section: Source Counters
+    Metric Name                                           Metric Unit Minimum        Maximum        Average       
+    ----------------------------------------------------- ----------- -------------- -------------- --------------
+    derived__smsp__inst_executed_op_branch_pct            %           0.066619       0.066619       0.066619      
+    smsp__inst_executed_op_branch.sum                     inst        1714176.000000 1714176.000000 1714176.000000
+    smsp__sass_average_branch_targets_threads_uniform.pct %           100.000000     100.000000     100.000000    
+    smsp__sass_branch_targets_threads_divergent.avg                   0.000000       0.000000       0.000000      
+
+  _ZN69_GLOBAL__N__45_tmpxft_0000ca79_00000000_7_solver_gpu_cpp1_ii_529c231a30compute_block_max_speed_kernelILi256EEEv18ConstGrid2DGPUViewPd, Block Size 256, Grid Size 9216, Device 0, 2 invocations 
+    Section: Warp State Statistics
+    Metric Name                                                Metric Unit Minimum   Maximum   Average  
+    ---------------------------------------------------------- ----------- --------- --------- ---------
+    smsp__average_warp_latency_per_inst_issued.ratio           cycle       20.009073 20.060220 20.034647
+    smsp__average_warps_active_per_inst_executed.ratio         cycle       20.047087 20.098349 20.072718
+    smsp__thread_inst_executed_per_inst_executed.ratio                     31.922278 31.922278 31.922278
+    smsp__thread_inst_executed_pred_on_per_inst_executed.ratio             30.208214 30.208214 30.208214
+
+  apply_bt_bc_kernel(Grid2DGPUView, BoundaryType, BoundaryType), Block Size 256, Grid Size 7, Device 0, 2 invocations 
+    Section: Compute Workload Analysis
+    Metric Name                                                 Metric Unit Minimum  Maximum  Average 
+    ----------------------------------------------------------- ----------- -------- -------- --------
+    sm__inst_executed.avg.per_cycle_active                      inst/cycle  0.067905 0.068030 0.067968
+    sm__inst_executed.avg.per_cycle_elapsed                     inst/cycle  0.003786 0.003839 0.003812
+    sm__inst_issued.avg.pct_of_peak_sustained_active            %           1.819870 1.823238 1.821554
+    sm__inst_issued.avg.per_cycle_active                        inst/cycle  0.072795 0.072930 0.072862
+    sm__instruction_throughput.avg.pct_of_peak_sustained_active %           1.819870 1.823238 1.821554
+
+  apply_bt_bc_kernel(Grid2DGPUView, BoundaryType, BoundaryType), Block Size 256, Grid Size 7, Device 0, 2 invocations 
+    Section: GPU Speed Of Light Roofline Chart
+    Metric Name Metric Unit Minimum Maximum Average
+    ----------- ----------- ------- ------- -------
+
+  apply_bt_bc_kernel(Grid2DGPUView, BoundaryType, BoundaryType), Block Size 256, Grid Size 7, Device 0, 2 invocations 
+    Section: GPU Speed Of Light Throughput
+    Metric Name                                                      Metric Unit   Minimum      Maximum      Average     
+    ---------------------------------------------------------------- ------------- ------------ ------------ ------------
+    dram__cycles_elapsed.avg.per_second                              cycle/nsecond 1.306733     1.357143     1.331938    
+    gpc__cycles_elapsed.avg.per_second                               cycle/nsecond 1.046574     1.085795     1.066185    
+    gpc__cycles_elapsed.max                                          cycle         26865.000000 27252.000000 27058.500000
+    gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed %             1.334688     1.381706     1.358197    
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %             1.019149     1.033218     1.026184    
+    gpu__time_duration.sum                                           usecond       25.088000    25.664000    25.376000   
+    l1tex__throughput.avg.pct_of_peak_sustained_active               %             10.291620    10.294557    10.293089   
+    lts__throughput.avg.pct_of_peak_sustained_elapsed                %             2.057967     2.064765     2.061366    
+    sm__cycles_active.avg                                            cycle         1515.796296  1518.601852  1517.199074 
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %             0.121823     0.123552     0.122688    
+
+  apply_bt_bc_kernel(Grid2DGPUView, BoundaryType, BoundaryType), Block Size 256, Grid Size 7, Device 0, 2 invocations 
+    Section: Instruction Statistics
+    Metric Name             Metric Unit Minimum      Maximum      Average     
+    ----------------------- ----------- ------------ ------------ ------------
+    smsp__inst_executed.avg inst        25.780093    25.780093    25.780093   
+    smsp__inst_executed.sum inst        11137.000000 11137.000000 11137.000000
+    smsp__inst_issued.avg   inst        27.636574    27.636574    27.636574   
+    smsp__inst_issued.sum   inst        11939.000000 11939.000000 11939.000000
+
+  apply_bt_bc_kernel(Grid2DGPUView, BoundaryType, BoundaryType), Block Size 256, Grid Size 7, Device 0, 2 invocations 
+    Section: Launch Statistics
+    Metric Name                          Metric Unit     Minimum     Maximum     Average    
+    ------------------------------------ --------------- ----------- ----------- -----------
+    launch__block_size                                   256.000000  256.000000  256.000000 
+    launch__grid_size                                    7.000000    7.000000    7.000000   
+    launch__registers_per_thread         register/thread 56.000000   56.000000   56.000000  
+    launch__shared_mem_config_size       Kbyte           32.768000   32.768000   32.768000  
+    launch__shared_mem_per_block_driver  Kbyte/block     1.024000    1.024000    1.024000   
+    launch__shared_mem_per_block_dynamic byte/block      0.000000    0.000000    0.000000   
+    launch__shared_mem_per_block_static  byte/block      0.000000    0.000000    0.000000   
+    launch__thread_count                 thread          1792.000000 1792.000000 1792.000000
+    launch__waves_per_multiprocessor                     0.016204    0.016204    0.016204   
+
+  apply_bt_bc_kernel(Grid2DGPUView, BoundaryType, BoundaryType), Block Size 256, Grid Size 7, Device 0, 2 invocations 
+    Section: Memory Workload Analysis
+    Metric Name                                                              Metric Unit  Minimum   Maximum   Average  
+    ------------------------------------------------------------------------ ------------ --------- --------- ---------
+    dram__bytes.sum.per_second                                               Gbyte/second 17.281796 17.704082 17.492939
+    gpu__compute_memory_access_throughput.avg.pct_of_peak_sustained_elapsed  %            1.334688  1.381706  1.358197 
+    gpu__compute_memory_request_throughput.avg.pct_of_peak_sustained_elapsed %            1.019149  1.033218  1.026184 
+    l1tex__t_sector_hit_rate.pct                                             %            8.831813  9.013593  8.922703 
+    lts__average_gcomp_input_sector_success_rate.pct                         %            0.000000  0.000000  0.000000 
+    lts__average_gcomp_output_sector_compression_achieved_rate.ratio                      0.000000  0.000000  0.000000 
+    lts__t_sector_hit_rate.pct                                               %            66.454441 68.610920 67.532680
+    sm__memory_throughput.avg.pct_of_peak_sustained_elapsed                  %            0.121823  0.123552  0.122688 
+
+  apply_bt_bc_kernel(Grid2DGPUView, BoundaryType, BoundaryType), Block Size 256, Grid Size 7, Device 0, 2 invocations 
+    Section: Memory Workload Analysis Chart
+    Metric Name Metric Unit Minimum Maximum Average
+    ----------- ----------- ------- ------- -------
+
+  apply_bt_bc_kernel(Grid2DGPUView, BoundaryType, BoundaryType), Block Size 256, Grid Size 7, Device 0, 2 invocations 
+    Section: Occupancy
+    Metric Name                                       Metric Unit Minimum    Maximum    Average   
+    ------------------------------------------------- ----------- ---------- ---------- ----------
+    launch__occupancy_limit_blocks                    block       32.000000  32.000000  32.000000 
+    launch__occupancy_limit_registers                 block       4.000000   4.000000   4.000000  
+    launch__occupancy_limit_shared_mem                block       164.000000 164.000000 164.000000
+    launch__occupancy_limit_warps                     block       8.000000   8.000000   8.000000  
+    sm__maximum_warps_avg_per_active_cycle            warp        32.000000  32.000000  32.000000 
+    sm__maximum_warps_per_active_cycle_pct            %           50.000000  50.000000  50.000000 
+    sm__warps_active.avg.pct_of_peak_sustained_active %           11.067363  11.069972  11.068667 
+    sm__warps_active.avg.per_cycle_active             warp        7.083112   7.084782   7.083947  
+
+  apply_bt_bc_kernel(Grid2DGPUView, BoundaryType, BoundaryType), Block Size 256, Grid Size 7, Device 0, 2 invocations 
+    Section: Scheduler Statistics
+    Metric Name                                         Metric Unit Minimum   Maximum   Average  
+    --------------------------------------------------- ----------- --------- --------- ---------
+    smsp__issue_active.avg.pct_of_peak_sustained_active %           2.008269  2.046010  2.027140 
+    smsp__issue_active.avg.per_cycle_active                         0.020083  0.020460  0.020271 
+    smsp__issue_inst0.avg.pct_of_peak_sustained_active  %           97.953990 97.991731 97.972860
+    smsp__warps_active.avg.per_cycle_active             warp        1.955753  1.959915  1.957834 
+    smsp__warps_eligible.avg.per_cycle_active           warp        0.021777  0.022193  0.021985 
+
+  apply_bt_bc_kernel(Grid2DGPUView, BoundaryType, BoundaryType), Block Size 256, Grid Size 7, Device 0, 2 invocations 
+    Section: Source Counters
+    Metric Name                                           Metric Unit Minimum    Maximum    Average   
+    ----------------------------------------------------- ----------- ---------- ---------- ----------
+    derived__smsp__inst_executed_op_branch_pct            %           0.040226   0.040226   0.040226  
+    smsp__inst_executed_op_branch.sum                     inst        448.000000 448.000000 448.000000
+    smsp__sass_average_branch_targets_threads_uniform.pct %           100.000000 100.000000 100.000000
+    smsp__sass_branch_targets_threads_divergent.avg                   0.000000   0.000000   0.000000  
+
+  apply_bt_bc_kernel(Grid2DGPUView, BoundaryType, BoundaryType), Block Size 256, Grid Size 7, Device 0, 2 invocations 
+    Section: Warp State Statistics
+    Metric Name                                                Metric Unit Minimum    Maximum    Average   
+    ---------------------------------------------------------- ----------- ---------- ---------- ----------
+    smsp__average_warp_latency_per_inst_issued.ratio           cycle       95.588659  97.592261  96.590460 
+    smsp__average_warps_active_per_inst_executed.ratio         cycle       102.472210 104.620095 103.546152
+    smsp__thread_inst_executed_per_inst_executed.ratio                     31.454431  31.454431  31.454431 
+    smsp__thread_inst_executed_pred_on_per_inst_executed.ratio             31.039598  31.039598  31.039598 
+
+  apply_lr_bc_kernel(Grid2DGPUView, BoundaryType, BoundaryType), Block Size 256, Grid Size 7, Device 0, 2 invocations 
+    Section: Compute Workload Analysis
+    Metric Name                                                 Metric Unit Minimum  Maximum  Average 
+    ----------------------------------------------------------- ----------- -------- -------- --------
+    sm__inst_executed.avg.per_cycle_active                      inst/cycle  0.064199 0.064946 0.064573
+    sm__inst_executed.avg.per_cycle_elapsed                     inst/cycle  0.003598 0.003609 0.003603
+    sm__inst_issued.avg.pct_of_peak_sustained_active            %           1.676903 1.696427 1.686665
+    sm__inst_issued.avg.per_cycle_active                        inst/cycle  0.067076 0.067857 0.067467
+    sm__instruction_throughput.avg.pct_of_peak_sustained_active %           1.968894 1.991818 1.980356
+
+  apply_lr_bc_kernel(Grid2DGPUView, BoundaryType, BoundaryType), Block Size 256, Grid Size 7, Device 0, 2 invocations 
+    Section: GPU Speed Of Light Roofline Chart
+    Metric Name Metric Unit Minimum Maximum Average
+    ----------- ----------- ------- ------- -------
+
+  apply_lr_bc_kernel(Grid2DGPUView, BoundaryType, BoundaryType), Block Size 256, Grid Size 7, Device 0, 2 invocations 
+    Section: GPU Speed Of Light Throughput
+    Metric Name                                                      Metric Unit   Minimum      Maximum      Average     
+    ---------------------------------------------------------------- ------------- ------------ ------------ ------------
+    dram__cycles_elapsed.avg.per_second                              cycle/nsecond 1.418661     1.439835     1.429248    
+    gpc__cycles_elapsed.avg.per_second                               cycle/nsecond 1.135658     1.152140     1.143899    
+    gpc__cycles_elapsed.max                                          cycle         35731.000000 35834.000000 35782.500000
+    gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed %             6.216980     6.228632     6.222806    
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %             2.329229     2.335687     2.332458    
+    gpu__time_duration.sum                                           usecond       31.008000    31.552000    31.280000   
+    l1tex__throughput.avg.pct_of_peak_sustained_active               %             76.630563    77.484991    77.057777   
+    lts__throughput.avg.pct_of_peak_sustained_elapsed                %             6.819759     6.845444     6.832602    
+    sm__cycles_active.avg                                            cycle         1984.972222  2008.083333  1996.527778 
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %             0.506088     0.523020     0.514554    
+
+  apply_lr_bc_kernel(Grid2DGPUView, BoundaryType, BoundaryType), Block Size 256, Grid Size 7, Device 0, 2 invocations 
+    Section: Instruction Statistics
+    Metric Name             Metric Unit Minimum      Maximum      Average     
+    ----------------------- ----------- ------------ ------------ ------------
+    smsp__inst_executed.avg inst        32.229167    32.229167    32.229167   
+    smsp__inst_executed.sum inst        13923.000000 13923.000000 13923.000000
+    smsp__inst_issued.avg   inst        33.673611    33.673611    33.673611   
+    smsp__inst_issued.sum   inst        14547.000000 14547.000000 14547.000000
+
+  apply_lr_bc_kernel(Grid2DGPUView, BoundaryType, BoundaryType), Block Size 256, Grid Size 7, Device 0, 2 invocations 
+    Section: Launch Statistics
+    Metric Name                          Metric Unit     Minimum     Maximum     Average    
+    ------------------------------------ --------------- ----------- ----------- -----------
+    launch__block_size                                   256.000000  256.000000  256.000000 
+    launch__grid_size                                    7.000000    7.000000    7.000000   
+    launch__registers_per_thread         register/thread 56.000000   56.000000   56.000000  
+    launch__shared_mem_config_size       Kbyte           32.768000   32.768000   32.768000  
+    launch__shared_mem_per_block_driver  Kbyte/block     1.024000    1.024000    1.024000   
+    launch__shared_mem_per_block_dynamic byte/block      0.000000    0.000000    0.000000   
+    launch__shared_mem_per_block_static  byte/block      0.000000    0.000000    0.000000   
+    launch__thread_count                 thread          1792.000000 1792.000000 1792.000000
+    launch__waves_per_multiprocessor                     0.016204    0.016204    0.016204   
+
+  apply_lr_bc_kernel(Grid2DGPUView, BoundaryType, BoundaryType), Block Size 256, Grid Size 7, Device 0, 2 invocations 
+    Section: Memory Workload Analysis
+    Metric Name                                                              Metric Unit  Minimum   Maximum   Average  
+    ------------------------------------------------------------------------ ------------ --------- --------- ---------
+    dram__bytes.sum.per_second                                               Gbyte/second 42.296146 43.046440 42.671293
+    gpu__compute_memory_access_throughput.avg.pct_of_peak_sustained_elapsed  %            5.774542  5.790254  5.782398 
+    gpu__compute_memory_request_throughput.avg.pct_of_peak_sustained_elapsed %            6.216980  6.228632  6.222806 
+    l1tex__t_sector_hit_rate.pct                                             %            33.357232 33.506357 33.431794
+    lts__average_gcomp_input_sector_success_rate.pct                         %            0.000000  0.000000  0.000000 
+    lts__average_gcomp_output_sector_compression_achieved_rate.ratio                      0.000000  0.000000  0.000000 
+    lts__t_sector_hit_rate.pct                                               %            80.215905 80.847395 80.531650
+    sm__memory_throughput.avg.pct_of_peak_sustained_elapsed                  %            0.506088  0.523020  0.514554 
+
+  apply_lr_bc_kernel(Grid2DGPUView, BoundaryType, BoundaryType), Block Size 256, Grid Size 7, Device 0, 2 invocations 
+    Section: Memory Workload Analysis Chart
+    Metric Name Metric Unit Minimum Maximum Average
+    ----------- ----------- ------- ------- -------
+
+  apply_lr_bc_kernel(Grid2DGPUView, BoundaryType, BoundaryType), Block Size 256, Grid Size 7, Device 0, 2 invocations 
+    Section: Occupancy
+    Metric Name                                       Metric Unit Minimum    Maximum    Average   
+    ------------------------------------------------- ----------- ---------- ---------- ----------
+    launch__occupancy_limit_blocks                    block       32.000000  32.000000  32.000000 
+    launch__occupancy_limit_registers                 block       4.000000   4.000000   4.000000  
+    launch__occupancy_limit_shared_mem                block       164.000000 164.000000 164.000000
+    launch__occupancy_limit_warps                     block       8.000000   8.000000   8.000000  
+    sm__maximum_warps_avg_per_active_cycle            warp        32.000000  32.000000  32.000000 
+    sm__maximum_warps_per_active_cycle_pct            %           50.000000  50.000000  50.000000 
+    sm__warps_active.avg.pct_of_peak_sustained_active %           11.758711  11.769132  11.763921 
+    sm__warps_active.avg.per_cycle_active             warp        7.525575   7.532245   7.528910  
+
+  apply_lr_bc_kernel(Grid2DGPUView, BoundaryType, BoundaryType), Block Size 256, Grid Size 7, Device 0, 2 invocations 
+    Section: Scheduler Statistics
+    Metric Name                                         Metric Unit Minimum   Maximum   Average  
+    --------------------------------------------------- ----------- --------- --------- ---------
+    smsp__issue_active.avg.pct_of_peak_sustained_active %           1.782520  1.786965  1.784742 
+    smsp__issue_active.avg.per_cycle_active                         0.017825  0.017870  0.017847 
+    smsp__issue_inst0.avg.pct_of_peak_sustained_active  %           98.213035 98.217480 98.215258
+    smsp__warps_active.avg.per_cycle_active             warp        1.974690  1.975680  1.975185 
+    smsp__warps_eligible.avg.per_cycle_active           warp        0.018516  0.018562  0.018539 
+
+  apply_lr_bc_kernel(Grid2DGPUView, BoundaryType, BoundaryType), Block Size 256, Grid Size 7, Device 0, 2 invocations 
+    Section: Source Counters
+    Metric Name                                           Metric Unit Minimum    Maximum    Average   
+    ----------------------------------------------------- ----------- ---------- ---------- ----------
+    derived__smsp__inst_executed_op_branch_pct            %           0.028658   0.028658   0.028658  
+    smsp__inst_executed_op_branch.sum                     inst        399.000000 399.000000 399.000000
+    smsp__sass_average_branch_targets_threads_uniform.pct %           100.000000 100.000000 100.000000
+    smsp__sass_branch_targets_threads_divergent.avg                   0.000000   0.000000   0.000000  
+
+  apply_lr_bc_kernel(Grid2DGPUView, BoundaryType, BoundaryType), Block Size 256, Grid Size 7, Device 0, 2 invocations 
+    Section: Warp State Statistics
+    Metric Name                                                Metric Unit Minimum    Maximum    Average   
+    ---------------------------------------------------------- ----------- ---------- ---------- ----------
+    smsp__average_warp_latency_per_inst_issued.ratio           cycle       110.505259 110.836392 110.670826
+    smsp__average_warps_active_per_inst_executed.ratio         cycle       115.457875 115.803850 115.630863
+    smsp__thread_inst_executed_per_inst_executed.ratio                     31.446958  31.446958  31.446958 
+    smsp__thread_inst_executed_pred_on_per_inst_executed.ratio             31.115133  31.115133  31.115133 
+
+  void cub::DeviceReduceKernel<cub::DeviceReducePolicy<double, double, int, cub::Max>::Policy600, double *, double *, int, cub::Max>(T2, T3, T4, cub::GridEvenShare<T4>, T5), Block Size 256, Grid Size 5, Device 0, 2 invocations 
+    Section: Compute Workload Analysis
+    Metric Name                                                 Metric Unit Minimum  Maximum  Average 
+    ----------------------------------------------------------- ----------- -------- -------- --------
+    sm__inst_executed.avg.per_cycle_active                      inst/cycle  0.311359 0.314157 0.312758
+    sm__inst_executed.avg.per_cycle_elapsed                     inst/cycle  0.006977 0.007322 0.007149
+    sm__inst_issued.avg.pct_of_peak_sustained_active            %           8.674833 8.752809 8.713821
+    sm__inst_issued.avg.per_cycle_active                        inst/cycle  0.346993 0.350112 0.348553
+    sm__instruction_throughput.avg.pct_of_peak_sustained_active %           8.674833 8.752809 8.713821
+
+  void cub::DeviceReduceKernel<cub::DeviceReducePolicy<double, double, int, cub::Max>::Policy600, double *, double *, int, cub::Max>(T2, T3, T4, cub::GridEvenShare<T4>, T5), Block Size 256, Grid Size 5, Device 0, 2 invocations 
+    Section: GPU Speed Of Light Roofline Chart
+    Metric Name Metric Unit Minimum Maximum Average
+    ----------- ----------- ------- ------- -------
+
+  void cub::DeviceReduceKernel<cub::DeviceReducePolicy<double, double, int, cub::Max>::Policy600, double *, double *, int, cub::Max>(T2, T3, T4, cub::GridEvenShare<T4>, T5), Block Size 256, Grid Size 5, Device 0, 2 invocations 
+    Section: GPU Speed Of Light Throughput
+    Metric Name                                                      Metric Unit   Minimum     Maximum     Average    
+    ---------------------------------------------------------------- ------------- ----------- ----------- -----------
+    dram__cycles_elapsed.avg.per_second                              cycle/nsecond 1.313924    1.377215    1.345570   
+    gpc__cycles_elapsed.avg.per_second                               cycle/nsecond 1.049051    1.100899    1.074975   
+    gpc__cycles_elapsed.max                                          cycle         5309.000000 5576.000000 5442.500000
+    gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed %             0.842514    0.880957    0.861736   
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %             0.828642    0.868557    0.848600   
+    gpu__time_duration.sum                                           usecond       5.056000    5.056000    5.056000   
+    l1tex__throughput.avg.pct_of_peak_sustained_active               %             12.345954   12.464419   12.405187  
+    lts__throughput.avg.pct_of_peak_sustained_elapsed                %             0.842514    0.880957    0.861736   
+    sm__cycles_active.avg                                            cycle         123.611111  124.722222  124.166667 
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %             0.194379    0.203989    0.199184   
+
+  void cub::DeviceReduceKernel<cub::DeviceReducePolicy<double, double, int, cub::Max>::Policy600, double *, double *, int, cub::Max>(T2, T3, T4, cub::GridEvenShare<T4>, T5), Block Size 256, Grid Size 5, Device 0, 2 invocations 
+    Section: Instruction Statistics
+    Metric Name             Metric Unit Minimum     Maximum     Average    
+    ----------------------- ----------- ----------- ----------- -----------
+    smsp__inst_executed.avg inst        9.708333    9.708333    9.708333   
+    smsp__inst_executed.sum inst        4194.000000 4194.000000 4194.000000
+    smsp__inst_issued.avg   inst        10.819444   10.819444   10.819444  
+    smsp__inst_issued.sum   inst        4674.000000 4674.000000 4674.000000
+
+  void cub::DeviceReduceKernel<cub::DeviceReducePolicy<double, double, int, cub::Max>::Policy600, double *, double *, int, cub::Max>(T2, T3, T4, cub::GridEvenShare<T4>, T5), Block Size 256, Grid Size 5, Device 0, 2 invocations 
+    Section: Launch Statistics
+    Metric Name                          Metric Unit     Minimum     Maximum     Average    
+    ------------------------------------ --------------- ----------- ----------- -----------
+    launch__block_size                                   256.000000  256.000000  256.000000 
+    launch__grid_size                                    5.000000    5.000000    5.000000   
+    launch__registers_per_thread         register/thread 32.000000   32.000000   32.000000  
+    launch__shared_mem_config_size       Kbyte           32.768000   32.768000   32.768000  
+    launch__shared_mem_per_block_driver  Kbyte/block     1.024000    1.024000    1.024000   
+    launch__shared_mem_per_block_dynamic byte/block      0.000000    0.000000    0.000000   
+    launch__shared_mem_per_block_static  byte/block      80.000000   80.000000   80.000000  
+    launch__thread_count                 thread          1280.000000 1280.000000 1280.000000
+    launch__waves_per_multiprocessor                     0.005787    0.005787    0.005787   
+
+  void cub::DeviceReduceKernel<cub::DeviceReducePolicy<double, double, int, cub::Max>::Policy600, double *, double *, int, cub::Max>(T2, T3, T4, cub::GridEvenShare<T4>, T5), Block Size 256, Grid Size 5, Device 0, 2 invocations 
+    Section: Memory Workload Analysis
+    Metric Name                                                              Metric Unit  Minimum   Maximum   Average  
+    ------------------------------------------------------------------------ ------------ --------- --------- ---------
+    dram__bytes.sum.per_second                                               Gbyte/second 14.607595 14.607595 14.607595
+    gpu__compute_memory_access_throughput.avg.pct_of_peak_sustained_elapsed  %            0.842514  0.880957  0.861736 
+    gpu__compute_memory_request_throughput.avg.pct_of_peak_sustained_elapsed %            0.828642  0.868557  0.848600 
+    l1tex__t_sector_hit_rate.pct                                             %            47.004820 47.004820 47.004820
+    lts__average_gcomp_input_sector_success_rate.pct                         %            0.000000  0.000000  0.000000 
+    lts__average_gcomp_output_sector_compression_achieved_rate.ratio                      0.000000  0.000000  0.000000 
+    lts__t_sector_hit_rate.pct                                               %            57.491582 58.857223 58.174403
+    sm__memory_throughput.avg.pct_of_peak_sustained_elapsed                  %            0.117276  0.123074  0.120175 
+
+  void cub::DeviceReduceKernel<cub::DeviceReducePolicy<double, double, int, cub::Max>::Policy600, double *, double *, int, cub::Max>(T2, T3, T4, cub::GridEvenShare<T4>, T5), Block Size 256, Grid Size 5, Device 0, 2 invocations 
+    Section: Memory Workload Analysis Chart
+    Metric Name Metric Unit Minimum Maximum Average
+    ----------- ----------- ------- ------- -------
+
+  void cub::DeviceReduceKernel<cub::DeviceReducePolicy<double, double, int, cub::Max>::Policy600, double *, double *, int, cub::Max>(T2, T3, T4, cub::GridEvenShare<T4>, T5), Block Size 256, Grid Size 5, Device 0, 2 invocations 
+    Section: Occupancy
+    Metric Name                                       Metric Unit Minimum    Maximum    Average   
+    ------------------------------------------------- ----------- ---------- ---------- ----------
+    launch__occupancy_limit_blocks                    block       32.000000  32.000000  32.000000 
+    launch__occupancy_limit_registers                 block       8.000000   8.000000   8.000000  
+    launch__occupancy_limit_shared_mem                block       145.000000 145.000000 145.000000
+    launch__occupancy_limit_warps                     block       8.000000   8.000000   8.000000  
+    sm__maximum_warps_avg_per_active_cycle            warp        64.000000  64.000000  64.000000 
+    sm__maximum_warps_per_active_cycle_pct            %           100.000000 100.000000 100.000000
+    sm__warps_active.avg.pct_of_peak_sustained_active %           11.787453  11.793337  11.790395 
+    sm__warps_active.avg.per_cycle_active             warp        7.543970   7.547736   7.545853  
+
+  void cub::DeviceReduceKernel<cub::DeviceReducePolicy<double, double, int, cub::Max>::Policy600, double *, double *, int, cub::Max>(T2, T3, T4, cub::GridEvenShare<T4>, T5), Block Size 256, Grid Size 5, Device 0, 2 invocations 
+    Section: Scheduler Statistics
+    Metric Name                                         Metric Unit Minimum   Maximum   Average  
+    --------------------------------------------------- ----------- --------- --------- ---------
+    smsp__issue_active.avg.pct_of_peak_sustained_active %           8.877493  9.124985  9.001239 
+    smsp__issue_active.avg.per_cycle_active                         0.088775  0.091250  0.090012 
+    smsp__issue_inst0.avg.pct_of_peak_sustained_active  %           90.875015 91.122507 90.998761
+    smsp__warps_active.avg.per_cycle_active             warp        1.979540  1.980057  1.979799 
+    smsp__warps_eligible.avg.per_cycle_active           warp        0.098006  0.100699  0.099352 
+
+  void cub::DeviceReduceKernel<cub::DeviceReducePolicy<double, double, int, cub::Max>::Policy600, double *, double *, int, cub::Max>(T2, T3, T4, cub::GridEvenShare<T4>, T5), Block Size 256, Grid Size 5, Device 0, 2 invocations 
+    Section: Source Counters
+    Metric Name                                           Metric Unit Minimum    Maximum    Average   
+    ----------------------------------------------------- ----------- ---------- ---------- ----------
+    derived__smsp__inst_executed_op_branch_pct            %           0.087268   0.087268   0.087268  
+    smsp__inst_executed_op_branch.sum                     inst        366.000000 366.000000 366.000000
+    smsp__sass_average_branch_targets_threads_uniform.pct %           98.015873  98.015873  98.015873 
+    smsp__sass_branch_targets_threads_divergent.avg                   0.011574   0.011574   0.011574  
+
+  void cub::DeviceReduceKernel<cub::DeviceReducePolicy<double, double, int, cub::Max>::Policy600, double *, double *, int, cub::Max>(T2, T3, T4, cub::GridEvenShare<T4>, T5), Block Size 256, Grid Size 5, Device 0, 2 invocations 
+    Section: Warp State Statistics
+    Metric Name                                                Metric Unit Minimum   Maximum   Average  
+    ---------------------------------------------------------- ----------- --------- --------- ---------
+    smsp__average_warp_latency_per_inst_issued.ratio           cycle       21.693624 22.304236 21.998930
+    smsp__average_warps_active_per_inst_executed.ratio         cycle       24.176443 24.856938 24.516691
+    smsp__thread_inst_executed_per_inst_executed.ratio                     30.860515 30.860515 30.860515
+    smsp__thread_inst_executed_pred_on_per_inst_executed.ratio             29.128040 29.128040 29.128040
+
+  void cub::DeviceReduceSingleTileKernel<cub::DeviceReducePolicy<double, double, int, cub::Max>::Policy600, double *, double *, int, cub::Max, double>(T2, T3, T4, T5, T6), Block Size 256, Grid Size 1, Device 0, 1 invocations 
+    Section: Compute Workload Analysis
+    Metric Name                                                 Metric Unit Minimum  Maximum  Average 
+    ----------------------------------------------------------- ----------- -------- -------- --------
+    sm__inst_executed.avg.per_cycle_active                      inst/cycle  0.271459 0.271459 0.271459
+    sm__inst_executed.avg.per_cycle_elapsed                     inst/cycle  0.001395 0.001395 0.001395
+    sm__inst_issued.avg.pct_of_peak_sustained_active            %           7.378436 7.378436 7.378436
+    sm__inst_issued.avg.per_cycle_active                        inst/cycle  0.295137 0.295137 0.295137
+    sm__instruction_throughput.avg.pct_of_peak_sustained_active %           7.378436 7.378436 7.378436
+
+  void cub::DeviceReduceSingleTileKernel<cub::DeviceReducePolicy<double, double, int, cub::Max>::Policy600, double *, double *, int, cub::Max, double>(T2, T3, T4, T5, T6), Block Size 256, Grid Size 1, Device 0, 1 invocations 
+    Section: GPU Speed Of Light Roofline Chart
+    Metric Name Metric Unit Minimum Maximum Average
+    ----------- ----------- ------- ------- -------
+
+  void cub::DeviceReduceSingleTileKernel<cub::DeviceReducePolicy<double, double, int, cub::Max>::Policy600, double *, double *, int, cub::Max, double>(T2, T3, T4, T5, T6), Block Size 256, Grid Size 1, Device 0, 1 invocations 
+    Section: GPU Speed Of Light Throughput
+    Metric Name                                                      Metric Unit   Minimum     Maximum     Average    
+    ---------------------------------------------------------------- ------------- ----------- ----------- -----------
+    dram__cycles_elapsed.avg.per_second                              cycle/nsecond 1.195683    1.195683    1.195683   
+    gpc__cycles_elapsed.avg.per_second                               cycle/usecond 957.990750  957.990750  957.990750 
+    gpc__cycles_elapsed.max                                          cycle         4265.000000 4265.000000 4265.000000
+    gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed %             0.457614    0.457614    0.457614   
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %             0.003761    0.003761    0.003761   
+    gpu__time_duration.sum                                           usecond       4.448000    4.448000    4.448000   
+    l1tex__throughput.avg.pct_of_peak_sustained_active               %             18.393235   18.393235   18.393235  
+    lts__throughput.avg.pct_of_peak_sustained_elapsed                %             0.457614    0.457614    0.457614   
+    sm__cycles_active.avg                                            cycle         21.898148   21.898148   21.898148  
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %             0.037918    0.037918    0.037918   
+
+  void cub::DeviceReduceSingleTileKernel<cub::DeviceReducePolicy<double, double, int, cub::Max>::Policy600, double *, double *, int, cub::Max, double>(T2, T3, T4, T5, T6), Block Size 256, Grid Size 1, Device 0, 1 invocations 
+    Section: Instruction Statistics
+    Metric Name             Metric Unit Minimum    Maximum    Average   
+    ----------------------- ----------- ---------- ---------- ----------
+    smsp__inst_executed.avg inst        1.486111   1.486111   1.486111  
+    smsp__inst_executed.sum inst        642.000000 642.000000 642.000000
+    smsp__inst_issued.avg   inst        1.615741   1.615741   1.615741  
+    smsp__inst_issued.sum   inst        698.000000 698.000000 698.000000
+
+  void cub::DeviceReduceSingleTileKernel<cub::DeviceReducePolicy<double, double, int, cub::Max>::Policy600, double *, double *, int, cub::Max, double>(T2, T3, T4, T5, T6), Block Size 256, Grid Size 1, Device 0, 1 invocations 
+    Section: Launch Statistics
+    Metric Name                          Metric Unit     Minimum    Maximum    Average   
+    ------------------------------------ --------------- ---------- ---------- ----------
+    launch__block_size                                   256.000000 256.000000 256.000000
+    launch__grid_size                                    1.000000   1.000000   1.000000  
+    launch__registers_per_thread         register/thread 64.000000  64.000000  64.000000 
+    launch__shared_mem_config_size       Kbyte           16.384000  16.384000  16.384000 
+    launch__shared_mem_per_block_driver  Kbyte/block     1.024000   1.024000   1.024000  
+    launch__shared_mem_per_block_dynamic byte/block      0.000000   0.000000   0.000000  
+    launch__shared_mem_per_block_static  byte/block      80.000000  80.000000  80.000000 
+    launch__thread_count                 thread          256.000000 256.000000 256.000000
+    launch__waves_per_multiprocessor                     0.002315   0.002315   0.002315  
+
+  void cub::DeviceReduceSingleTileKernel<cub::DeviceReducePolicy<double, double, int, cub::Max>::Policy600, double *, double *, int, cub::Max, double>(T2, T3, T4, T5, T6), Block Size 256, Grid Size 1, Device 0, 1 invocations 
+    Section: Memory Workload Analysis
+    Metric Name                                                              Metric Unit  Minimum    Maximum    Average   
+    ------------------------------------------------------------------------ ------------ ---------- ---------- ----------
+    dram__bytes.sum.per_second                                               Mbyte/second 57.553957  57.553957  57.553957 
+    gpu__compute_memory_access_throughput.avg.pct_of_peak_sustained_elapsed  %            0.457614   0.457614   0.457614  
+    gpu__compute_memory_request_throughput.avg.pct_of_peak_sustained_elapsed %            0.346794   0.346794   0.346794  
+    l1tex__t_sector_hit_rate.pct                                             %            0.000000   0.000000   0.000000  
+    lts__average_gcomp_input_sector_success_rate.pct                         %            0.000000   0.000000   0.000000  
+    lts__average_gcomp_output_sector_compression_achieved_rate.ratio                      0.000000   0.000000   0.000000  
+    lts__t_sector_hit_rate.pct                                               %            100.235770 100.235770 100.235770
+    sm__memory_throughput.avg.pct_of_peak_sustained_elapsed                  %            0.023685   0.023685   0.023685  
+
+  void cub::DeviceReduceSingleTileKernel<cub::DeviceReducePolicy<double, double, int, cub::Max>::Policy600, double *, double *, int, cub::Max, double>(T2, T3, T4, T5, T6), Block Size 256, Grid Size 1, Device 0, 1 invocations 
+    Section: Memory Workload Analysis Chart
+    Metric Name Metric Unit Minimum Maximum Average
+    ----------- ----------- ------- ------- -------
+
+  void cub::DeviceReduceSingleTileKernel<cub::DeviceReducePolicy<double, double, int, cub::Max>::Policy600, double *, double *, int, cub::Max, double>(T2, T3, T4, T5, T6), Block Size 256, Grid Size 1, Device 0, 1 invocations 
+    Section: Occupancy
+    Metric Name                                       Metric Unit Minimum    Maximum    Average   
+    ------------------------------------------------- ----------- ---------- ---------- ----------
+    launch__occupancy_limit_blocks                    block       32.000000  32.000000  32.000000 
+    launch__occupancy_limit_registers                 block       4.000000   4.000000   4.000000  
+    launch__occupancy_limit_shared_mem                block       145.000000 145.000000 145.000000
+    launch__occupancy_limit_warps                     block       8.000000   8.000000   8.000000  
+    sm__maximum_warps_avg_per_active_cycle            warp        32.000000  32.000000  32.000000 
+    sm__maximum_warps_per_active_cycle_pct            %           50.000000  50.000000  50.000000 
+    sm__warps_active.avg.pct_of_peak_sustained_active %           11.626586  11.626586  11.626586 
+    sm__warps_active.avg.per_cycle_active             warp        7.441015   7.441015   7.441015  
+
+  void cub::DeviceReduceSingleTileKernel<cub::DeviceReducePolicy<double, double, int, cub::Max>::Policy600, double *, double *, int, cub::Max, double>(T2, T3, T4, T5, T6), Block Size 256, Grid Size 1, Device 0, 1 invocations 
+    Section: Scheduler Statistics
+    Metric Name                                         Metric Unit Minimum   Maximum   Average  
+    --------------------------------------------------- ----------- --------- --------- ---------
+    smsp__issue_active.avg.pct_of_peak_sustained_active %           8.063771  8.063771  8.063771 
+    smsp__issue_active.avg.per_cycle_active                         0.080638  0.080638  0.080638 
+    smsp__issue_inst0.avg.pct_of_peak_sustained_active  %           91.936229 91.936229 91.936229
+    smsp__warps_active.avg.per_cycle_active             warp        1.973082  1.973082  1.973082 
+    smsp__warps_eligible.avg.per_cycle_active           warp        0.088378  0.088378  0.088378 
+
+  void cub::DeviceReduceSingleTileKernel<cub::DeviceReducePolicy<double, double, int, cub::Max>::Policy600, double *, double *, int, cub::Max, double>(T2, T3, T4, T5, T6), Block Size 256, Grid Size 1, Device 0, 1 invocations 
+    Section: Source Counters
+    Metric Name                                           Metric Unit Minimum   Maximum   Average  
+    ----------------------------------------------------- ----------- --------- --------- ---------
+    derived__smsp__inst_executed_op_branch_pct            %           0.143302  0.143302  0.143302 
+    smsp__inst_executed_op_branch.sum                     inst        92.000000 92.000000 92.000000
+    smsp__sass_average_branch_targets_threads_uniform.pct %           96.491228 96.491228 96.491228
+    smsp__sass_branch_targets_threads_divergent.avg                   0.004630  0.004630  0.004630 
+
+  void cub::DeviceReduceSingleTileKernel<cub::DeviceReducePolicy<double, double, int, cub::Max>::Policy600, double *, double *, int, cub::Max, double>(T2, T3, T4, T5, T6), Block Size 256, Grid Size 1, Device 0, 1 invocations 
+    Section: Warp State Statistics
+    Metric Name                                                Metric Unit Minimum   Maximum   Average  
+    ---------------------------------------------------------- ----------- --------- --------- ---------
+    smsp__average_warp_latency_per_inst_issued.ratio           cycle       24.468481 24.468481 24.468481
+    smsp__average_warps_active_per_inst_executed.ratio         cycle       26.602804 26.602804 26.602804
+    smsp__thread_inst_executed_per_inst_executed.ratio                     29.993769 29.993769 29.993769
+    smsp__thread_inst_executed_pred_on_per_inst_executed.ratio             28.799065 28.799065 28.799065
+
+Note: The shown averages are calculated as the arithmetic mean of the metric values after the evaluation of the metrics for each individual kernel launch.
+If aggregating across varying launch configurations (like shared memory, cache config settings), the arithmetic mean can be misleading and looking at the individual results is recommended instead.
+This output mode is backwards compatible to the per-kernel summary output of nvprof

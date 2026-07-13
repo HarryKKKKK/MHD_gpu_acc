@@ -56,8 +56,8 @@ set -euo pipefail
 # ------------------------------------------------------------
 
 N="${N:-8}"
-CASE="${CASE:-shock_bubble}"
-SOLVER="${SOLVER:-hllc}"
+CASE="${CASE:-orszag_tang}"
+SOLVER="${SOLVER:-hlld}"
 
 # Run the program once without profiling before collection.
 WARMUP="${WARMUP:-1}"
