@@ -6,7 +6,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
-#SBATCH --time=01:00:00
+#SBATCH --time=04:00:00
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 
@@ -28,7 +28,12 @@
 #
 # Cases   : orszag_tang, rotor
 # Solvers : hll hllc hlld force
-# Scales  : n = 1, 2, 4
+# Scales  : n = 1, 2, 4, 8
+#
+# n=8 is the largest scale in the default sweep (orszag_tang 1536x1536,
+# rotor 3200x3200). Based on the n=4 timings, this roughly 8x's the
+# per-solver cost of n=4, so --time is sized generously above the
+# observed sweep total to leave headroom.
 #
 # Override on the command line before sbatch, e.g.:
 #   SOLVERS_STR="hlld" sbatch scripts/dgx_slurm/slurm_gpu.sh
@@ -50,7 +55,7 @@ module load cuda/12.2
 
 read -r -a CASES   <<< "${CASES_STR:-orszag_tang rotor}"
 read -r -a SOLVERS <<< "${SOLVERS_STR:-hll hllc hlld force}"
-read -r -a SCALES  <<< "${SCALES_STR:-1 2 4}"
+read -r -a SCALES  <<< "${SCALES_STR:-1 2 4 8}"
 
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
 export OMP_PROC_BIND=close
