@@ -40,5 +40,4 @@ Thumbs.db
 *.pem
 *.key
 outputs/
-profiling/
 note1.txt
