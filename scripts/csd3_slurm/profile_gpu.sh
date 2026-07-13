@@ -11,49 +11,42 @@
 #SBATCH -e logs/%x_%j.err
 
 # ============================================================
-# GPU profiling script for CSD3 Ampere GPU nodes.
+# Nsight Compute (ncu) profiling on CSD3 Ampere GPU nodes.
+#
+# This script only produces Nsight Compute output (no Nsight Systems
+# pass). ncu replays each captured kernel launch to collect metrics, so
+# only NCU_LAUNCH_COUNT launches (after skipping NCU_LAUNCH_SKIP) are
+# profiled per submission — sweeping many (case, solver, n) combos the
+# way slurm_gpu.sh does would take far too long under replay.
 #
 # Default configuration:
 #   N       = 8
 #   CASE    = shock_bubble
 #   SOLVER  = hllc
-#   MODE    = nsys
-#
-# PROFILE_MODE options:
-#   nsys : application-level timeline profiling
-#   ncu  : detailed kernel-level profiling
-#   both : run nsys, then ncu
 #
 # Recommended workflow:
 #
-# 1. First run Nsight Systems:
+# 1. Exploratory run — leave NCU_KERNEL_REGEX empty to see what the
+#    first NCU_LAUNCH_COUNT kernel launches actually are (one solver
+#    step launches ~10 kernels: dt-reduction, advance_x, boundary x2,
+#    advance_y, boundary x2, psi damping):
 #
-#   PROFILE_MODE=nsys \
-#   CASE=shock_bubble \
-#   SOLVER=hllc \
-#   N=8 \
-#   sbatch scripts/slurm/run_gpu_profile_n8.sh
+#   CASE=shock_bubble SOLVER=hllc N=8 \
+#   sbatch scripts/csd3_slurm/profile_gpu.sh
 #
-# 2. Inspect the generated kernel summary and choose a hotspot.
+# 2. Inspect "${base}_summary.txt" / "${base}_details.csv" for the
+#    kernel names, pick the hotspot, then re-run targeted at just that
+#    kernel with a couple of replays:
 #
-# 3. Run Nsight Compute on that kernel:
-#
-#   PROFILE_MODE=ncu \
-#   CASE=shock_bubble \
-#   SOLVER=hllc \
-#   N=8 \
-#   NCU_KERNEL_REGEX='kernel_name_fragment' \
-#   NCU_LAUNCH_COUNT=1 \
-#   sbatch scripts/slurm/run_gpu_profile_n8.sh
+#   CASE=shock_bubble SOLVER=hllc N=8 \
+#   NCU_KERNEL_REGEX='advance_x_kernel' \
+#   NCU_LAUNCH_COUNT=3 \
+#   sbatch scripts/csd3_slurm/profile_gpu.sh
 #
 # Optional:
 #
-#   PROFILE_MODE=both ...
-#
-#   NCU_SET=full ...
-#
-#   NCU_LAUNCH_SKIP=20 ...
-#
+#   NCU_SET=full ...        # full section set instead of targeted (slow)
+#   NCU_LAUNCH_SKIP=20 ...  # skip past startup/warm-up launches
 # ============================================================
 
 set -euo pipefail
@@ -61,8 +54,6 @@ set -euo pipefail
 # ------------------------------------------------------------
 # Configuration
 # ------------------------------------------------------------
-
-PROFILE_MODE="${PROFILE_MODE:-nsys}"
 
 N="${N:-8}"
 CASE="${CASE:-shock_bubble}"
@@ -73,11 +64,12 @@ WARMUP="${WARMUP:-1}"
 
 # Nsight Compute options.
 #
-# Leave NCU_KERNEL_REGEX empty only for an exploratory run.
-# It is much better to obtain the exact kernel name from nsys first.
+# Leave NCU_KERNEL_REGEX empty only for an exploratory run — profiling
+# the first matching launches may just catch initialization/boundary
+# kernels rather than the hot loop.
 NCU_KERNEL_REGEX="${NCU_KERNEL_REGEX:-}"
 NCU_LAUNCH_SKIP="${NCU_LAUNCH_SKIP:-0}"
-NCU_LAUNCH_COUNT="${NCU_LAUNCH_COUNT:-3}"
+NCU_LAUNCH_COUNT="${NCU_LAUNCH_COUNT:-12}"
 
 # targeted: selected performance sections
 # full:     Nsight Compute full section set, much slower
@@ -89,7 +81,7 @@ WORKDIR="${SLURM_SUBMIT_DIR}"
 
 cd "${WORKDIR}"
 
-mkdir -p logs outputs validation scaling profiling
+mkdir -p logs profiling
 
 PROFILE_DIR="${WORKDIR}/profiling/${SLURM_JOB_ID}_${CASE}_${SOLVER}_n${N}"
 mkdir -p "${PROFILE_DIR}"
@@ -97,15 +89,6 @@ mkdir -p "${PROFILE_DIR}"
 # ------------------------------------------------------------
 # Validate configuration
 # ------------------------------------------------------------
-
-case "${PROFILE_MODE}" in
-    nsys|ncu|both)
-        ;;
-    *)
-        echo "[ERROR] PROFILE_MODE must be nsys, ncu, or both."
-        exit 2
-        ;;
-esac
 
 if ! [[ "${N}" =~ ^[0-9]+$ ]] || [ "${N}" -le 0 ]; then
     echo "[ERROR] N must be a positive integer."
@@ -174,13 +157,6 @@ require_command() {
     fi
 }
 
-command_supported() {
-    local command_name="$1"
-    local option_name="$2"
-
-    "${command_name}" --help 2>&1 | grep -q -- "${option_name}"
-}
-
 # ------------------------------------------------------------
 # Environment and metadata
 # ------------------------------------------------------------
@@ -194,7 +170,6 @@ echo "Workdir            : ${WORKDIR}"
 echo "Profile directory  : ${PROFILE_DIR}"
 echo "Partition          : ${SLURM_JOB_PARTITION:-unknown}"
 echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-unset}"
-echo "PROFILE_MODE       : ${PROFILE_MODE}"
 echo "N                  : ${N}"
 echo "CASE               : ${CASE}"
 echo "SOLVER             : ${SOLVER}"
@@ -225,7 +200,6 @@ METADATA_FILE="${PROFILE_DIR}/metadata.txt"
 
     echo ""
     echo "===== PROFILE CONFIGURATION ====="
-    echo "PROFILE_MODE=${PROFILE_MODE}"
     echo "N=${N}"
     echo "CASE=${CASE}"
     echo "SOLVER=${SOLVER}"
@@ -261,10 +235,7 @@ METADATA_FILE="${PROFILE_DIR}/metadata.txt"
     nvcc --version || true
 
     echo ""
-    echo "===== PROFILERS ====="
-    which nsys || true
-    nsys --version || true
-
+    echo "===== PROFILER ====="
     which ncu || true
     ncu --version || true
 
@@ -289,20 +260,23 @@ fi
 
 make gpu
 
-if [ ! -x "./main_gpu" ]; then
-    echo "[ERROR] ./main_gpu was not produced or is not executable."
+BIN="./bin/main_gpu"
+
+if [ ! -x "${BIN}" ]; then
+    echo "[ERROR] ${BIN} was not produced or is not executable."
     exit 1
 fi
 
 echo "[INFO] Binary:"
-ls -lh ./main_gpu
+ls -lh "${BIN}"
 
 # Application command stored as an array to preserve arguments safely.
 APP=(
-    ./main_gpu
+    "${BIN}"
     "${N}"
     --case "${CASE}"
     --solver "${SOLVER}"
+    --no-out
 )
 
 printf "[INFO] Application command:"
@@ -342,292 +316,151 @@ if [ "${WARMUP}" = "1" ]; then
 fi
 
 # ------------------------------------------------------------
-# Nsight Systems
-# ------------------------------------------------------------
-
-run_nsys_profile() {
-    require_command nsys
-
-    echo ""
-    echo "============================================================"
-    echo "===== NSIGHT SYSTEMS PROFILE ====="
-    echo "============================================================"
-
-    local base="${PROFILE_DIR}/nsys_${CASE}_${SOLVER}_n${N}"
-    local console_log="${base}_console.log"
-    local report="${base}.nsys-rep"
-
-    local nsys_args=(
-        profile
-        --trace=cuda,nvtx,osrt
-        --sample=none
-        --cpuctxsw=none
-        --force-overwrite=true
-        --output="${base}"
-    )
-
-    # Some installed versions expose CUDA memory usage tracing.
-    if command_supported "nsys profile" "--cuda-memory-usage"; then
-        nsys_args+=(--cuda-memory-usage=true)
-    fi
-
-    printf "[INFO] Command: nsys"
-    printf " %q" "${nsys_args[@]}"
-    printf " "
-    printf "%q " "${APP[@]}"
-    printf "\n"
-
-    set +e
-    /usr/bin/time \
-        -f "[PROFILE_TIME] real_seconds=%e
-[PROFILE_TIME] user_seconds=%U
-[PROFILE_TIME] sys_seconds=%S
-[PROFILE_TIME] max_rss_kb=%M" \
-        nsys "${nsys_args[@]}" "${APP[@]}" \
-        2>&1 | tee "${console_log}"
-
-    local status=${PIPESTATUS[0]}
-    set -e
-
-    if [ "${status}" -ne 0 ]; then
-        echo "[ERROR] Nsight Systems failed with status ${status}."
-        echo "[ERROR] See ${console_log}."
-        return "${status}"
-    fi
-
-    if [ ! -f "${report}" ]; then
-        echo "[ERROR] Expected report not found: ${report}"
-        return 1
-    fi
-
-    echo ""
-    echo "[INFO] Nsight Systems report: ${report}"
-
-    # Full readable summary.
-    nsys stats "${report}" \
-        > "${base}_stats.txt" 2>&1 || true
-
-    # Kernel-time summary.
-    nsys stats \
-        --report cuda_gpu_kern_sum \
-        --format csv \
-        --output - \
-        "${report}" \
-        > "${base}_cuda_gpu_kern_sum.csv" 2>&1 || true
-
-    # CUDA API summary, useful for finding cudaDeviceSynchronize,
-    # cudaMemcpy and other host-side blocking operations.
-    nsys stats \
-        --report cuda_api_sum \
-        --format csv \
-        --output - \
-        "${report}" \
-        > "${base}_cuda_api_sum.csv" 2>&1 || true
-
-    # Memory operation timing.
-    nsys stats \
-        --report cuda_gpu_mem_time_sum \
-        --format csv \
-        --output - \
-        "${report}" \
-        > "${base}_cuda_gpu_mem_time_sum.csv" 2>&1 || true
-
-    # Detailed GPU trace. This can be large but is useful for ordering.
-    nsys stats \
-        --report cuda_gpu_trace \
-        --format csv \
-        --output - \
-        "${report}" \
-        > "${base}_cuda_gpu_trace.csv" 2>&1 || true
-
-    echo ""
-    echo "===== TOP GPU KERNELS ====="
-    head -n 25 "${base}_cuda_gpu_kern_sum.csv" || true
-
-    echo ""
-    echo "===== TOP CUDA API CALLS ====="
-    head -n 25 "${base}_cuda_api_sum.csv" || true
-
-    echo ""
-    echo "[INFO] Generated:"
-    echo "  ${report}"
-    echo "  ${base}_stats.txt"
-    echo "  ${base}_cuda_gpu_kern_sum.csv"
-    echo "  ${base}_cuda_api_sum.csv"
-    echo "  ${base}_cuda_gpu_mem_time_sum.csv"
-    echo "  ${base}_cuda_gpu_trace.csv"
-}
-
-# ------------------------------------------------------------
 # Nsight Compute
 # ------------------------------------------------------------
 
-run_ncu_profile() {
-    require_command ncu
+require_command ncu
 
-    echo ""
-    echo "============================================================"
-    echo "===== NSIGHT COMPUTE PROFILE ====="
-    echo "============================================================"
+echo ""
+echo "============================================================"
+echo "===== NSIGHT COMPUTE PROFILE ====="
+echo "============================================================"
 
-    local base="${PROFILE_DIR}/ncu_${CASE}_${SOLVER}_n${N}"
-    local console_log="${base}_console.log"
-    local report="${base}.ncu-rep"
+BASE="${PROFILE_DIR}/ncu_${CASE}_${SOLVER}_n${N}"
+CONSOLE_LOG="${BASE}_console.log"
+REPORT="${BASE}.ncu-rep"
 
-    local ncu_args=(
-        --force-overwrite
-        --target-processes all
-        --replay-mode kernel
-        --launch-skip "${NCU_LAUNCH_SKIP}"
-        --launch-count "${NCU_LAUNCH_COUNT}"
-        --export "${base}"
+NCU_ARGS=(
+    --force-overwrite
+    --target-processes all
+    --replay-mode kernel
+    --launch-skip "${NCU_LAUNCH_SKIP}"
+    --launch-count "${NCU_LAUNCH_COUNT}"
+    --export "${BASE}"
+)
+
+if [ -n "${NCU_KERNEL_REGEX}" ]; then
+    NCU_ARGS+=(
+        --kernel-name-base demangled
+        --kernel-name "regex:${NCU_KERNEL_REGEX}"
     )
 
-    if [ -n "${NCU_KERNEL_REGEX}" ]; then
-        ncu_args+=(
-            --kernel-name-base demangled
-            --kernel-name "regex:${NCU_KERNEL_REGEX}"
-        )
+    echo "[INFO] Kernel filter: regex:${NCU_KERNEL_REGEX}"
+else
+    echo "[WARN] NCU_KERNEL_REGEX is empty."
+    echo "[WARN] Nsight Compute will profile the first ${NCU_LAUNCH_COUNT} kernel launches."
+    echo "[WARN] Use this exploratory pass to find kernel names, then re-run with a regex."
+fi
 
-        echo "[INFO] Kernel filter: regex:${NCU_KERNEL_REGEX}"
-    else
-        echo "[WARN] NCU_KERNEL_REGEX is empty."
-        echo "[WARN] Nsight Compute will profile the first matching launches."
-        echo "[WARN] These may be initialization or boundary kernels."
-        echo "[WARN] Run nsys first and use a hotspot kernel name."
-    fi
+if [ "${NCU_SET}" = "full" ]; then
+    echo "[WARN] Using the full Nsight Compute section set."
+    echo "[WARN] This can require many kernel replays."
 
-    if [ "${NCU_SET}" = "full" ]; then
-        echo "[WARN] Using the full Nsight Compute section set."
-        echo "[WARN] This can require many kernel replays."
+    NCU_ARGS+=(--set full)
+else
+    echo "[INFO] Selecting targeted Nsight Compute sections."
 
-        ncu_args+=(--set full)
-    else
-        echo "[INFO] Selecting targeted Nsight Compute sections."
+    # Discover sections supported by the installed version.
+    AVAILABLE_SECTIONS="$(ncu --list-sections 2>&1 || true)"
 
-        # Discover sections supported by the installed version.
-        local available_sections
-        available_sections="$(ncu --list-sections 2>&1 || true)"
+    REQUESTED_SECTIONS=(
+        LaunchStats
+        Occupancy
+        SpeedOfLight
+        SpeedOfLight_RooflineChart
+        ComputeWorkloadAnalysis
+        MemoryWorkloadAnalysis
+        MemoryWorkloadAnalysis_Chart
+        SchedulerStats
+        WarpStateStats
+        InstructionStats
+        SourceCounters
+    )
 
-        local requested_sections=(
-            LaunchStats
-            Occupancy
-            SpeedOfLight
-            SpeedOfLight_RooflineChart
-            ComputeWorkloadAnalysis
-            MemoryWorkloadAnalysis
-            MemoryWorkloadAnalysis_Chart
-            SchedulerStats
-            WarpStateStats
-            InstructionStats
-            SourceCounters
-        )
+    SELECTED_COUNT=0
 
-        local selected_count=0
-        local section
-
-        for section in "${requested_sections[@]}"; do
-            if grep -q "${section}" <<< "${available_sections}"; then
-                ncu_args+=(--section "${section}")
-                echo "[INFO] Enabled section: ${section}"
-                selected_count=$((selected_count + 1))
-            else
-                echo "[INFO] Section unavailable in installed version: ${section}"
-            fi
-        done
-
-        if [ "${selected_count}" -eq 0 ]; then
-            echo "[WARN] Could not identify targeted sections."
-            echo "[WARN] Falling back to Nsight Compute basic set."
-            ncu_args+=(--set basic)
+    for SECTION in "${REQUESTED_SECTIONS[@]}"; do
+        if grep -q "${SECTION}" <<< "${AVAILABLE_SECTIONS}"; then
+            NCU_ARGS+=(--section "${SECTION}")
+            echo "[INFO] Enabled section: ${SECTION}"
+            SELECTED_COUNT=$((SELECTED_COUNT + 1))
+        else
+            echo "[INFO] Section unavailable in installed version: ${SECTION}"
         fi
+    done
+
+    if [ "${SELECTED_COUNT}" -eq 0 ]; then
+        echo "[WARN] Could not identify targeted sections."
+        echo "[WARN] Falling back to Nsight Compute basic set."
+        NCU_ARGS+=(--set basic)
     fi
+fi
 
-    printf "[INFO] Command: ncu"
-    printf " %q" "${ncu_args[@]}"
-    printf " "
-    printf "%q " "${APP[@]}"
-    printf "\n"
+printf "[INFO] Command: ncu"
+printf " %q" "${NCU_ARGS[@]}"
+printf " "
+printf "%q " "${APP[@]}"
+printf "\n"
 
-    set +e
-    /usr/bin/time \
-        -f "[PROFILE_TIME] real_seconds=%e
+set +e
+/usr/bin/time \
+    -f "[PROFILE_TIME] real_seconds=%e
 [PROFILE_TIME] user_seconds=%U
 [PROFILE_TIME] sys_seconds=%S
 [PROFILE_TIME] max_rss_kb=%M" \
-        ncu "${ncu_args[@]}" "${APP[@]}" \
-        2>&1 | tee "${console_log}"
+    ncu "${NCU_ARGS[@]}" "${APP[@]}" \
+    2>&1 | tee "${CONSOLE_LOG}"
 
-    local status=${PIPESTATUS[0]}
-    set -e
+STATUS=${PIPESTATUS[0]}
+set -e
 
-    if [ "${status}" -ne 0 ]; then
-        echo "[ERROR] Nsight Compute failed with status ${status}."
-        echo "[ERROR] See ${console_log}."
-        echo ""
-        echo "Common cluster-side causes include:"
-        echo "  - GPU performance-counter permission is disabled;"
-        echo "  - another profiler is using the performance monitor;"
-        echo "  - the kernel regex matched no kernel;"
-        echo "  - too many launches or sections were selected."
-        return "${status}"
-    fi
-
-    if [ ! -f "${report}" ]; then
-        echo "[ERROR] Expected report not found: ${report}"
-        return 1
-    fi
-
+if [ "${STATUS}" -ne 0 ]; then
+    echo "[ERROR] Nsight Compute failed with status ${STATUS}."
+    echo "[ERROR] See ${CONSOLE_LOG}."
     echo ""
-    echo "[INFO] Nsight Compute report: ${report}"
+    echo "Common cluster-side causes include:"
+    echo "  - GPU performance-counter permission is disabled;"
+    echo "  - another profiler is using the performance monitor;"
+    echo "  - the kernel regex matched no kernel;"
+    echo "  - too many launches or sections were selected."
+    exit "${STATUS}"
+fi
 
-    # Section-oriented output with rule results.
-    ncu \
-        --import "${report}" \
-        --page details \
-        --csv \
-        > "${base}_details.csv" 2>&1 || true
+if [ ! -f "${REPORT}" ]; then
+    echo "[ERROR] Expected report not found: ${REPORT}"
+    exit 1
+fi
 
-    # All raw collected metrics.
-    ncu \
-        --import "${report}" \
-        --page raw \
-        --csv \
-        > "${base}_raw.csv" 2>&1 || true
+echo ""
+echo "[INFO] Nsight Compute report: ${REPORT}"
 
-    # Per-kernel summary.
-    ncu \
-        --import "${report}" \
-        --page details \
-        --print-summary per-kernel \
-        > "${base}_summary.txt" 2>&1 || true
+# Section-oriented output with rule results.
+ncu \
+    --import "${REPORT}" \
+    --page details \
+    --csv \
+    > "${BASE}_details.csv" 2>&1 || true
 
-    echo ""
-    echo "[INFO] Generated:"
-    echo "  ${report}"
-    echo "  ${base}_details.csv"
-    echo "  ${base}_raw.csv"
-    echo "  ${base}_summary.txt"
-}
+# All raw collected metrics.
+ncu \
+    --import "${REPORT}" \
+    --page raw \
+    --csv \
+    > "${BASE}_raw.csv" 2>&1 || true
 
-# ------------------------------------------------------------
-# Execute requested profiling mode
-# ------------------------------------------------------------
+# Per-kernel summary.
+ncu \
+    --import "${REPORT}" \
+    --page details \
+    --print-summary per-kernel \
+    > "${BASE}_summary.txt" 2>&1 || true
 
-case "${PROFILE_MODE}" in
-    nsys)
-        run_nsys_profile
-        ;;
-
-    ncu)
-        run_ncu_profile
-        ;;
-
-    both)
-        run_nsys_profile
-        run_ncu_profile
-        ;;
-esac
+echo ""
+echo "[INFO] Generated:"
+echo "  ${REPORT}"
+echo "  ${BASE}_details.csv"
+echo "  ${BASE}_raw.csv"
+echo "  ${BASE}_summary.txt"
 
 # ------------------------------------------------------------
 # Final GPU state
@@ -644,4 +477,4 @@ echo ""
 echo "===== PROFILE COMPLETE ====="
 echo "End time           : $(date --iso-8601=seconds)"
 echo "Profile directory  : ${PROFILE_DIR}"
-echo "Metadata            : ${METADATA_FILE}"
+echo "Metadata           : ${METADATA_FILE}"
