@@ -1,0 +1,25 @@
+Branch: occupancy-variant-c (based on main)
+
+Three changes made in src/gpu/solver_gpu.cu, combining the block-shape
+reduction from variant-b with the launch_bounds hint from variant-a,
+re-tuned for the new block size:
+
+1. advance_gpu() block shape (line 531):
+   const int bx = 16, by = 16;   ->   const int bx = 16, by = 8;
+   (bx unchanged; only by reduced. x_smem/y_smem, grid/blocks dims, and
+   cudaFuncSetAttribute calls are left as formulas — they recompute from
+   bx/by at runtime, not hand-edited.)
+
+2. advance_x_kernel signature (line 236):
+   __global__ void advance_x_kernel(
+   ->
+   __global__ __launch_bounds__(128, 4) void advance_x_kernel(
+   (128 = bx*by = 16*8, matching the new block's thread count; 4 = desired
+   min blocks/SM for this variant.)
+
+3. advance_y_kernel signature (line 343): same change as #2.
+
+Not touched: kernel bodies, Riemann solver, reconstruct_cell_muscl_hancock,
+is_physical/enforce_physical_*, Makefile, and all other .cu/.cpp/.hpp files.
+
+No compilation, profiling, or correctness testing was performed, per instructions.

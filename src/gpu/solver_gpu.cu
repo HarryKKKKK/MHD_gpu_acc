@@ -233,7 +233,7 @@ __global__ void apply_psi_damping_kernel(Grid2DGPUView grid, double factor) {
     grid.psi[idx] *= factor;
 }
 
-__global__ void advance_x_kernel(
+__global__ __launch_bounds__(128, 4) void advance_x_kernel(
     ConstGrid2DGPUView Uin,
     Grid2DGPUView      Uout,
     double             dt,
@@ -340,7 +340,7 @@ __global__ void advance_x_kernel(
            enforce_physical_conserved(Unew_c, Uc));
 }
 
-__global__ void advance_y_kernel(
+__global__ __launch_bounds__(128, 4) void advance_y_kernel(
     ConstGrid2DGPUView Uin,
     Grid2DGPUView      Uout,
     double             dt,
@@ -528,7 +528,7 @@ void advance_gpu(
     if (ws.nx != Uold.nx() || ws.ny != Uold.ny() || !ws.speed_d)
         throw std::runtime_error("advance_gpu: workspace not initialised.");
 
-    const int bx = 16, by = 16;
+    const int bx = 16, by = 8;
     const dim3 threads(bx, by);
     const dim3 blocks(
         (Uold.nx() + bx - 1) / bx,
