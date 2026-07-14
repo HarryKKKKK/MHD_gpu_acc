@@ -36,9 +36,16 @@ def load_csv(path: Path) -> np.ndarray:
 
 
 def find_csv_files(root: Path) -> dict[str, Path]:
-    """Return {relative_path_str: absolute_path} for every .csv under root."""
+    """Return {relative_path_str: absolute_path} for every field-output .csv under root.
+
+    Excludes comparison_report*.csv: those are compare_multi_arch.py's own
+    summary tables (headered, non-numeric), not per-field grids, so they
+    can never be diffed the same way.
+    """
     result = {}
     for p in sorted(root.rglob("*.csv")):
+        if p.name.startswith("comparison_report"):
+            continue
         rel = str(p.relative_to(root))
         result[rel] = p
     return result
@@ -156,6 +163,7 @@ def main():
         except Exception as e:
             print(f"  [ERROR] could not load '{rel}': {e}")
             n_fail += 1
+            any_fail = True
             continue
 
         stats = diff_stats(a, b)
