@@ -1,0 +1,3 @@
+run,case,solver,n,real_seconds,user_seconds,sys_seconds,max_rss_kb,output_dir,git_branch,git_commit
+1,orszag_tang,hlld,8,187.89,181.55,5.34,631588,/rds/user/hk597/hpc-work/MHD_gpu_acc/outputs/31495993_orszag_tang_hlld_n8/run1,fix_wrap,2fd8705
+2,orszag_tang,hlld,8,187.96,181.65,5.28,627760,/rds/user/hk597/hpc-work/MHD_gpu_acc/outputs/31495993_orszag_tang_hlld_n8/run2,fix_wrap,2fd8705
