@@ -620,14 +620,15 @@ double compute_dt_mpi(const Grid2D& grid, double cfl, MPI_Comm comm) {
 // Second-order MUSCL-Hancock, x-then-y dimensional splitting (MPI).
 //
 // Steps (identical to advance_cpu() in solver_cpu.cpp, except
-// steps 3 and 6 use MPI halo exchange in place of apply_boundary()):
+// steps 3 and 7 use directional MPI halo exchange in place of the matching
+// single-domain boundary refresh):
 //   1. Fill x-face cache from Uold
 //   2. x-update: Uold -> Utmp (interior only)
-//   3. Halo exchange on Utmp
+//   3. y-halo exchange on Utmp
 //   4. Fill y-face cache from Utmp
 //   5. y-update: Utmp -> Unew (interior only)
-//   6. Halo exchange on Unew
-//   7. Mixed-GLM psi damping on Unew
+//   6. Mixed-GLM psi damping on Unew
+//   7. x-halo exchange on Unew for the next timestep
 // ============================================================
 
 void advance_mpi(
@@ -698,8 +699,8 @@ void advance_mpi(
         }
     }
 
-    // Step 3: refresh Utmp's ghost cells (halo exchange + local physical BC)
-    exchange_halo_full(Utmp, dom, bc);
+    // Step 3: the y sweep only needs bottom/top halo rows of Utmp.
+    exchange_halo_y(Utmp, dom, bc);
 
     // ----------------------------------------------------------
     // Steps 4-5: y-sweep  (Utmp -> Unew)
@@ -735,15 +736,10 @@ void advance_mpi(
         }
     }
 
-    // Step 6: refresh Unew's ghost cells (halo exchange + local physical BC)
-    exchange_halo_full(Unew, dom, bc);
-
-    // Step 7: Mixed-GLM psi damping (Dedner eq. 45)
+    // Step 6: Mixed-GLM psi damping (Dedner eq. 45)
     apply_psi_damping(Unew, dt);
 
-    // Step 8: refresh ghost/halo cells again so they reflect the damped
-    // psi values (otherwise ghosts carry stale, pre-damping psi until the
-    // next step's exchange, causing rank-dependent inconsistencies at
-    // subdomain boundaries).
-    exchange_halo_full(Unew, dom, bc);
+    // Step 7: the next timestep starts with an x sweep.  Refresh only the
+    // left/right halo columns, after damping, so halo psi is current.
+    exchange_halo_x(Unew, dom, bc);
 }

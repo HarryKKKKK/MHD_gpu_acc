@@ -219,17 +219,16 @@ __global__ void compute_block_max_speed_kernel(
     }
 }
 
-// Covers the FULL domain (interior + ghost cells), not just the interior.
-// Periodic/transmissive ghost cells are exact copies of their source cell
-// before damping (ghost == source); multiplying every cell — ghost and
-// source alike — by the same `factor` preserves that equality exactly, so
-// there is no need to re-run apply_boundary_gpu() after this kernel (see
-// advance_gpu below).
+// Damping is applied to the interior only.  The x boundary refresh that
+// follows copies the already-damped psi into the only ghosts needed by the
+// next timestep's x sweep.
 __global__ void apply_psi_damping_kernel(Grid2DGPUView grid, double factor) {
-    const int i = blockIdx.x * blockDim.x + threadIdx.x;
-    const int j = blockIdx.y * blockDim.y + threadIdx.y;
-    if (i >= grid.total_nx() || j >= grid.total_ny()) return;
-    const int idx = grid.flat_index(i, j);
+    const int local_i = blockIdx.x * blockDim.x + threadIdx.x;
+    const int local_j = blockIdx.y * blockDim.y + threadIdx.y;
+    if (local_i >= grid.nx || local_j >= grid.ny) return;
+    const int idx = grid.flat_index(
+        grid.i_begin() + local_i,
+        grid.j_begin() + local_j);
     grid.psi[idx] *= factor;
 }
 
@@ -573,13 +572,13 @@ void advance_gpu(
         make_view(static_cast<const Grid2DGPU&>(Uold)),
         make_view(Utmp), dt, solver);
     CUDA_CHECK(cudaGetLastError());
-    apply_boundary_gpu(Utmp, bc);
+    // The y sweep only reads bottom/top ghosts of Utmp.
+    apply_boundary_y_gpu(Utmp, bc);
 
     advance_y_kernel<<<blocks, threads, y_smem>>>(
         make_view(static_cast<const Grid2DGPU&>(Utmp)),
         make_view(Unew), dt, solver);
     CUDA_CHECK(cudaGetLastError());
-    apply_boundary_gpu(Unew, bc);
 
     // ch was already computed as `max_speed` by compute_dt_gpu() this same
     // step and pushed to both phys::d_ch_glm (device) and phys::ch_glm
@@ -597,14 +596,15 @@ void advance_gpu(
     const double l_d = phys::cr_glm;
     if (ch > 0.0 && l_d > 0.0) {
         const double factor = std::exp(-dt * ch / l_d);
-        // Full-domain launch (ghost cells included) — see comment on
-        // apply_psi_damping_kernel for why this makes the boundary refresh
-        // that used to follow this call unnecessary.
         const dim3 psi_blocks(
-            (Uold.total_nx() + bx - 1) / bx,
-            (Uold.total_ny() + by - 1) / by
+            (Uold.nx() + bx - 1) / bx,
+            (Uold.ny() + by - 1) / by
         );
         apply_psi_damping_kernel<<<psi_blocks, threads>>>(make_view(Unew), factor);
         CUDA_CHECK(cudaGetLastError());
     }
+
+    // The next timestep starts with an x sweep.  Refresh only left/right
+    // ghosts, after damping, so ghost psi matches its source cell.
+    apply_boundary_x_gpu(Unew, bc);
 }

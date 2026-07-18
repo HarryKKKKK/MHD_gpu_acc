@@ -121,24 +121,29 @@ __global__ void apply_bt_bc_kernel(
 }
 
 // ============================================================
-// Host-side dispatcher
+// Host-side directional dispatchers
 // ============================================================
-void apply_boundary_gpu(Grid2DGPU& grid, const BoundaryConfig& bc) {
+void apply_boundary_x_gpu(Grid2DGPU& grid, const BoundaryConfig& bc) {
     Grid2DGPUView view = make_view(grid);
 
     // Left / right — one thread per row (total_ny rows)
-    {
-        const int threads = 256;
-        const int blocks  = (grid.total_ny() + threads - 1) / threads;
-        apply_lr_bc_kernel<<<blocks, threads>>>(
-            view, bc.left, bc.right);
-    }
+    const int threads = 256;
+    const int blocks  = (grid.total_ny() + threads - 1) / threads;
+    apply_lr_bc_kernel<<<blocks, threads>>>(
+        view, bc.left, bc.right);
+}
+
+void apply_boundary_y_gpu(Grid2DGPU& grid, const BoundaryConfig& bc) {
+    Grid2DGPUView view = make_view(grid);
 
     // Bottom / top — one thread per column (total_nx columns)
-    {
-        const int threads = 256;
-        const int blocks  = (grid.total_nx() + threads - 1) / threads;
-        apply_bt_bc_kernel<<<blocks, threads>>>(
-            view, bc.bottom, bc.top);
-    }
+    const int threads = 256;
+    const int blocks  = (grid.total_nx() + threads - 1) / threads;
+    apply_bt_bc_kernel<<<blocks, threads>>>(
+        view, bc.bottom, bc.top);
+}
+
+void apply_boundary_gpu(Grid2DGPU& grid, const BoundaryConfig& bc) {
+    apply_boundary_x_gpu(grid, bc);
+    apply_boundary_y_gpu(grid, bc);
 }

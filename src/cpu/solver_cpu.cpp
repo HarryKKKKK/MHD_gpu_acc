@@ -341,7 +341,8 @@ void advance_cpu(
         }
     }
 
-    apply_boundary(Utmp, bc);
+    // The y sweep only reads bottom/top ghosts of Utmp.
+    apply_boundary_y(Utmp, bc);
 
 #ifdef _OPENMP
 #pragma omp parallel for collapse(2) schedule(static)
@@ -373,10 +374,10 @@ void advance_cpu(
         }
     }
 
-    apply_boundary(Unew, bc);
-
     apply_psi_damping(Unew, dt);
-    apply_boundary(Unew, bc);
+    // The next timestep starts with an x sweep, so only left/right ghosts
+    // are required.  Refresh them after damping so ghost psi is current.
+    apply_boundary_x(Unew, bc);
 }
 
 void advance_cpu(

@@ -3,8 +3,12 @@
 #include "gpu/grid_gpu.cuh"
 #include "test_cases.hpp"   // BoundaryConfig, BoundaryType
 
-// Apply all four boundary conditions (left/right/bottom/top) to a GPU grid.
+// Directional boundary refreshes used by the dimensionally split solver.
 // Handles Periodic and Transmissive types. All 9 GLM-MHD fields are updated.
+void apply_boundary_x_gpu(Grid2DGPU& grid, const BoundaryConfig& bc);
+void apply_boundary_y_gpu(Grid2DGPU& grid, const BoundaryConfig& bc);
+
+// Full refresh retained for initialisation and non-split callers.
 void apply_boundary_gpu(Grid2DGPU& grid, const BoundaryConfig& bc);
 
 // Convenience wrapper: transmissive on all four sides.
