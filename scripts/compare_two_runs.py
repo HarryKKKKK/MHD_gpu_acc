@@ -9,7 +9,7 @@ Examples:
 
     python3 scripts/compare_two_runs.py \
     outputs/31461372_orszag_tang_hlld_n8/run1 \
-    outputs/<new_job_id>_orszag_tang_hlld_n8/run1 \
+    outputs/31463669_orszag_tang_hlld_n8/run1 \
     --atol 0 \
     --rtol 0 \
     --verbose
