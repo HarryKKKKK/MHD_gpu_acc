@@ -20,8 +20,6 @@ values outside ``atol + rtol * abs(run_a)`` fail the comparison.  Only the
 Python standard library is required.
 """
 
-from __future__ import annotations
-
 import argparse
 import csv
 import math
@@ -29,8 +27,8 @@ import sys
 from pathlib import Path
 
 
-def load_field(path: Path) -> list[list[float]]:
-    rows: list[list[float]] = []
+def load_field(path):
+    rows = []
     with path.open(newline="") as handle:
         for row in csv.reader(handle):
             if row:
@@ -39,11 +37,11 @@ def load_field(path: Path) -> list[list[float]]:
 
 
 def compare_field(
-    reference: list[list[float]],
-    candidate: list[list[float]],
-    atol: float,
-    rtol: float,
-) -> dict[str, object]:
+    reference,
+    candidate,
+    atol,
+    rtol,
+):
     if len(reference) != len(candidate):
         return {"passed": False, "error": "row-count mismatch"}
 
@@ -96,14 +94,14 @@ def compare_field(
     }
 
 
-def collect_csvs(root: Path) -> dict[str, Path]:
+def collect_csvs(root):
     return {
         path.relative_to(root).as_posix(): path
         for path in sorted(root.rglob("*.csv"))
     }
 
 
-def default_report_path(run_a: Path, run_b: Path) -> Path:
+def default_report_path(run_a, run_b):
     if run_a.parent == run_b.parent:
         parent = run_a.parent
     else:
@@ -111,7 +109,7 @@ def default_report_path(run_a: Path, run_b: Path) -> Path:
     return parent / f"comparison_{run_a.name}_vs_{run_b.name}.csv"
 
 
-def main() -> int:
+def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("run_a", type=Path, help="reference/baseline run directory")
     parser.add_argument("run_b", type=Path, help="candidate/new run directory")
@@ -151,7 +149,7 @@ def main() -> int:
     report_path.parent.mkdir(parents=True, exist_ok=True)
 
     overall_pass = bool(common) and not only_a and not only_b
-    report_rows: list[list[object]] = []
+    report_rows = []
 
     print("=" * 116)
     print("MHD two-run field comparison")
