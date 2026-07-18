@@ -20,25 +20,35 @@ constexpr double kRhoFloor   = 1.0e-12;
 constexpr double kPFloor     = 1.0e-12;
 constexpr int    kDtBlockSize = 256;
 
-// advance_x/y always launch a 16x8 (128-thread) tile.  The HLLD kernels
-// currently use 255 registers/thread, which limits an A100 SM to two resident
-// blocks.  Ask ptxas to target three blocks/SM for this controlled occupancy
-// experiment.  Defining MHD_ADVANCE_MIN_BLOCKS_PER_SM=0 restores the baseline
-// kernel attributes without maintaining a second source file.
+// advance_x/y always launch a 16x8 (128-thread) tile.  Profiling showed that
+// targeting three resident blocks/SM is beneficial for advance_x, but the
+// resulting register spills make advance_y slightly slower.  Keep independent
+// compile-time controls so each direction can use its measured best setting.
 constexpr int kAdvanceBlockX = 16;
 constexpr int kAdvanceBlockY = 8;
 constexpr int kAdvanceThreadsPerBlock = kAdvanceBlockX * kAdvanceBlockY;
 static_assert(kAdvanceThreadsPerBlock == 128, "launch-bounds experiment assumes 128 threads/block");
 
-#ifndef MHD_ADVANCE_MIN_BLOCKS_PER_SM
-#define MHD_ADVANCE_MIN_BLOCKS_PER_SM 3
+#ifndef MHD_ADVANCE_X_MIN_BLOCKS_PER_SM
+#define MHD_ADVANCE_X_MIN_BLOCKS_PER_SM 3
 #endif
 
-#if MHD_ADVANCE_MIN_BLOCKS_PER_SM > 0
-#define MHD_ADVANCE_LAUNCH_BOUNDS \
-    __launch_bounds__(kAdvanceThreadsPerBlock, MHD_ADVANCE_MIN_BLOCKS_PER_SM)
+#ifndef MHD_ADVANCE_Y_MIN_BLOCKS_PER_SM
+#define MHD_ADVANCE_Y_MIN_BLOCKS_PER_SM 0
+#endif
+
+#if MHD_ADVANCE_X_MIN_BLOCKS_PER_SM > 0
+#define MHD_ADVANCE_X_LAUNCH_BOUNDS \
+    __launch_bounds__(kAdvanceThreadsPerBlock, MHD_ADVANCE_X_MIN_BLOCKS_PER_SM)
 #else
-#define MHD_ADVANCE_LAUNCH_BOUNDS
+#define MHD_ADVANCE_X_LAUNCH_BOUNDS
+#endif
+
+#if MHD_ADVANCE_Y_MIN_BLOCKS_PER_SM > 0
+#define MHD_ADVANCE_Y_LAUNCH_BOUNDS \
+    __launch_bounds__(kAdvanceThreadsPerBlock, MHD_ADVANCE_Y_MIN_BLOCKS_PER_SM)
+#else
+#define MHD_ADVANCE_Y_LAUNCH_BOUNDS
 #endif
 
 constexpr int PAD_X = 1;
@@ -253,7 +263,7 @@ __global__ void apply_psi_damping_kernel(Grid2DGPUView grid, double factor) {
     grid.psi[idx] *= factor;
 }
 
-__global__ void MHD_ADVANCE_LAUNCH_BOUNDS advance_x_kernel(
+__global__ void MHD_ADVANCE_X_LAUNCH_BOUNDS advance_x_kernel(
     ConstGrid2DGPUView Uin,
     Grid2DGPUView      Uout,
     double             dt,
@@ -360,7 +370,7 @@ __global__ void MHD_ADVANCE_LAUNCH_BOUNDS advance_x_kernel(
            enforce_physical_conserved(Unew_c, Uc));
 }
 
-__global__ void MHD_ADVANCE_LAUNCH_BOUNDS advance_y_kernel(
+__global__ void MHD_ADVANCE_Y_LAUNCH_BOUNDS advance_y_kernel(
     ConstGrid2DGPUView Uin,
     Grid2DGPUView      Uout,
     double             dt,

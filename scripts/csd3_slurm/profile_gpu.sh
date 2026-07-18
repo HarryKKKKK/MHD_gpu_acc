@@ -48,7 +48,8 @@
 #   NCU_SET=full ...        # full section set instead of targeted (slow)
 #   NCU_LAUNCH_SKIP=20 ...  # skip past startup/warm-up launches
 #   PROFILE_NVCC_FLAGS=...  # override profiling compile flags
-#   ADVANCE_MIN_BLOCKS_PER_SM=0  # rebuild the no-launch-bounds baseline
+#   ADVANCE_X_MIN_BLOCKS_PER_SM=0  # disable x launch bounds
+#   ADVANCE_Y_MIN_BLOCKS_PER_SM=3  # enable the tested y launch bounds
 #   MAKE_CLEAN=0 ...        # reuse objects (not recommended for comparisons)
 # ============================================================
 
@@ -83,7 +84,8 @@ NCU_SET="${NCU_SET:-targeted}"
 # make cannot otherwise tell that command-line NVCC flags changed between the
 # baseline and an experimental build.
 PROFILE_NVCC_FLAGS="${PROFILE_NVCC_FLAGS:--lineinfo -Xptxas=-v}"
-ADVANCE_MIN_BLOCKS_PER_SM="${ADVANCE_MIN_BLOCKS_PER_SM:-3}"
+ADVANCE_X_MIN_BLOCKS_PER_SM="${ADVANCE_X_MIN_BLOCKS_PER_SM:-3}"
+ADVANCE_Y_MIN_BLOCKS_PER_SM="${ADVANCE_Y_MIN_BLOCKS_PER_SM:-0}"
 MAKE_CLEAN="${MAKE_CLEAN:-1}"
 
 SLURM_JOB_ID="${SLURM_JOB_ID:-manual}"
@@ -116,8 +118,13 @@ if ! [[ "${NCU_LAUNCH_COUNT}" =~ ^[1-9][0-9]*$ ]]; then
     exit 2
 fi
 
-if ! [[ "${ADVANCE_MIN_BLOCKS_PER_SM}" =~ ^[0-9]+$ ]]; then
-    echo "[ERROR] ADVANCE_MIN_BLOCKS_PER_SM must be a non-negative integer."
+if ! [[ "${ADVANCE_X_MIN_BLOCKS_PER_SM}" =~ ^[0-9]+$ ]]; then
+    echo "[ERROR] ADVANCE_X_MIN_BLOCKS_PER_SM must be a non-negative integer."
+    exit 2
+fi
+
+if ! [[ "${ADVANCE_Y_MIN_BLOCKS_PER_SM}" =~ ^[0-9]+$ ]]; then
+    echo "[ERROR] ADVANCE_Y_MIN_BLOCKS_PER_SM must be a non-negative integer."
     exit 2
 fi
 
@@ -195,7 +202,8 @@ echo "NCU_LAUNCH_SKIP    : ${NCU_LAUNCH_SKIP}"
 echo "NCU_LAUNCH_COUNT   : ${NCU_LAUNCH_COUNT}"
 echo "NCU_SET            : ${NCU_SET}"
 echo "PROFILE_NVCC_FLAGS : ${PROFILE_NVCC_FLAGS}"
-echo "ADVANCE_MIN_BLOCKS : ${ADVANCE_MIN_BLOCKS_PER_SM}"
+echo "ADVANCE_X_MIN_BLOCKS: ${ADVANCE_X_MIN_BLOCKS_PER_SM}"
+echo "ADVANCE_Y_MIN_BLOCKS: ${ADVANCE_Y_MIN_BLOCKS_PER_SM}"
 echo "MAKE_CLEAN         : ${MAKE_CLEAN}"
 echo ""
 
@@ -227,7 +235,8 @@ METADATA_FILE="${PROFILE_DIR}/metadata.txt"
     echo "NCU_LAUNCH_COUNT=${NCU_LAUNCH_COUNT}"
     echo "NCU_SET=${NCU_SET}"
     echo "PROFILE_NVCC_FLAGS=${PROFILE_NVCC_FLAGS}"
-    echo "ADVANCE_MIN_BLOCKS_PER_SM=${ADVANCE_MIN_BLOCKS_PER_SM}"
+    echo "ADVANCE_X_MIN_BLOCKS_PER_SM=${ADVANCE_X_MIN_BLOCKS_PER_SM}"
+    echo "ADVANCE_Y_MIN_BLOCKS_PER_SM=${ADVANCE_Y_MIN_BLOCKS_PER_SM}"
     echo "MAKE_CLEAN=${MAKE_CLEAN}"
 
     echo ""
@@ -277,7 +286,9 @@ echo ""
 echo "===== BUILD ====="
 
 BUILD_LOG="${PROFILE_DIR}/build.log"
-BUILD_NVCC_FLAGS="${PROFILE_NVCC_FLAGS} -DMHD_ADVANCE_MIN_BLOCKS_PER_SM=${ADVANCE_MIN_BLOCKS_PER_SM}"
+BUILD_NVCC_FLAGS="${PROFILE_NVCC_FLAGS}"
+BUILD_NVCC_FLAGS+=" -DMHD_ADVANCE_X_MIN_BLOCKS_PER_SM=${ADVANCE_X_MIN_BLOCKS_PER_SM}"
+BUILD_NVCC_FLAGS+=" -DMHD_ADVANCE_Y_MIN_BLOCKS_PER_SM=${ADVANCE_Y_MIN_BLOCKS_PER_SM}"
 
 set +e
 {
