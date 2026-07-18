@@ -250,19 +250,6 @@ __global__ void compute_block_max_speed_kernel(
     }
 }
 
-// Damping is applied to the interior only.  The x boundary refresh that
-// follows copies the already-damped psi into the only ghosts needed by the
-// next timestep's x sweep.
-__global__ void apply_psi_damping_kernel(Grid2DGPUView grid, double factor) {
-    const int local_i = blockIdx.x * blockDim.x + threadIdx.x;
-    const int local_j = blockIdx.y * blockDim.y + threadIdx.y;
-    if (local_i >= grid.nx || local_j >= grid.ny) return;
-    const int idx = grid.flat_index(
-        grid.i_begin() + local_i,
-        grid.j_begin() + local_j);
-    grid.psi[idx] *= factor;
-}
-
 __global__ void MHD_ADVANCE_X_LAUNCH_BOUNDS advance_x_kernel(
     ConstGrid2DGPUView Uin,
     Grid2DGPUView      Uout,
@@ -374,6 +361,7 @@ __global__ void MHD_ADVANCE_Y_LAUNCH_BOUNDS advance_y_kernel(
     ConstGrid2DGPUView Uin,
     Grid2DGPUView      Uout,
     double             dt,
+    double             psi_damping_factor,
     RiemannSolver      solver
 ) {
     const int local_i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -472,11 +460,18 @@ __global__ void MHD_ADVANCE_Y_LAUNCH_BOUNDS advance_y_kernel(
     const int sc  = (threadIdx.y + 2) * sw + si;
     const Conserved Uc     = S.load(sc);
     const Conserved Unew_c = Uc - dt_dy * (F.load(fp) - F.load(fm));
+    Conserved Unew_physical = enforce_physical_conserved(Unew_c, Uc);
+
+    // The previous implementation applied the same multiplication in a
+    // separate full-grid kernel after advance_y.  Performing it after the
+    // physical-state fallback preserves the numerical order while removing
+    // that kernel launch and the extra read/write of Unew.psi.
+    Unew_physical.psi *= psi_damping_factor;
 
     gstore(Uout,
            Uin.i_begin() + local_i,
            Uin.j_begin() + local_j,
-           enforce_physical_conserved(Unew_c, Uc));
+           Unew_physical);
 }
 
 } // anonymous namespace
@@ -606,34 +601,21 @@ void advance_gpu(
     // The y sweep only reads bottom/top ghosts of Utmp.
     apply_boundary_y_gpu(Utmp, bc);
 
-    advance_y_kernel<<<blocks, threads, y_smem>>>(
-        make_view(static_cast<const Grid2DGPU&>(Utmp)),
-        make_view(Unew), dt, solver);
-    CUDA_CHECK(cudaGetLastError());
-
     // ch was already computed as `max_speed` by compute_dt_gpu() this same
     // step and pushed to both phys::d_ch_glm (device) and phys::ch_glm
-    // (host) via set_gpu_physics_ch(). Reading the host copy back here
-    // avoids a synchronous device->host round trip that just re-fetches a
-    // value the host already has.
-    const double ch = phys::get_ch_glm();
-    // Dedner et al. (2002): c_r := c_p^2/c_h ~= 0.18 gave optimal results
-    // "regardless of the grid resolution" (also confirmed by Bard & Dorelli
-    // 2014, JCP 259, who use the same fixed value in all simulations).
-    // l_d is therefore used directly as this fixed length, not scaled by dx/dy.
-    // Read from phys::cr_glm (host global, same source of truth as
-    // apply_psi_damping() in solver_cpu.cpp/solver_mpi.cpp) instead of a
-    // separately hardcoded value that could silently drift out of sync.
+    // (host) via set_gpu_physics_ch().  Dedner damping uses the same fixed
+    // c_r = c_p^2/c_h value as the CPU/MPI paths; it is deliberately not
+    // scaled by dx or dy.  Computing this while the boundary launch is queued
+    // avoids adding host work before advance_x.
+    const double ch  = phys::get_ch_glm();
     const double l_d = phys::cr_glm;
-    if (ch > 0.0 && l_d > 0.0) {
-        const double factor = std::exp(-dt * ch / l_d);
-        const dim3 psi_blocks(
-            (Uold.nx() + bx - 1) / bx,
-            (Uold.ny() + by - 1) / by
-        );
-        apply_psi_damping_kernel<<<psi_blocks, threads>>>(make_view(Unew), factor);
-        CUDA_CHECK(cudaGetLastError());
-    }
+    const double psi_damping_factor =
+        (ch > 0.0 && l_d > 0.0) ? std::exp(-dt * ch / l_d) : 1.0;
+
+    advance_y_kernel<<<blocks, threads, y_smem>>>(
+        make_view(static_cast<const Grid2DGPU&>(Utmp)),
+        make_view(Unew), dt, psi_damping_factor, solver);
+    CUDA_CHECK(cudaGetLastError());
 
     // The next timestep starts with an x sweep.  Refresh only left/right
     // ghosts, after damping, so ghost psi matches its source cell.
