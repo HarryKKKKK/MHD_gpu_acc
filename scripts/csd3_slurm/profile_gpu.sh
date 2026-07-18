@@ -47,6 +47,9 @@
 #
 #   NCU_SET=full ...        # full section set instead of targeted (slow)
 #   NCU_LAUNCH_SKIP=20 ...  # skip past startup/warm-up launches
+#   PROFILE_NVCC_FLAGS=...  # override profiling compile flags
+#   ADVANCE_MIN_BLOCKS_PER_SM=0  # rebuild the no-launch-bounds baseline
+#   MAKE_CLEAN=0 ...        # reuse objects (not recommended for comparisons)
 # ============================================================
 
 set -euo pipefail
@@ -75,6 +78,14 @@ NCU_LAUNCH_COUNT="${NCU_LAUNCH_COUNT:-12}"
 # full:     Nsight Compute full section set, much slower
 NCU_SET="${NCU_SET:-targeted}"
 
+# A profiling build needs line information for source correlation and ptxas
+# resource statistics for detecting register spills.  Clean by default because
+# make cannot otherwise tell that command-line NVCC flags changed between the
+# baseline and an experimental build.
+PROFILE_NVCC_FLAGS="${PROFILE_NVCC_FLAGS:--lineinfo -Xptxas=-v}"
+ADVANCE_MIN_BLOCKS_PER_SM="${ADVANCE_MIN_BLOCKS_PER_SM:-3}"
+MAKE_CLEAN="${MAKE_CLEAN:-1}"
+
 SLURM_JOB_ID="${SLURM_JOB_ID:-manual}"
 SLURM_SUBMIT_DIR="${SLURM_SUBMIT_DIR:-$(pwd)}"
 WORKDIR="${SLURM_SUBMIT_DIR}"
@@ -102,6 +113,11 @@ fi
 
 if ! [[ "${NCU_LAUNCH_COUNT}" =~ ^[1-9][0-9]*$ ]]; then
     echo "[ERROR] NCU_LAUNCH_COUNT must be a positive integer."
+    exit 2
+fi
+
+if ! [[ "${ADVANCE_MIN_BLOCKS_PER_SM}" =~ ^[0-9]+$ ]]; then
+    echo "[ERROR] ADVANCE_MIN_BLOCKS_PER_SM must be a non-negative integer."
     exit 2
 fi
 
@@ -178,6 +194,9 @@ echo "NCU_KERNEL_REGEX   : ${NCU_KERNEL_REGEX:-<not set>}"
 echo "NCU_LAUNCH_SKIP    : ${NCU_LAUNCH_SKIP}"
 echo "NCU_LAUNCH_COUNT   : ${NCU_LAUNCH_COUNT}"
 echo "NCU_SET            : ${NCU_SET}"
+echo "PROFILE_NVCC_FLAGS : ${PROFILE_NVCC_FLAGS}"
+echo "ADVANCE_MIN_BLOCKS : ${ADVANCE_MIN_BLOCKS_PER_SM}"
+echo "MAKE_CLEAN         : ${MAKE_CLEAN}"
 echo ""
 
 METADATA_FILE="${PROFILE_DIR}/metadata.txt"
@@ -207,6 +226,9 @@ METADATA_FILE="${PROFILE_DIR}/metadata.txt"
     echo "NCU_LAUNCH_SKIP=${NCU_LAUNCH_SKIP}"
     echo "NCU_LAUNCH_COUNT=${NCU_LAUNCH_COUNT}"
     echo "NCU_SET=${NCU_SET}"
+    echo "PROFILE_NVCC_FLAGS=${PROFILE_NVCC_FLAGS}"
+    echo "ADVANCE_MIN_BLOCKS_PER_SM=${ADVANCE_MIN_BLOCKS_PER_SM}"
+    echo "MAKE_CLEAN=${MAKE_CLEAN}"
 
     echo ""
     echo "===== CPU ====="
@@ -254,11 +276,26 @@ METADATA_FILE="${PROFILE_DIR}/metadata.txt"
 echo ""
 echo "===== BUILD ====="
 
-if [ "${MAKE_CLEAN:-0}" = "1" ]; then
-    make clean
-fi
+BUILD_LOG="${PROFILE_DIR}/build.log"
+BUILD_NVCC_FLAGS="${PROFILE_NVCC_FLAGS} -DMHD_ADVANCE_MIN_BLOCKS_PER_SM=${ADVANCE_MIN_BLOCKS_PER_SM}"
 
-make gpu
+set +e
+{
+    if [ "${MAKE_CLEAN}" = "1" ]; then
+        make clean
+    fi
+
+    make gpu NVCC_EXTRA_FLAGS="${BUILD_NVCC_FLAGS}"
+} 2>&1 | tee "${BUILD_LOG}"
+
+BUILD_STATUS=${PIPESTATUS[0]}
+set -e
+
+if [ "${BUILD_STATUS}" -ne 0 ]; then
+    echo "[ERROR] GPU build failed with status ${BUILD_STATUS}."
+    echo "[ERROR] See ${BUILD_LOG}."
+    exit "${BUILD_STATUS}"
+fi
 
 BIN="./bin/main_gpu"
 
@@ -338,6 +375,16 @@ NCU_ARGS=(
     --launch-count "${NCU_LAUNCH_COUNT}"
     --export "${BASE}"
 )
+
+# Nsight Compute versions differ in whether source embedding is available.
+# Enable it when supported so a copied .ncu-rep remains source-correlated away
+# from the cluster filesystem.
+if ncu --help 2>&1 | grep -q -- "--import-source"; then
+    NCU_ARGS+=(--import-source yes)
+    echo "[INFO] Source files will be embedded in the Nsight Compute report."
+else
+    echo "[INFO] Installed Nsight Compute does not expose --import-source."
+fi
 
 if [ -n "${NCU_KERNEL_REGEX}" ]; then
     NCU_ARGS+=(
@@ -457,6 +504,7 @@ ncu \
 
 echo ""
 echo "[INFO] Generated:"
+echo "  ${BUILD_LOG}"
 echo "  ${REPORT}"
 echo "  ${BASE}_details.csv"
 echo "  ${BASE}_raw.csv"
