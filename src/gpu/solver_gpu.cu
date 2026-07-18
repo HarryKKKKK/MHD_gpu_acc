@@ -263,11 +263,11 @@ __global__ void apply_psi_damping_kernel(Grid2DGPUView grid, double factor) {
     grid.psi[idx] *= factor;
 }
 
+template <RiemannSolver Solver>
 __global__ void MHD_ADVANCE_X_LAUNCH_BOUNDS advance_x_kernel(
     ConstGrid2DGPUView Uin,
     Grid2DGPUView      Uout,
-    double             dt,
-    RiemannSolver      solver
+    double             dt
 ) {
     const int local_i = blockIdx.x * blockDim.x + threadIdx.x;
     const int local_j = blockIdx.y * blockDim.y + threadIdx.y;
@@ -349,7 +349,8 @@ __global__ void MHD_ADVANCE_X_LAUNCH_BOUNDS advance_x_kernel(
             const Conserved UL = R.load(left_idx);
             const Conserved UR = L.load(right_idx);
 
-            F.store(lin, riemann_flux(UL, UR, Direction::X, solver));
+            F.store(lin, riemann_flux_specialized<Solver>(
+                UL, UR, Direction::X));
         }
     }
     __syncthreads();
@@ -370,11 +371,11 @@ __global__ void MHD_ADVANCE_X_LAUNCH_BOUNDS advance_x_kernel(
            enforce_physical_conserved(Unew_c, Uc));
 }
 
+template <RiemannSolver Solver>
 __global__ void MHD_ADVANCE_Y_LAUNCH_BOUNDS advance_y_kernel(
     ConstGrid2DGPUView Uin,
     Grid2DGPUView      Uout,
-    double             dt,
-    RiemannSolver      solver
+    double             dt
 ) {
     const int local_i = blockIdx.x * blockDim.x + threadIdx.x;
     const int local_j = blockIdx.y * blockDim.y + threadIdx.y;
@@ -458,7 +459,8 @@ __global__ void MHD_ADVANCE_Y_LAUNCH_BOUNDS advance_y_kernel(
             const Conserved UL = R.load(lower);
             const Conserved UR = L.load(upper);
 
-            F.store(lin, riemann_flux(UL, UR, Direction::Y, solver));
+            F.store(lin, riemann_flux_specialized<Solver>(
+                UL, UR, Direction::Y));
         }
     }
     __syncthreads();
@@ -477,6 +479,48 @@ __global__ void MHD_ADVANCE_Y_LAUNCH_BOUNDS advance_y_kernel(
            Uin.i_begin() + local_i,
            Uin.j_begin() + local_j,
            enforce_physical_conserved(Unew_c, Uc));
+}
+
+template <RiemannSolver Solver>
+void launch_directional_updates(
+    const Grid2DGPU& Uold,
+    Grid2DGPU&       Utmp,
+    Grid2DGPU&       Unew,
+    double           dt,
+    const BoundaryConfig& bc,
+    dim3             blocks,
+    dim3             threads,
+    std::size_t      x_smem,
+    std::size_t      y_smem
+) {
+    // Dynamic shared-memory requirements depend only on the fixed tile size.
+    // Each solver specialization is a distinct CUDA function and therefore
+    // needs its attribute configured once, when it is first used.
+    static bool smem_attrs_set = false;
+    if (!smem_attrs_set) {
+        CUDA_CHECK(cudaFuncSetAttribute(
+            advance_x_kernel<Solver>,
+            cudaFuncAttributeMaxDynamicSharedMemorySize,
+            static_cast<int>(x_smem)));
+        CUDA_CHECK(cudaFuncSetAttribute(
+            advance_y_kernel<Solver>,
+            cudaFuncAttributeMaxDynamicSharedMemorySize,
+            static_cast<int>(y_smem)));
+        smem_attrs_set = true;
+    }
+
+    advance_x_kernel<Solver><<<blocks, threads, x_smem>>>(
+        make_view(static_cast<const Grid2DGPU&>(Uold)),
+        make_view(Utmp), dt);
+    CUDA_CHECK(cudaGetLastError());
+
+    // The y sweep only reads bottom/top ghosts of Utmp.
+    apply_boundary_y_gpu(Utmp, bc);
+
+    advance_y_kernel<Solver><<<blocks, threads, y_smem>>>(
+        make_view(static_cast<const Grid2DGPU&>(Utmp)),
+        make_view(Unew), dt);
+    CUDA_CHECK(cudaGetLastError());
 }
 
 } // anonymous namespace
@@ -582,34 +626,33 @@ void advance_gpu(
             y_sw * y_sh + 2 * y_sw * y_rh + y_sw * y_fh
         ) * sizeof(double);
 
-    // advance_x/y_kernel's dynamic shared memory size depends only on the
-    // fixed bx/by tile above, never on the grid or the current step, so the
-    // attribute only needs to be set once per process rather than on every
-    // single call (this used to run twice per timestep).
-    static bool smem_attrs_set = false;
-    if (!smem_attrs_set) {
-        CUDA_CHECK(cudaFuncSetAttribute(
-            advance_x_kernel,
-            cudaFuncAttributeMaxDynamicSharedMemorySize,
-            static_cast<int>(x_smem)));
-        CUDA_CHECK(cudaFuncSetAttribute(
-            advance_y_kernel,
-            cudaFuncAttributeMaxDynamicSharedMemorySize,
-            static_cast<int>(y_smem)));
-        smem_attrs_set = true;
+    // Dispatch once on the host so the hot CUDA kernels contain only the
+    // selected Riemann solver.  This allows ptxas to remove the unused HLL,
+    // HLLC, HLLD, or FORCE paths instead of carrying a runtime branch and the
+    // maximum live-register footprint of all four implementations.
+    switch (solver) {
+        case RiemannSolver::HLL:
+            launch_directional_updates<RiemannSolver::HLL>(
+                Uold, Utmp, Unew, dt, bc, blocks, threads, x_smem, y_smem);
+            break;
+        case RiemannSolver::HLLC:
+            launch_directional_updates<RiemannSolver::HLLC>(
+                Uold, Utmp, Unew, dt, bc, blocks, threads, x_smem, y_smem);
+            break;
+        case RiemannSolver::HLLD:
+            launch_directional_updates<RiemannSolver::HLLD>(
+                Uold, Utmp, Unew, dt, bc, blocks, threads, x_smem, y_smem);
+            break;
+        case RiemannSolver::FORCE:
+            launch_directional_updates<RiemannSolver::FORCE>(
+                Uold, Utmp, Unew, dt, bc, blocks, threads, x_smem, y_smem);
+            break;
+        default:
+            // Match riemann_flux()'s legacy fallback for invalid enum values.
+            launch_directional_updates<RiemannSolver::FORCE>(
+                Uold, Utmp, Unew, dt, bc, blocks, threads, x_smem, y_smem);
+            break;
     }
-
-    advance_x_kernel<<<blocks, threads, x_smem>>>(
-        make_view(static_cast<const Grid2DGPU&>(Uold)),
-        make_view(Utmp), dt, solver);
-    CUDA_CHECK(cudaGetLastError());
-    // The y sweep only reads bottom/top ghosts of Utmp.
-    apply_boundary_y_gpu(Utmp, bc);
-
-    advance_y_kernel<<<blocks, threads, y_smem>>>(
-        make_view(static_cast<const Grid2DGPU&>(Utmp)),
-        make_view(Unew), dt, solver);
-    CUDA_CHECK(cudaGetLastError());
 
     // ch was already computed as `max_speed` by compute_dt_gpu() this same
     // step and pushed to both phys::d_ch_glm (device) and phys::ch_glm

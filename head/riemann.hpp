@@ -577,6 +577,37 @@ HD inline void apply_glm_flux(
     F.psi = ch*ch * glm.Bn;
 }
 
+template <RiemannSolver Solver>
+HD inline Conserved riemann_flux_specialized(
+    const Conserved& UL,
+    const Conserved& UR,
+    Direction        dir,
+    double           ch
+) {
+    if constexpr (Solver == RiemannSolver::HLL) {
+        return hll_flux(UL, UR, dir, ch);
+    } else {
+        Conserved F;
+        if constexpr (Solver == RiemannSolver::HLLC) {
+            F = hllc_flux(UL, UR, dir, ch);
+        } else if constexpr (Solver == RiemannSolver::HLLD) {
+            F = hlld_flux(UL, UR, dir, ch);
+        } else {
+            static_assert(Solver == RiemannSolver::FORCE,
+                          "Unsupported compile-time Riemann solver");
+            F = force_flux(UL, UR, dir, ch);
+        }
+
+        if (!finite_number(F.rho) || !finite_number(F.E) ||
+            !finite_number(F.Bx)  || !finite_number(F.psi)) {
+            return hll_flux(UL, UR, dir, ch);
+        }
+
+        apply_glm_flux(F, UL, UR, dir, ch);
+        return F;
+    }
+}
+
 HD inline Conserved riemann_flux(
     const Conserved& UL,
     const Conserved& UR,
@@ -599,6 +630,16 @@ HD inline Conserved riemann_flux(
 
     apply_glm_flux(F, UL, UR, dir, ch);
     return F;
+}
+
+template <RiemannSolver Solver>
+HD inline Conserved riemann_flux_specialized(
+    const Conserved& UL,
+    const Conserved& UR,
+    Direction        dir
+) {
+    return riemann_flux_specialized<Solver>(
+        UL, UR, dir, phys::get_ch_glm());
 }
 
 HD inline Conserved riemann_flux(
