@@ -308,216 +308,214 @@ HD inline Conserved hllc_flux(
     return FR + SR * (URs - UR);
 }
 
+HD inline bool conserved_is_finite(const Conserved& U) {
+    return finite_number(U.rho)  && finite_number(U.rhou) &&
+           finite_number(U.rhov) && finite_number(U.rhow) &&
+           finite_number(U.Bx)   && finite_number(U.By)   &&
+           finite_number(U.Bz)   && finite_number(U.E)    &&
+           finite_number(U.psi);
+}
+
+HD inline Conserved swap_xy(const Conserved& U) {
+    return Conserved(U.rho, U.rhov, U.rhou, U.rhow,
+                     U.By, U.Bx, U.Bz, U.E, U.psi);
+}
+
+// Canonical x-direction HLLD implementation ported expression-for-expression
+// from huangyu701/mhd-cuda-solver.  In particular, the GLM interface state is
+// installed before primitive conversion, wave-speed estimation and fluxes.
+HD inline Conserved hlld_flux_x(
+    const Conserved& UL_in,
+    const Conserved& UR_in,
+    double           ch
+) {
+    auto fallback_hll = [&]() -> Conserved {
+        return hll_flux(UL_in, UR_in, Direction::X, ch);
+    };
+
+    Conserved UL = UL_in;
+    Conserved UR = UR_in;
+    const GlmStar glm = glm_resolve(UL.Bx, UR.Bx, UL.psi, UR.psi, ch);
+    const double Bx = glm.Bn;
+    const double psi_s = glm.psi;
+
+    UL.Bx = Bx; UR.Bx = Bx;
+    UL.psi = psi_s; UR.psi = psi_s;
+
+    const Primitive WL = phys::cons_to_prim(UL);
+    const Primitive WR = phys::cons_to_prim(UR);
+    if (!primitive_is_physical(WL) || !primitive_is_physical(WR)) {
+        return fallback_hll();
+    }
+
+    const double cfL = phys::fast_speed_x(WL);
+    const double cfR = phys::fast_speed_x(WR);
+    const double cmax = fmax(cfL, cfR);
+    const double SL = fmin(WL.u, WR.u) - cmax;
+    const double SR = fmax(WL.u, WR.u) + cmax;
+
+    const Conserved FL = phys::flux_x(UL, ch);
+    const Conserved FR = phys::flux_x(UR, ch);
+
+    if (SL >= 0.0) return FL;
+    if (SR <= 0.0) return FR;
+
+    const double denomRL = SR - SL;
+    if (!finite_number(SL) || !finite_number(SR) ||
+        fabs(denomRL) < 1.0e-14) {
+        return fallback_hll();
+    }
+
+    const double pTL = WL.p + 0.5*(Bx*Bx + WL.By*WL.By + WL.Bz*WL.Bz);
+    const double pTR = WR.p + 0.5*(Bx*Bx + WR.By*WR.By + WR.Bz*WR.Bz);
+
+    const double denomM = (SR - WR.u)*WR.rho - (SL - WL.u)*WL.rho;
+    if (!finite_number(denomM) || fabs(denomM) < 1.0e-14) {
+        return fallback_hll();
+    }
+
+    const double SM = ((SR - WR.u)*WR.rho*WR.u
+                       - (SL - WL.u)*WL.rho*WL.u - pTR + pTL) / denomM;
+    const double pTs = ((SR - WR.u)*WR.rho*pTL
+                        - (SL - WL.u)*WL.rho*pTR
+                        + WL.rho*WR.rho*(SR - WR.u)*(SL - WL.u)
+                          *(WR.u - WL.u)) / denomM;
+    if (!finite_number(SM) || !finite_number(pTs) ||
+        fabs(SL - SM) < 1.0e-14 || fabs(SR - SM) < 1.0e-14) {
+        return fallback_hll();
+    }
+
+    auto star_state = [&](const Primitive& W, double E, double S,
+                          Conserved& Us, double& rhos) -> bool {
+        const double rhoS = W.rho * (S - W.u) / (S - SM);
+        rhos = rhoS;
+        if (!(rhoS > 0.0) || !finite_number(rhoS)) return false;
+
+        const double denom = W.rho*(S - W.u)*(S - SM) - Bx*Bx;
+        double vs, ws, Bys, Bzs;
+        if (fabs(denom) < 1.0e-30 *
+                          (W.rho*(S - W.u)*(S - W.u) + 1.0)) {
+            vs = W.v; ws = W.w;
+            Bys = W.By; Bzs = W.Bz;
+        } else {
+            const double inv = 1.0 / denom;
+            vs = W.v - Bx*W.By*(SM - W.u)*inv;
+            ws = W.w - Bx*W.Bz*(SM - W.u)*inv;
+            Bys = W.By * (W.rho*(S - W.u)*(S - W.u) - Bx*Bx)*inv;
+            Bzs = W.Bz * (W.rho*(S - W.u)*(S - W.u) - Bx*Bx)*inv;
+        }
+
+        const double vdotB = W.u*Bx + W.v*W.By + W.w*W.Bz;
+        const double vsdotB = SM*Bx + vs*Bys + ws*Bzs;
+        const double Es = ((S - W.u)*E
+                           - (W.p + 0.5*(Bx*Bx + W.By*W.By + W.Bz*W.Bz))*W.u
+                           + pTs*SM + Bx*(vdotB - vsdotB)) / (S - SM);
+        Us = Conserved(rhoS, rhoS*SM, rhoS*vs, rhoS*ws,
+                       Bx, Bys, Bzs, Es, psi_s);
+        return conserved_is_finite(Us) &&
+               primitive_is_physical(phys::cons_to_prim(Us));
+    };
+
+    Conserved UsL, UsR;
+    double rhosL, rhosR;
+    if (!star_state(WL, UL.E, SL, UsL, rhosL) ||
+        !star_state(WR, UR.E, SR, UsR, rhosR)) {
+        return fallback_hll();
+    }
+
+    const double sqrtL = sqrt(rhosL);
+    const double sqrtR = sqrt(rhosR);
+    const double SsL = SM - fabs(Bx) / sqrtL;
+    const double SsR = SM + fabs(Bx) / sqrtR;
+    if (!finite_number(SsL) || !finite_number(SsR)) {
+        return fallback_hll();
+    }
+
+    const bool degenerate =
+        fabs(Bx) < 1.0e-12 * (1.0 + fabs(SR - SL));
+    const Conserved FsL = FL + SL*(UsL - UL);
+    const Conserved FsR = FR + SR*(UsR - UR);
+    Conserved F;
+
+    if (!degenerate) {
+        if (SL <= 0.0 && 0.0 <= SsL) {
+            F = FsL;
+        } else if (SsR <= 0.0 && 0.0 <= SR) {
+            F = FsR;
+        } else {
+            const double sgn = (Bx > 0.0) ? 1.0 : -1.0;
+            const double denomV = sqrtL + sqrtR;
+            if (!finite_number(denomV) || denomV <= 0.0) {
+                return fallback_hll();
+            }
+            const double vss =
+                (sqrtL*UsL.rhov/rhosL + sqrtR*UsR.rhov/rhosR
+                 + (UsR.By - UsL.By)*sgn) / denomV;
+            const double wss =
+                (sqrtL*UsL.rhow/rhosL + sqrtR*UsR.rhow/rhosR
+                 + (UsR.Bz - UsL.Bz)*sgn) / denomV;
+            const double Byss =
+                (sqrtL*UsR.By + sqrtR*UsL.By
+                 + sqrtL*sqrtR*(UsR.rhov/rhosR - UsL.rhov/rhosL)*sgn)
+                / denomV;
+            const double Bzss =
+                (sqrtL*UsR.Bz + sqrtR*UsL.Bz
+                 + sqrtL*sqrtR*(UsR.rhow/rhosR - UsL.rhow/rhosL)*sgn)
+                / denomV;
+            const double vssdotB = SM*Bx + vss*Byss + wss*Bzss;
+
+            auto inner_state = [&](const Conserved& Us, double rhos,
+                                   double sign_side) -> Conserved {
+                const double vsdotB =
+                    SM*Bx + (Us.rhov/rhos)*Us.By + (Us.rhow/rhos)*Us.Bz;
+                return Conserved(
+                    rhos, rhos*SM, rhos*vss, rhos*wss,
+                    Bx, Byss, Bzss,
+                    Us.E + sign_side*sqrt(rhos)*(vsdotB - vssdotB)*sgn,
+                    psi_s);
+            };
+
+            if (SsL <= 0.0 && 0.0 <= SM) {
+                const Conserved UssL = inner_state(UsL, rhosL, -1.0);
+                if (!conserved_is_finite(UssL) ||
+                    !primitive_is_physical(phys::cons_to_prim(UssL))) {
+                    return fallback_hll();
+                }
+                F = FsL + SsL*(UssL - UsL);
+            } else if (SM <= 0.0 && 0.0 <= SsR) {
+                const Conserved UssR = inner_state(UsR, rhosR, +1.0);
+                if (!conserved_is_finite(UssR) ||
+                    !primitive_is_physical(phys::cons_to_prim(UssR))) {
+                    return fallback_hll();
+                }
+                F = FsR + SsR*(UssR - UsR);
+            } else {
+                return fallback_hll();
+            }
+        }
+    } else {
+        if (SL <= 0.0 && 0.0 <= SM) {
+            F = FsL;
+        } else if (SM <= 0.0 && 0.0 <= SR) {
+            F = FsR;
+        } else {
+            return fallback_hll();
+        }
+    }
+
+    F.Bx = psi_s;
+    F.psi = ch*ch*Bx;
+    return conserved_is_finite(F) ? F : fallback_hll();
+}
+
 HD inline Conserved hlld_flux(
     const Conserved& UL,
     const Conserved& UR,
     Direction        dir,
     double           ch
 ) {
-    const Primitive VL = phys::cons_to_prim(UL);
-    const Primitive VR = phys::cons_to_prim(UR);
-
-    if (!primitive_is_physical(VL) || !primitive_is_physical(VR)) {
-        return hll_flux(UL, UR, dir, ch);
-    }
-
-    const double rhoL = VL.rho, rhoR = VR.rho;
-    const double pL   = VL.p,   pR   = VR.p;
-
-    double unL, unR, utL, utR, uwL, uwR;
-    double BnL_raw, BnR_raw, BtL, BtR, BwL, BwR;
-    const double psiL = VL.psi, psiR = VR.psi;
-
-    if (dir == Direction::X) {
-        unL = VL.u;  unR = VR.u;
-        utL = VL.v;  utR = VR.v;
-        uwL = VL.w;  uwR = VR.w;
-        BnL_raw = VL.Bx; BnR_raw = VR.Bx;
-        BtL = VL.By; BtR = VR.By;
-        BwL = VL.Bz; BwR = VR.Bz;
-    } else {
-        unL = VL.v;  unR = VR.v;
-        utL = VL.u;  utR = VR.u;
-        uwL = VL.w;  uwR = VR.w;
-        BnL_raw = VL.By; BnR_raw = VR.By;
-        BtL = VL.Bx; BtR = VR.Bx;
-        BwL = VL.Bz; BwR = VR.Bz;
-    }
-
-    const double cfL = (dir == Direction::X) ? phys::fast_speed_x(VL)
-                                             : phys::fast_speed_y(VL);
-    const double cfR = (dir == Direction::X) ? phys::fast_speed_x(VR)
-                                             : phys::fast_speed_y(VR);
-
-    const double SL = fmin(unL - cfL, unR - cfR);
-    const double SR = fmax(unL + cfL, unR + cfR);
-
-    const double denom_RL = SR - SL;
-    if (fabs(denom_RL) < 1.0e-14) {
-        return hllc_flux(UL, UR, dir, ch);
-    }
-
-    const Conserved FL = (dir == Direction::X) ? phys::flux_x(UL, ch)
-                                               : phys::flux_y(UL, ch);
-    const Conserved FR = (dir == Direction::X) ? phys::flux_x(UR, ch)
-                                               : phys::flux_y(UR, ch);
-
-    if (SL >= 0.0) return FL;
-    if (SR <= 0.0) return FR;
-
-    const GlmStar glm  = glm_resolve(BnL_raw, BnR_raw, psiL, psiR, ch);
-    const double  Bn   = glm.Bn;
-    const double  psiM = glm.psi;
-
-    const double BmagL2 = Bn*Bn + BtL*BtL + BwL*BwL;
-    const double BmagR2 = Bn*Bn + BtR*BtR + BwR*BwR;
-    const double ptL = pL + 0.5*BmagL2;
-    const double ptR = pR + 0.5*BmagR2;
-
-    const double numerSM = (SR - unR)*rhoR*unR - (SL - unL)*rhoL*unL
-                         + ptL - ptR;
-    const double denomSM = (SR - unR)*rhoR     - (SL - unL)*rhoL;
-
-    if (fabs(denomSM) < 1.0e-14) {
-        return hllc_flux(UL, UR, dir, ch);
-    }
-    const double SM = numerSM / denomSM;
-
-    const double rhoLs = rhoL * (SL - unL) / (SL - SM);
-    const double rhoRs = rhoR * (SR - unR) / (SR - SM);
-
-    if (rhoLs <= 0.0 || rhoRs <= 0.0 ||
-        !finite_number(rhoLs) || !finite_number(rhoRs)) {
-        return hllc_flux(UL, UR, dir, ch);
-    }
-
-    const double ptstar = ptL + rhoL*(SL - unL)*(SM - unL);
-
-    const double sqrtRhoLs = sqrt(rhoLs);
-    const double sqrtRhoRs = sqrt(rhoRs);
-    const double SLs = SM - fabs(Bn) / sqrtRhoLs;
-    const double SRs = SM + fabs(Bn) / sqrtRhoRs;
-
-    double utLs, uwLs, BtLs, BwLs, ELs;
-    {
-        const double BdotUL = Bn*unL + BtL*utL + BwL*uwL;
-        const double d      = rhoL*(SL - unL)*(SL - SM) - Bn*Bn;
-        if (fabs(d) < 1.0e-14) {
-            utLs = utL; uwLs = uwL; BtLs = BtL; BwLs = BwL;
-        } else {
-            utLs = utL - Bn*BtL*(SM - unL) / d;
-            uwLs = uwL - Bn*BwL*(SM - unL) / d;
-            BtLs = BtL * (rhoL*(SL-unL)*(SL-unL) - Bn*Bn) / d;
-            BwLs = BwL * (rhoL*(SL-unL)*(SL-unL) - Bn*Bn) / d;
-        }
-        const double BdotULs = Bn*SM + BtLs*utLs + BwLs*uwLs;
-        // Miyoshi & Kusano (2005), Eq. (48): the magnetic-work term is
-        // Bn * (v_side dot B_side - v_star dot B_star).
-        ELs = (UL.E*(SL - unL) - ptL*unL + ptstar*SM
-               + Bn*(BdotUL - BdotULs)) / (SL - SM);
-    }
-
-    double utRs, uwRs, BtRs, BwRs, ERs;
-    {
-        const double BdotUR = Bn*unR + BtR*utR + BwR*uwR;
-        const double d      = rhoR*(SR - unR)*(SR - SM) - Bn*Bn;
-        if (fabs(d) < 1.0e-14) {
-            utRs = utR; uwRs = uwR; BtRs = BtR; BwRs = BwR;
-        } else {
-            utRs = utR - Bn*BtR*(SM - unR) / d;
-            uwRs = uwR - Bn*BwR*(SM - unR) / d;
-            BtRs = BtR * (rhoR*(SR-unR)*(SR-unR) - Bn*Bn) / d;
-            BwRs = BwR * (rhoR*(SR-unR)*(SR-unR) - Bn*Bn) / d;
-        }
-        const double BdotURs = Bn*SM + BtRs*utRs + BwRs*uwRs;
-        ERs = (UR.E*(SR - unR) - ptR*unR + ptstar*SM
-               + Bn*(BdotUR - BdotURs)) / (SR - SM);
-    }
-
-    const double signBn = (Bn >= 0.0) ? 1.0 : -1.0;
-
-    const double sqRhoLs = sqrtRhoLs;
-    const double sqRhoRs = sqrtRhoRs;
-    const double denom2  = sqRhoLs + sqRhoRs;
-
-    double utLss, uwLss, BtLss, BwLss;
-    double utRss, uwRss, BtRss, BwRss;
-    double ELss, ERss;
-
-    if (fabs(denom2) < 1.0e-14) {
-        utLss = utLs; uwLss = uwLs; BtLss = BtLs; BwLss = BwLs; ELss = ELs;
-        utRss = utRs; uwRss = uwRs; BtRss = BtRs; BwRss = BwRs; ERss = ERs;
-    } else {
-        const double inv_d2 = 1.0 / denom2;
-        utLss = utRss = (sqRhoLs*utLs + sqRhoRs*utRs + signBn*(BtRs - BtLs)) * inv_d2;
-        uwLss = uwRss = (sqRhoLs*uwLs + sqRhoRs*uwRs + signBn*(BwRs - BwLs)) * inv_d2;
-        BtLss = BtRss = (sqRhoLs*BtRs + sqRhoRs*BtLs + signBn*sqRhoLs*sqRhoRs*(utRs - utLs)) * inv_d2;
-        BwLss = BwRss = (sqRhoLs*BwRs + sqRhoRs*BwLs + signBn*sqRhoLs*sqRhoRs*(uwRs - uwLs)) * inv_d2;
-
-        const double BdotULss = Bn*SM + BtLss*utLss + BwLss*uwLss;
-        const double BdotULs_ = Bn*SM + BtLs *utLs  + BwLs *uwLs;
-        ELss = ELs - sqRhoLs*signBn*(BdotULss - BdotULs_);
-
-        const double BdotURss = Bn*SM + BtRss*utRss + BwRss*uwRss;
-        const double BdotURs_ = Bn*SM + BtRs *utRs  + BwRs *uwRs;
-        ERss = ERs + sqRhoRs*signBn*(BdotURss - BdotURs_);
-    }
-
-    auto build_conserved = [&](
-        double rhos_, double uns_, double uts_, double uws_,
-        double Bns_, double Bts_, double Bws_, double Es_,
-        double psis_
-    ) -> Conserved {
-        if (dir == Direction::X) {
-            return Conserved(
-                rhos_,
-                rhos_*uns_, rhos_*uts_, rhos_*uws_,
-                Bns_, Bts_, Bws_,
-                Es_, psis_
-            );
-        } else {
-            return Conserved(
-                rhos_,
-                rhos_*uts_, rhos_*uns_, rhos_*uws_,
-                Bts_, Bns_, Bws_,
-                Es_, psis_
-            );
-        }
-    };
-
-    auto state_ok = [&](const Conserved& U) -> bool {
-        return primitive_is_physical(phys::cons_to_prim(U));
-    };
-
-    if (SM >= 0.0) {
-        if (SLs >= 0.0) {
-            const Conserved ULs = build_conserved(
-                rhoLs, SM, utLs, uwLs, Bn, BtLs, BwLs, ELs, psiM);
-            if (!state_ok(ULs)) return hllc_flux(UL, UR, dir, ch);
-            return FL + SL * (ULs - UL);
-        } else {
-            const Conserved ULs  = build_conserved(
-                rhoLs, SM, utLs,  uwLs,  Bn, BtLs,  BwLs,  ELs,  psiM);
-            const Conserved ULss = build_conserved(
-                rhoLs, SM, utLss, uwLss, Bn, BtLss, BwLss, ELss, psiM);
-            if (!state_ok(ULss)) return hllc_flux(UL, UR, dir, ch);
-            return FL + SL*(ULs - UL) + SLs*(ULss - ULs);
-        }
-    } else {
-        if (SRs <= 0.0) {
-            const Conserved URs = build_conserved(
-                rhoRs, SM, utRs, uwRs, Bn, BtRs, BwRs, ERs, psiM);
-            if (!state_ok(URs)) return hllc_flux(UL, UR, dir, ch);
-            return FR + SR * (URs - UR);
-        } else {
-            const Conserved URs  = build_conserved(
-                rhoRs, SM, utRs,  uwRs,  Bn, BtRs,  BwRs,  ERs,  psiM);
-            const Conserved URss = build_conserved(
-                rhoRs, SM, utRss, uwRss, Bn, BtRss, BwRss, ERss, psiM);
-            if (!state_ok(URss)) return hllc_flux(UL, UR, dir, ch);
-            return FR + SR*(URs - UR) + SRs*(URss - URs);
-        }
-    }
+    if (dir == Direction::X) return hlld_flux_x(UL, UR, ch);
+    return swap_xy(hlld_flux_x(swap_xy(UL), swap_xy(UR), ch));
 }
 
 HD inline Conserved force_flux(
