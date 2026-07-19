@@ -411,8 +411,10 @@ HD inline Conserved hlld_flux(
             BwLs = BwL * (rhoL*(SL-unL)*(SL-unL) - Bn*Bn) / d;
         }
         const double BdotULs = Bn*SM + BtLs*utLs + BwLs*uwLs;
+        // Miyoshi & Kusano (2005), Eq. (48): the magnetic-work term is
+        // Bn * (v_side dot B_side - v_star dot B_star).
         ELs = (UL.E*(SL - unL) - ptL*unL + ptstar*SM
-               + Bn*(BdotULs - BdotUL)) / (SL - SM);
+               + Bn*(BdotUL - BdotULs)) / (SL - SM);
     }
 
     double utRs, uwRs, BtRs, BwRs, ERs;
@@ -429,7 +431,7 @@ HD inline Conserved hlld_flux(
         }
         const double BdotURs = Bn*SM + BtRs*utRs + BwRs*uwRs;
         ERs = (UR.E*(SR - unR) - ptR*unR + ptstar*SM
-               + Bn*(BdotURs - BdotUR)) / (SR - SM);
+               + Bn*(BdotUR - BdotURs)) / (SR - SM);
     }
 
     const double signBn = (Bn >= 0.0) ? 1.0 : -1.0;
