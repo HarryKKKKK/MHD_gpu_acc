@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#SBATCH -J sys_eq_gpu_run_twice
+#SBATCH -J slurm_gpu
 #SBATCH -A MPHIL-NIKIFORAKIS-HK597-SL2-GPU
 #SBATCH -p ampere
 #SBATCH -N 1
@@ -167,11 +167,7 @@ lscpu | grep -E \
 echo ""
 echo "===== BUILD ====="
 
-if [ "${MAKE_CLEAN}" = "1" ]; then
-    echo "[INFO] Running make clean."
-    make clean
-fi
-
+make clean
 make gpu
 
 BIN="./bin/main_gpu"
