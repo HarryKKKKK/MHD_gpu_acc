@@ -243,11 +243,11 @@ __global__ void compute_block_max_speed_kernel(
     }
 }
 
+template <RiemannSolver Solver>
 __global__ void MHD_ADVANCE_X_LAUNCH_BOUNDS advance_x_kernel(
     ConstGrid2DGPUView Uin,
     Grid2DGPUView      Uout,
-    double             dt,
-    RiemannSolver      solver
+    double             dt
 ) {
     const int local_i = blockIdx.x * blockDim.x + threadIdx.x;
     const int local_j = blockIdx.y * blockDim.y + threadIdx.y;
@@ -329,7 +329,7 @@ __global__ void MHD_ADVANCE_X_LAUNCH_BOUNDS advance_x_kernel(
             const Conserved UL = R.load(left_idx);
             const Conserved UR = L.load(right_idx);
 
-            F.store(lin, riemann_flux(UL, UR, Direction::X, solver));
+            F.store(lin, riemann_flux<Solver>(UL, UR, Direction::X));
         }
     }
     __syncthreads();
@@ -350,12 +350,12 @@ __global__ void MHD_ADVANCE_X_LAUNCH_BOUNDS advance_x_kernel(
            Unew_c);
 }
 
+template <RiemannSolver Solver>
 __global__ void MHD_ADVANCE_Y_LAUNCH_BOUNDS advance_y_kernel(
     ConstGrid2DGPUView Uin,
     Grid2DGPUView      Uout,
     double             dt,
-    double             psi_damping_factor,
-    RiemannSolver      solver
+    double             psi_damping_factor
 ) {
     const int local_i = blockIdx.x * blockDim.x + threadIdx.x;
     const int local_j = blockIdx.y * blockDim.y + threadIdx.y;
@@ -439,7 +439,7 @@ __global__ void MHD_ADVANCE_Y_LAUNCH_BOUNDS advance_y_kernel(
             const Conserved UL = R.load(lower);
             const Conserved UR = L.load(upper);
 
-            F.store(lin, riemann_flux(UL, UR, Direction::Y, solver));
+            F.store(lin, riemann_flux<Solver>(UL, UR, Direction::Y));
         }
     }
     __syncthreads();
@@ -532,13 +532,13 @@ double compute_dt_gpu(const Grid2DGPU& grid, GpuWorkspace& ws, double cfl) {
     return cfl * std::min(grid.dx(), grid.dy()) / max_speed;
 }
 
-void advance_gpu(
+template <RiemannSolver Solver>
+static void advance_gpu_specialized(
     const Grid2DGPU& Uold,
     Grid2DGPU&       Utmp,
     Grid2DGPU&       Unew,
     GpuWorkspace&    ws,
     double           dt,
-    RiemannSolver    solver,
     const BoundaryConfig& bc
 ) {
     if (ws.nx != Uold.nx() || ws.ny != Uold.ny() || !ws.speed_d)
@@ -569,25 +569,25 @@ void advance_gpu(
         ) * sizeof(double);
 
     // advance_x/y_kernel's dynamic shared memory size depends only on the
-    // fixed bx/by tile above, never on the grid or the current step, so the
-    // attribute only needs to be set once per process rather than on every
-    // single call (this used to run twice per timestep).
+    // fixed bx/by tile above, never on the grid or the current step.  Each
+    // Solver specialization has its own kernel symbols, so configure those
+    // symbols once on their first use rather than twice per timestep.
     static bool smem_attrs_set = false;
     if (!smem_attrs_set) {
         CUDA_CHECK(cudaFuncSetAttribute(
-            advance_x_kernel,
+            advance_x_kernel<Solver>,
             cudaFuncAttributeMaxDynamicSharedMemorySize,
             static_cast<int>(x_smem)));
         CUDA_CHECK(cudaFuncSetAttribute(
-            advance_y_kernel,
+            advance_y_kernel<Solver>,
             cudaFuncAttributeMaxDynamicSharedMemorySize,
             static_cast<int>(y_smem)));
         smem_attrs_set = true;
     }
 
-    advance_x_kernel<<<blocks, threads, x_smem>>>(
+    advance_x_kernel<Solver><<<blocks, threads, x_smem>>>(
         make_view(static_cast<const Grid2DGPU&>(Uold)),
-        make_view(Utmp), dt, solver);
+        make_view(Utmp), dt);
     CUDA_CHECK(cudaGetLastError());
     // The y sweep only reads bottom/top ghosts of Utmp.
     apply_boundary_y_gpu(Utmp, bc);
@@ -603,12 +603,50 @@ void advance_gpu(
     const double psi_damping_factor =
         (ch > 0.0 && l_d > 0.0) ? std::exp(-dt * ch / l_d) : 1.0;
 
-    advance_y_kernel<<<blocks, threads, y_smem>>>(
+    advance_y_kernel<Solver><<<blocks, threads, y_smem>>>(
         make_view(static_cast<const Grid2DGPU&>(Utmp)),
-        make_view(Unew), dt, psi_damping_factor, solver);
+        make_view(Unew), dt, psi_damping_factor);
     CUDA_CHECK(cudaGetLastError());
 
     // The next timestep starts with an x sweep.  Refresh only left/right
     // ghosts, after damping, so ghost psi matches its source cell.
     apply_boundary_x_gpu(Unew, bc);
+}
+
+void advance_gpu(
+    const Grid2DGPU& Uold,
+    Grid2DGPU&       Utmp,
+    Grid2DGPU&       Unew,
+    GpuWorkspace&    ws,
+    double           dt,
+    RiemannSolver    solver,
+    const BoundaryConfig& bc
+) {
+    // Dispatch once on the host.  Every device launch below is a distinct
+    // compile-time Solver specialization, so no face pays a runtime solver
+    // selection and unused solver bodies cannot inflate that kernel.
+    switch (solver) {
+        case RiemannSolver::HLL:
+            advance_gpu_specialized<RiemannSolver::HLL>(
+                Uold, Utmp, Unew, ws, dt, bc);
+            break;
+        case RiemannSolver::HLLC:
+            advance_gpu_specialized<RiemannSolver::HLLC>(
+                Uold, Utmp, Unew, ws, dt, bc);
+            break;
+        case RiemannSolver::HLLD:
+            advance_gpu_specialized<RiemannSolver::HLLD>(
+                Uold, Utmp, Unew, ws, dt, bc);
+            break;
+        case RiemannSolver::FORCE:
+            advance_gpu_specialized<RiemannSolver::FORCE>(
+                Uold, Utmp, Unew, ws, dt, bc);
+            break;
+        default:
+            // Preserve the legacy riemann_flux() behavior, which treated an
+            // unrecognized enum value as FORCE.
+            advance_gpu_specialized<RiemannSolver::FORCE>(
+                Uold, Utmp, Unew, ws, dt, bc);
+            break;
+    }
 }
