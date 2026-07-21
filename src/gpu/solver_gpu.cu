@@ -18,33 +18,29 @@ namespace {
 
 constexpr int    kDtBlockSize = 256;
 
-// advance_x/y always launch a 16x8 (128-thread) tile.  Profiling showed that
-// targeting three resident blocks/SM is beneficial for advance_x, but the
-// resulting register spills make advance_y slightly slower.  Keep independent
-// compile-time controls so each direction can use its measured best setting.
-constexpr int kAdvanceBlockX = 16;
-constexpr int kAdvanceBlockY = 8;
-constexpr int kAdvanceThreadsPerBlock = kAdvanceBlockX * kAdvanceBlockY;
-static_assert(kAdvanceThreadsPerBlock == 128, "launch-bounds experiment assumes 128 threads/block");
-
-#ifndef MHD_ADVANCE_X_MIN_BLOCKS_PER_SM
-#define MHD_ADVANCE_X_MIN_BLOCKS_PER_SM 3
-#endif
-
-#ifndef MHD_ADVANCE_Y_MIN_BLOCKS_PER_SM
-#define MHD_ADVANCE_Y_MIN_BLOCKS_PER_SM 0
-#endif
+// Direction-specific compile-time launch controls.  The tuning sweep keeps
+// 128 threads per block while changing the 2-D shape and launch bounds.
+constexpr int kAdvanceXBlockX = MHD_ADVANCE_X_BLOCK_X;
+constexpr int kAdvanceXBlockY = MHD_ADVANCE_X_BLOCK_Y;
+constexpr int kAdvanceYBlockX = MHD_ADVANCE_Y_BLOCK_X;
+constexpr int kAdvanceYBlockY = MHD_ADVANCE_Y_BLOCK_Y;
+constexpr int kAdvanceXThreadsPerBlock = kAdvanceXBlockX * kAdvanceXBlockY;
+constexpr int kAdvanceYThreadsPerBlock = kAdvanceYBlockX * kAdvanceYBlockY;
+static_assert(kAdvanceXThreadsPerBlock == 128,
+              "x launch-tuning configurations must use 128 threads/block");
+static_assert(kAdvanceYThreadsPerBlock == 128,
+              "y launch-tuning configurations must use 128 threads/block");
 
 #if MHD_ADVANCE_X_MIN_BLOCKS_PER_SM > 0
 #define MHD_ADVANCE_X_LAUNCH_BOUNDS \
-    __launch_bounds__(kAdvanceThreadsPerBlock, MHD_ADVANCE_X_MIN_BLOCKS_PER_SM)
+    __launch_bounds__(kAdvanceXThreadsPerBlock, MHD_ADVANCE_X_MIN_BLOCKS_PER_SM)
 #else
 #define MHD_ADVANCE_X_LAUNCH_BOUNDS
 #endif
 
 #if MHD_ADVANCE_Y_MIN_BLOCKS_PER_SM > 0
 #define MHD_ADVANCE_Y_LAUNCH_BOUNDS \
-    __launch_bounds__(kAdvanceThreadsPerBlock, MHD_ADVANCE_Y_MIN_BLOCKS_PER_SM)
+    __launch_bounds__(kAdvanceYThreadsPerBlock, MHD_ADVANCE_Y_MIN_BLOCKS_PER_SM)
 #else
 #define MHD_ADVANCE_Y_LAUNCH_BOUNDS
 #endif
@@ -539,30 +535,37 @@ static void advance_gpu_specialized(
     Grid2DGPU&       Unew,
     GpuWorkspace&    ws,
     double           dt,
-    const BoundaryConfig& bc
+    const BoundaryConfig& bc,
+    GpuAdvanceTimings* timings
 ) {
     if (ws.nx != Uold.nx() || ws.ny != Uold.ny() || !ws.speed_d)
         throw std::runtime_error("advance_gpu: workspace not initialised.");
 
-    const int bx = kAdvanceBlockX, by = kAdvanceBlockY;
-    const dim3 threads(bx, by);
-    const dim3 blocks(
-        (Uold.nx() + bx - 1) / bx,
-        (Uold.ny() + by - 1) / by
+    const int x_bx = kAdvanceXBlockX, x_by = kAdvanceXBlockY;
+    const int y_bx = kAdvanceYBlockX, y_by = kAdvanceYBlockY;
+    const dim3 x_threads(x_bx, x_by);
+    const dim3 y_threads(y_bx, y_by);
+    const dim3 x_blocks(
+        (Uold.nx() + x_bx - 1) / x_bx,
+        (Uold.ny() + x_by - 1) / x_by
+    );
+    const dim3 y_blocks(
+        (Uold.nx() + y_bx - 1) / y_bx,
+        (Uold.ny() + y_by - 1) / y_by
     );
 
-    const int x_sw = bx + 4 + PAD_X;
-    const int x_rw = bx + 2 + PAD_X;
-    const int x_fw = bx + 1;
+    const int x_sw = x_bx + 4 + PAD_X;
+    const int x_rw = x_bx + 2 + PAD_X;
+    const int x_fw = x_bx + 1;
     const std::size_t x_smem =
         9 * static_cast<std::size_t>(
-            x_sw * by + 2 * x_rw * by + x_fw * by
+            x_sw * x_by + 2 * x_rw * x_by + x_fw * x_by
         ) * sizeof(double);
 
-    const int y_sw = bx + PAD_Y;
-    const int y_sh = by + 4;
-    const int y_rh = by + 2;
-    const int y_fh = by + 1;
+    const int y_sw = y_bx + PAD_Y;
+    const int y_sh = y_by + 4;
+    const int y_rh = y_by + 2;
+    const int y_fh = y_by + 1;
     const std::size_t y_smem =
         9 * static_cast<std::size_t>(
             y_sw * y_sh + 2 * y_sw * y_rh + y_sw * y_fh
@@ -585,10 +588,22 @@ static void advance_gpu_specialized(
         smem_attrs_set = true;
     }
 
-    advance_x_kernel<Solver><<<blocks, threads, x_smem>>>(
+    static bool timing_events_ready = false;
+    static cudaEvent_t x_start, x_stop, y_start, y_stop;
+    if (timings && !timing_events_ready) {
+        CUDA_CHECK(cudaEventCreate(&x_start));
+        CUDA_CHECK(cudaEventCreate(&x_stop));
+        CUDA_CHECK(cudaEventCreate(&y_start));
+        CUDA_CHECK(cudaEventCreate(&y_stop));
+        timing_events_ready = true;
+    }
+
+    if (timings) CUDA_CHECK(cudaEventRecord(x_start));
+    advance_x_kernel<Solver><<<x_blocks, x_threads, x_smem>>>(
         make_view(static_cast<const Grid2DGPU&>(Uold)),
         make_view(Utmp), dt);
     CUDA_CHECK(cudaGetLastError());
+    if (timings) CUDA_CHECK(cudaEventRecord(x_stop));
     // The y sweep only reads bottom/top ghosts of Utmp.
     apply_boundary_y_gpu(Utmp, bc);
 
@@ -603,14 +618,38 @@ static void advance_gpu_specialized(
     const double psi_damping_factor =
         (ch > 0.0 && l_d > 0.0) ? std::exp(-dt * ch / l_d) : 1.0;
 
-    advance_y_kernel<Solver><<<blocks, threads, y_smem>>>(
+    if (timings) CUDA_CHECK(cudaEventRecord(y_start));
+    advance_y_kernel<Solver><<<y_blocks, y_threads, y_smem>>>(
         make_view(static_cast<const Grid2DGPU&>(Utmp)),
         make_view(Unew), dt, psi_damping_factor);
     CUDA_CHECK(cudaGetLastError());
+    if (timings) CUDA_CHECK(cudaEventRecord(y_stop));
 
     // The next timestep starts with an x sweep.  Refresh only left/right
     // ghosts, after damping, so ghost psi matches its source cell.
     apply_boundary_x_gpu(Unew, bc);
+
+    if (timings) {
+        CUDA_CHECK(cudaEventSynchronize(y_stop));
+        float x_elapsed_ms = 0.0f;
+        float y_elapsed_ms = 0.0f;
+        CUDA_CHECK(cudaEventElapsedTime(&x_elapsed_ms, x_start, x_stop));
+        CUDA_CHECK(cudaEventElapsedTime(&y_elapsed_ms, y_start, y_stop));
+        timings->x_ms += static_cast<double>(x_elapsed_ms);
+        timings->y_ms += static_cast<double>(y_elapsed_ms);
+        ++timings->samples;
+    }
+}
+
+GpuLaunchConfig get_gpu_launch_config() {
+    return GpuLaunchConfig{
+        kAdvanceXBlockX,
+        kAdvanceXBlockY,
+        MHD_ADVANCE_X_MIN_BLOCKS_PER_SM,
+        kAdvanceYBlockX,
+        kAdvanceYBlockY,
+        MHD_ADVANCE_Y_MIN_BLOCKS_PER_SM
+    };
 }
 
 void advance_gpu(
@@ -620,7 +659,8 @@ void advance_gpu(
     GpuWorkspace&    ws,
     double           dt,
     RiemannSolver    solver,
-    const BoundaryConfig& bc
+    const BoundaryConfig& bc,
+    GpuAdvanceTimings* timings
 ) {
     // Dispatch once on the host.  Every device launch below is a distinct
     // compile-time Solver specialization, so no face pays a runtime solver
@@ -628,25 +668,25 @@ void advance_gpu(
     switch (solver) {
         case RiemannSolver::HLL:
             advance_gpu_specialized<RiemannSolver::HLL>(
-                Uold, Utmp, Unew, ws, dt, bc);
+                Uold, Utmp, Unew, ws, dt, bc, timings);
             break;
         case RiemannSolver::HLLC:
             advance_gpu_specialized<RiemannSolver::HLLC>(
-                Uold, Utmp, Unew, ws, dt, bc);
+                Uold, Utmp, Unew, ws, dt, bc, timings);
             break;
         case RiemannSolver::HLLD:
             advance_gpu_specialized<RiemannSolver::HLLD>(
-                Uold, Utmp, Unew, ws, dt, bc);
+                Uold, Utmp, Unew, ws, dt, bc, timings);
             break;
         case RiemannSolver::FORCE:
             advance_gpu_specialized<RiemannSolver::FORCE>(
-                Uold, Utmp, Unew, ws, dt, bc);
+                Uold, Utmp, Unew, ws, dt, bc, timings);
             break;
         default:
             // Preserve the legacy riemann_flux() behavior, which treated an
             // unrecognized enum value as FORCE.
             advance_gpu_specialized<RiemannSolver::FORCE>(
-                Uold, Utmp, Unew, ws, dt, bc);
+                Uold, Utmp, Unew, ws, dt, bc, timings);
             break;
     }
 }
