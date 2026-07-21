@@ -321,6 +321,52 @@ HD inline Conserved swap_xy(const Conserved& U) {
                      U.By, U.Bx, U.Bz, U.E, U.psi);
 }
 
+// Peer-style HLL fallback: solve the GLM interface first, install the common
+// normal field and psi in both states, then compute primitives, wave bounds
+// and physical fluxes from those adjusted states.
+HD inline Conserved hll_glm_flux_x(
+    const Conserved& UL_in,
+    const Conserved& UR_in,
+    double           ch
+) {
+    Conserved UL = UL_in;
+    Conserved UR = UR_in;
+    const GlmStar glm = glm_resolve(UL.Bx, UR.Bx, UL.psi, UR.psi, ch);
+    UL.Bx = glm.Bn; UR.Bx = glm.Bn;
+    UL.psi = glm.psi; UR.psi = glm.psi;
+
+    const Primitive WL = phys::cons_to_prim(UL);
+    const Primitive WR = phys::cons_to_prim(UR);
+    if (!primitive_is_physical(WL) || !primitive_is_physical(WR)) {
+        return hll_flux(UL_in, UR_in, Direction::X, ch);
+    }
+
+    const double cmax = fmax(phys::fast_speed_x(WL),
+                             phys::fast_speed_x(WR));
+    const double SL = fmin(WL.u, WR.u) - cmax;
+    const double SR = fmax(WL.u, WR.u) + cmax;
+    const Conserved FL = phys::flux_x(UL, ch);
+    const Conserved FR = phys::flux_x(UR, ch);
+
+    Conserved F;
+    if (SL >= 0.0) {
+        F = FL;
+    } else if (SR <= 0.0) {
+        F = FR;
+    } else {
+        const double denom = SR - SL;
+        if (!finite_number(denom) || fabs(denom) < 1.0e-14) {
+            return hll_flux(UL_in, UR_in, Direction::X, ch);
+        }
+        F = (SR*FL - SL*FR + (SR*SL)*(UR - UL)) / denom;
+    }
+    F.Bx = glm.psi;
+    F.psi = ch*ch*glm.Bn;
+    return conserved_is_finite(F)
+        ? F
+        : hll_flux(UL_in, UR_in, Direction::X, ch);
+}
+
 // Canonical x-direction HLLD implementation ported expression-for-expression
 // from huangyu701/mhd-cuda-solver.  In particular, the GLM interface state is
 // installed before primitive conversion, wave-speed estimation and fluxes.
@@ -330,7 +376,7 @@ HD inline Conserved hlld_flux_x(
     double           ch
 ) {
     auto fallback_hll = [&]() -> Conserved {
-        return hll_flux(UL_in, UR_in, Direction::X, ch);
+        return hll_glm_flux_x(UL_in, UR_in, ch);
     };
 
     Conserved UL = UL_in;

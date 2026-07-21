@@ -16,8 +16,6 @@
 
 namespace {
 
-constexpr double kRhoFloor   = 1.0e-12;
-constexpr double kPFloor     = 1.0e-12;
 constexpr int    kDtBlockSize = 256;
 
 // advance_x/y always launch a 16x8 (128-thread) tile.  Profiling showed that
@@ -68,40 +66,38 @@ __device__ inline int clamp_i(int x, int lo, int hi) {
 }
 
 __device__ inline double minmod_scalar(double a, double b) {
-    if (a * b <= 0.0) return 0.0;
-    return (a > 0.0) ? fmin(a, b) : fmax(a, b);
+    const double abs_a = fabs(a);
+    const double abs_b = fabs(b);
+    const double limited = fmin(abs_a, abs_b);
+    const double signed_limited = (a > 0.0) ? limited : -limited;
+    constexpr double eps = 1.0e-12;
+    return (abs_b < eps || a*b <= 0.0) ? 0.0 : signed_limited;
 }
 
-__device__ inline Primitive minmod_primitive(const Primitive& a, const Primitive& b) {
-    return Primitive(
-        minmod_scalar(a.rho, b.rho),
-        minmod_scalar(a.u,   b.u),
-        minmod_scalar(a.v,   b.v),
-        minmod_scalar(a.w,   b.w),
-        minmod_scalar(a.Bx,  b.Bx),
-        minmod_scalar(a.By,  b.By),
-        minmod_scalar(a.Bz,  b.Bz),
-        minmod_scalar(a.p,   b.p),
-        minmod_scalar(a.psi, b.psi)
+__device__ inline Conserved minmod_conserved(
+    const Conserved& L, const Conserved& C, const Conserved& R
+) {
+    return Conserved(
+        minmod_scalar(C.rho  - L.rho,  R.rho  - C.rho),
+        minmod_scalar(C.rhou - L.rhou, R.rhou - C.rhou),
+        minmod_scalar(C.rhov - L.rhov, R.rhov - C.rhov),
+        minmod_scalar(C.rhow - L.rhow, R.rhow - C.rhow),
+        minmod_scalar(C.Bx   - L.Bx,   R.Bx   - C.Bx),
+        minmod_scalar(C.By   - L.By,   R.By   - C.By),
+        minmod_scalar(C.Bz   - L.Bz,   R.Bz   - C.Bz),
+        minmod_scalar(C.E    - L.E,    R.E    - C.E),
+        minmod_scalar(C.psi  - L.psi,  R.psi  - C.psi)
     );
 }
 
-__device__ inline bool is_physical(const Primitive& V) {
-    return V.rho > kRhoFloor && V.p > kPFloor
-        && isfinite(V.rho)  && isfinite(V.p)
-        && isfinite(V.u)    && isfinite(V.v)    && isfinite(V.w)
-        && isfinite(V.Bx)   && isfinite(V.By)   && isfinite(V.Bz)
-        && isfinite(V.psi);
-}
-
-__device__ inline Primitive enforce_physical_primitive(const Primitive& cand, const Primitive& fb) {
-    if (is_physical(cand)) return cand;
-    return fb;
-}
-
-__device__ inline Conserved enforce_physical_conserved(const Conserved& cand, const Conserved& fb) {
-    if (is_physical(phys::cons_to_prim(cand))) return cand;
-    return fb;
+// Same conservative positivity test used by the peer implementation.  If
+// either predicted face state fails it, both states from this cell are reset
+// to Uc, giving a first-order reconstruction for that cell.
+__device__ inline bool positive_conserved(const Conserved& U) {
+    const double msq = U.rhou*U.rhou + U.rhov*U.rhov + U.rhow*U.rhow;
+    const double mag = 0.5 * (U.Bx*U.Bx + U.By*U.By + U.Bz*U.Bz);
+    const double lhs = U.rho * (U.E - mag) - 0.5 * msq;
+    return U.rho > 0.0 && lhs > 0.0;
 }
 
 __device__ inline Conserved gload(const ConstGrid2DGPUView& U, int i, int j) {
@@ -166,27 +162,26 @@ __device__ inline void reconstruct_cell_muscl_hancock(
     double dt_over_d, Direction dir,
     Conserved& UL_star, Conserved& UR_star
 ) {
-    const Primitive Wm = phys::cons_to_prim(Um);
-    const Primitive Wc = phys::cons_to_prim(Uc);
-    const Primitive Wp = phys::cons_to_prim(Up);
+    const Conserved slope = minmod_conserved(Um, Uc, Up);
+    const Conserved half_slope = 0.5 * slope;
+    const Conserved UL = Uc - half_slope;
+    const Conserved UR = Uc + half_slope;
 
-    const Primitive slope = minmod_primitive(Wc - Wm, Wp - Wc);
+    // Advance the GLM psi<->Bn subsystem in the Hancock predictor using the
+    // same current-step ch as the peer implementation and the Riemann solve.
+    const double ch = phys::get_ch_glm();
+    const Conserved FL = (dir == Direction::X) ? phys::flux_x(UL, ch)
+                                               : phys::flux_y(UL, ch);
+    const Conserved FR = (dir == Direction::X) ? phys::flux_x(UR, ch)
+                                               : phys::flux_y(UR, ch);
+    const Conserved base = Uc + 0.5 * dt_over_d * (FL - FR);
 
-    const Primitive WL = enforce_physical_primitive(Wc - 0.5 * slope, Wc);
-    const Primitive WR = enforce_physical_primitive(Wc + 0.5 * slope, Wc);
-
-    const Conserved UL = phys::prim_to_cons(WL);
-    const Conserved UR = phys::prim_to_cons(WR);
-
-    // ch=0 here intentionally (matches predictor step in solver_cpu.cpp)
-    const Conserved FL = (dir == Direction::X) ? phys::flux_x(UL, 0.0)
-                                               : phys::flux_y(UL, 0.0);
-    const Conserved FR = (dir == Direction::X) ? phys::flux_x(UR, 0.0)
-                                               : phys::flux_y(UR, 0.0);
-    const Conserved half = 0.5 * dt_over_d * (FR - FL);
-
-    UL_star = enforce_physical_conserved(UL - half, UL);
-    UR_star = enforce_physical_conserved(UR - half, UR);
+    UL_star = base - half_slope;
+    UR_star = base + half_slope;
+    if (!positive_conserved(UL_star) || !positive_conserved(UR_star)) {
+        UL_star = Uc;
+        UR_star = Uc;
+    }
 }
 
 template <int BLOCK_SIZE>
@@ -211,9 +206,7 @@ __global__ void compute_block_max_speed_kernel(
         const Primitive V = phys::cons_to_prim(U);
 
         // Validity threshold must match compute_dt_cpu() in solver_cpu.cpp
-        // (line ~264) and compute_dt_mpi() in solver_mpi.cpp (line ~674)
-        // exactly: 0.0, not the kRhoFloor/kPFloor (1e-12) used by
-        // is_physical() elsewhere in this file for floor enforcement.
+        // (line ~264) and compute_dt_mpi() in solver_mpi.cpp (line ~674).
         // A cell that fails this check must contribute exactly 0.0 to
         // local_speed (it stays at its initial value below), matching the
         // effect of the `continue` statement in the CPU/MPI per-cell loop.
@@ -354,7 +347,7 @@ __global__ void MHD_ADVANCE_X_LAUNCH_BOUNDS advance_x_kernel(
     gstore(Uout,
            Uin.i_begin() + local_i,
            Uin.j_begin() + local_j,
-           enforce_physical_conserved(Unew_c, Uc));
+           Unew_c);
 }
 
 __global__ void MHD_ADVANCE_Y_LAUNCH_BOUNDS advance_y_kernel(
@@ -460,18 +453,16 @@ __global__ void MHD_ADVANCE_Y_LAUNCH_BOUNDS advance_y_kernel(
     const int sc  = (threadIdx.y + 2) * sw + si;
     const Conserved Uc     = S.load(sc);
     const Conserved Unew_c = Uc - dt_dy * (F.load(fp) - F.load(fm));
-    Conserved Unew_physical = enforce_physical_conserved(Unew_c, Uc);
+    Conserved Unew_damped = Unew_c;
 
-    // The previous implementation applied the same multiplication in a
-    // separate full-grid kernel after advance_y.  Performing it after the
-    // physical-state fallback preserves the numerical order while removing
-    // that kernel launch and the extra read/write of Unew.psi.
-    Unew_physical.psi *= psi_damping_factor;
+    // Apply GLM damping after the completed split update, matching the peer
+    // implementation's post-update damping stage.
+    Unew_damped.psi *= psi_damping_factor;
 
     gstore(Uout,
            Uin.i_begin() + local_i,
            Uin.j_begin() + local_j,
-           Unew_physical);
+           Unew_damped);
 }
 
 } // anonymous namespace
