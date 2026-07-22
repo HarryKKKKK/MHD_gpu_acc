@@ -23,14 +23,14 @@ struct CpuWorkspace {
     // y-face flux cache: nx * (ny+1) entries
     std::vector<Conserved> fy_cache;
 
-    // Full-grid primitive cache (including ghost cells): total_nx * total_ny entries.
-    // Populated before each directional sweep to avoid redundant cons_to_prim calls.
-    std::vector<Primitive> prim_cache;
+    // Full-grid conserved-state cache (including ghost cells), matching the
+    // GPU kernels' direct reconstruction from conserved variables.
+    std::vector<Conserved> state_cache;
 
     // Per-cell MUSCL-Hancock half-stepped face states.
     // recon_L[i,j] = left-face (lower-index) half-stepped state of cell (i,j).
     // recon_R[i,j] = right-face (higher-index) half-stepped state of cell (i,j).
-    // Shared between x and y sweeps (used one at a time); lazily sized like prim_cache.
+    // Shared between x and y sweeps (used one at a time); lazily sized like state_cache.
     std::vector<Conserved> recon_L_cache;
     std::vector<Conserved> recon_R_cache;
 
@@ -39,7 +39,7 @@ struct CpuWorkspace {
         ny = ny_;
         fx_cache.resize(static_cast<std::size_t>(nx + 1) * ny);
         fy_cache.resize(static_cast<std::size_t>(nx) * (ny + 1));
-        // prim_cache is lazily sized in advance_cpu (needs grid's ng).
+        // state_cache is lazily sized in advance_cpu (needs grid's ng).
     }
 
     bool is_initialized() const {

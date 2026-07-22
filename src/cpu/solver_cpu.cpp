@@ -16,91 +16,65 @@
 
 namespace {
 
-constexpr double kRhoFloor = 1.0e-12;
-constexpr double kPFloor   = 1.0e-12;
-
 inline double minmod_scalar(double a, double b) {
-    if (a * b <= 0.0) return 0.0;
-    return (a > 0.0) ? std::min(a, b) : std::max(a, b);
+    const double abs_a = std::fabs(a);
+    const double abs_b = std::fabs(b);
+    const double limited = std::fmin(abs_a, abs_b);
+    const double signed_limited = (a > 0.0) ? limited : -limited;
+    constexpr double eps = 1.0e-12;
+    return (abs_b < eps || a*b <= 0.0) ? 0.0 : signed_limited;
 }
 
-inline Primitive minmod_primitive(const Primitive& a, const Primitive& b) {
-    return Primitive(
-        minmod_scalar(a.rho, b.rho),
-        minmod_scalar(a.u,   b.u),
-        minmod_scalar(a.v,   b.v),
-        minmod_scalar(a.w,   b.w),
-        minmod_scalar(a.Bx,  b.Bx),
-        minmod_scalar(a.By,  b.By),
-        minmod_scalar(a.Bz,  b.Bz),
-        minmod_scalar(a.p,   b.p),
-        minmod_scalar(a.psi, b.psi)
+inline Conserved minmod_conserved(
+    const Conserved& L, const Conserved& C, const Conserved& R
+) {
+    return Conserved(
+        minmod_scalar(C.rho  - L.rho,  R.rho  - C.rho),
+        minmod_scalar(C.rhou - L.rhou, R.rhou - C.rhou),
+        minmod_scalar(C.rhov - L.rhov, R.rhov - C.rhov),
+        minmod_scalar(C.rhow - L.rhow, R.rhow - C.rhow),
+        minmod_scalar(C.Bx   - L.Bx,   R.Bx   - C.Bx),
+        minmod_scalar(C.By   - L.By,   R.By   - C.By),
+        minmod_scalar(C.Bz   - L.Bz,   R.Bz   - C.Bz),
+        minmod_scalar(C.E    - L.E,    R.E    - C.E),
+        minmod_scalar(C.psi  - L.psi,  R.psi  - C.psi)
     );
 }
 
-inline bool is_physical(const Primitive& V) {
-    return std::isfinite(V.rho) && V.rho > kRhoFloor &&
-           std::isfinite(V.p)   && V.p   > kPFloor   &&
-           std::isfinite(V.u)   && std::isfinite(V.v) &&
-           std::isfinite(V.w)   &&
-           std::isfinite(V.Bx)  && std::isfinite(V.By) &&
-           std::isfinite(V.Bz)  && std::isfinite(V.psi);
-}
-
-inline Primitive enforce_physical_primitive(
-    const Primitive& candidate,
-    const Primitive& fallback
-) {
-    if (is_physical(candidate)) return candidate;
-    return fallback;
-}
-
-inline Conserved enforce_physical_conserved(
-    const Conserved& candidate,
-    const Conserved& fallback
-) {
-    if (is_physical(phys::cons_to_prim(candidate))) return candidate;
-    return fallback;
-}
-
-inline Primitive limited_slope(
-    const Primitive& Wm,
-    const Primitive& Wc,
-    const Primitive& Wp
-) {
-    return minmod_primitive(Wc - Wm, Wp - Wc);
+inline bool positive_conserved(const Conserved& U) {
+    const double msq = U.rhou*U.rhou + U.rhov*U.rhov + U.rhow*U.rhow;
+    const double mag = 0.5 * (U.Bx*U.Bx + U.By*U.By + U.Bz*U.Bz);
+    const double lhs = U.rho * (U.E - mag) - 0.5 * msq;
+    return U.rho > 0.0 && lhs > 0.0;
 }
 
 inline void reconstruct_cell_muscl_hancock(
-    const Primitive& Wm,
-    const Primitive& Wc,
-    const Primitive& Wp,
+    const Conserved& Um,
+    const Conserved& Uc,
+    const Conserved& Up,
     double           dt_over_d,
     Direction        dir,
     Conserved&       U_left_star,
     Conserved&       U_right_star
 ) {
-    const Primitive slope = limited_slope(Wm, Wc, Wp);
+    const Conserved slope = minmod_conserved(Um, Uc, Up);
+    const Conserved half_slope = 0.5 * slope;
+    const Conserved U_left = Uc - half_slope;
+    const Conserved U_right = Uc + half_slope;
 
-    Primitive W_left  = Wc - 0.5 * slope;
-    Primitive W_right = Wc + 0.5 * slope;
+    const double ch = phys::get_ch_glm();
+    const Conserved F_left  = (dir == Direction::X) ? phys::flux_x(U_left, ch)
+                                                     : phys::flux_y(U_left, ch);
+    const Conserved F_right = (dir == Direction::X) ? phys::flux_x(U_right, ch)
+                                                     : phys::flux_y(U_right, ch);
+    const Conserved base = Uc + 0.5 * dt_over_d * (F_left - F_right);
 
-    W_left  = enforce_physical_primitive(W_left,  Wc);
-    W_right = enforce_physical_primitive(W_right, Wc);
-
-    const Conserved U_left  = phys::prim_to_cons(W_left);
-    const Conserved U_right = phys::prim_to_cons(W_right);
-
-    // ch=0 here intentionally (matches src/gpu/solver_gpu.cu predictor step)
-    const Conserved F_left  = (dir == Direction::X) ? phys::flux_x(U_left,  0.0)
-                                                     : phys::flux_y(U_left,  0.0);
-    const Conserved F_right = (dir == Direction::X) ? phys::flux_x(U_right, 0.0)
-                                                     : phys::flux_y(U_right, 0.0);
-
-    const Conserved half_update = 0.5 * dt_over_d * (F_right - F_left);
-
-    U_left_star  = enforce_physical_conserved(U_left  - half_update, U_left);
-    U_right_star = enforce_physical_conserved(U_right - half_update, U_right);
+    U_left_star = base - half_slope;
+    U_right_star = base + half_slope;
+    if (!positive_conserved(U_left_star) || !positive_conserved(U_right_star)) {
+        U_left_star = Uc;
+        U_right_star = Uc;
+    }
 }
 
 inline int xface_idx(int local_j, int local_i_face, int nx_faces) {
@@ -112,7 +86,7 @@ inline int yface_idx(int local_j_face, int local_i, int nx_cells) {
 }
 
 void fill_recon_x_cache(
-    const std::vector<Primitive>& W,
+    const std::vector<Conserved>& U,
     int ib, int ie, int jb, int je,
     int total_nx,
     double dt_over_dx,
@@ -126,9 +100,9 @@ void fill_recon_x_cache(
         for (int i = ib - 1; i <= ie; ++i) {
             const std::size_t idx = static_cast<std::size_t>(j) * total_nx + i;
             reconstruct_cell_muscl_hancock(
-                W[static_cast<std::size_t>(j) * total_nx + (i - 1)],
-                W[idx],
-                W[static_cast<std::size_t>(j) * total_nx + (i + 1)],
+                U[static_cast<std::size_t>(j) * total_nx + (i - 1)],
+                U[idx],
+                U[static_cast<std::size_t>(j) * total_nx + (i + 1)],
                 dt_over_dx, Direction::X,
                 recon_L[idx], recon_R[idx]
             );
@@ -137,7 +111,7 @@ void fill_recon_x_cache(
 }
 
 void fill_recon_y_cache(
-    const std::vector<Primitive>& W,
+    const std::vector<Conserved>& U,
     int ib, int ie, int jb, int je,
     int total_nx,
     double dt_over_dy,
@@ -151,9 +125,9 @@ void fill_recon_y_cache(
         for (int i = ib; i < ie; ++i) {
             const std::size_t idx = static_cast<std::size_t>(j) * total_nx + i;
             reconstruct_cell_muscl_hancock(
-                W[static_cast<std::size_t>(j - 1) * total_nx + i],
-                W[idx],
-                W[static_cast<std::size_t>(j + 1) * total_nx + i],
+                U[static_cast<std::size_t>(j - 1) * total_nx + i],
+                U[idx],
+                U[static_cast<std::size_t>(j + 1) * total_nx + i],
                 dt_over_dy, Direction::Y,
                 recon_L[idx], recon_R[idx]
             );
@@ -307,7 +281,7 @@ void advance_cpu(
     const int total_nx = Uold.total_nx();
     const int total_ny = Uold.total_ny();
     const std::size_t total_cells = static_cast<std::size_t>(total_nx) * total_ny;
-    ws.prim_cache.resize(total_cells);
+    ws.state_cache.resize(total_cells);
     ws.recon_L_cache.resize(total_cells);
     ws.recon_R_cache.resize(total_cells);
 
@@ -316,10 +290,10 @@ void advance_cpu(
 #endif
     for (int jj = 0; jj < total_ny; ++jj)
         for (int ii = 0; ii < total_nx; ++ii)
-            ws.prim_cache[static_cast<std::size_t>(jj) * total_nx + ii] =
-                phys::cons_to_prim(Uold(ii, jj));
+            ws.state_cache[static_cast<std::size_t>(jj) * total_nx + ii] =
+                Uold(ii, jj);
 
-    fill_recon_x_cache(ws.prim_cache, ib, ie, jb, je, total_nx, dt_over_dx,
+    fill_recon_x_cache(ws.state_cache, ib, ie, jb, je, total_nx, dt_over_dx,
                        ws.recon_L_cache, ws.recon_R_cache);
     fill_x_face_cache(Uold, ws.recon_L_cache, ws.recon_R_cache, ws.fx_cache, solver);
 
@@ -337,7 +311,6 @@ void advance_cpu(
                     ws.fx_cache[xface_idx(local_j, local_i_face_p, nx_faces)] -
                     ws.fx_cache[xface_idx(local_j, local_i_face_m, nx_faces)]
                 );
-            Utmp(i,j) = enforce_physical_conserved(Utmp(i,j), Uold(i,j));
         }
     }
 
@@ -349,10 +322,10 @@ void advance_cpu(
 #endif
     for (int jj = 0; jj < total_ny; ++jj)
         for (int ii = 0; ii < total_nx; ++ii)
-            ws.prim_cache[static_cast<std::size_t>(jj) * total_nx + ii] =
-                phys::cons_to_prim(Utmp(ii, jj));
+            ws.state_cache[static_cast<std::size_t>(jj) * total_nx + ii] =
+                Utmp(ii, jj);
 
-    fill_recon_y_cache(ws.prim_cache, ib, ie, jb, je, total_nx, dt_over_dy,
+    fill_recon_y_cache(ws.state_cache, ib, ie, jb, je, total_nx, dt_over_dy,
                        ws.recon_L_cache, ws.recon_R_cache);
     fill_y_face_cache(Utmp, ws.recon_L_cache, ws.recon_R_cache, ws.fy_cache, solver);
 
@@ -370,7 +343,6 @@ void advance_cpu(
                     ws.fy_cache[yface_idx(local_j_face_p, local_i, nx_cells)] -
                     ws.fy_cache[yface_idx(local_j_face_m, local_i, nx_cells)]
                 );
-            Unew(i,j) = enforce_physical_conserved(Unew(i,j), Utmp(i,j));
         }
     }
 

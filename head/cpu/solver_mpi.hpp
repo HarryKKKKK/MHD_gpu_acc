@@ -16,7 +16,7 @@
 //
 // Algorithm and optimisations are identical to the OpenMP CPU solver:
 // second-order MUSCL-Hancock reconstruction with x-then-y dimensional
-// splitting, a precomputed primitive-variable cache, a precomputed
+// splitting, a precomputed conserved-state cache, a precomputed
 // per-cell left/right reconstruction cache, and precomputed x-/y-face
 // Riemann flux caches (see src/cpu/solver_mpi.cpp).
 //
@@ -121,8 +121,8 @@ struct MpiWorkspace {
     std::vector<Conserved> fx_cache;
     // y-face flux cache: nx * (ny+1) entries
     std::vector<Conserved> fy_cache;
-    // Full-grid primitive cache (including ghost cells).
-    std::vector<Primitive> prim_cache;
+    // Full-grid conserved-state cache (including ghost cells), matching GPU.
+    std::vector<Conserved> state_cache;
     // Per-cell MUSCL-Hancock half-stepped face states.
     std::vector<Conserved> recon_L_cache;
     std::vector<Conserved> recon_R_cache;
