@@ -6,7 +6,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
-#SBATCH --array=0-31%4
+#SBATCH --array=0-3%4
 #SBATCH -t 24:00:00
 #SBATCH -o logs/%x_%A_%a.out
 #SBATCH -e logs/%x_%A_%a.err
@@ -14,8 +14,10 @@
 set -euo pipefail
 
 # Final GPU time-to-solution matrix on CSD3:
-#   2 cases x 4 solvers x n={1,2,4,8} = 32 array tasks.
-# n=1/2 run three times; n=4/8 run once.  No field files are written.
+#   4 array tasks, one solver per task/GPU.
+# Each task builds its solver once, then runs both cases and n={1,2,4,8}
+# sequentially.  n=1/2 run three times; n=4/8 run once.  No field files
+# are written.
 # HLLD uses the measured canonical-Y + X/Y launch-bound-3 build.  The other
 # solvers use the repository defaults, so their kernels are not changed by the
 # HLLD-specific experiment.
@@ -100,9 +102,14 @@ if [ ! -x "${BIN}" ]; then
 fi
 
 unset CUDA_LAUNCH_BLOCKING
-for ((repeat = 1; repeat <= NUM_REPEATS; ++repeat)); do
-    comparison_run_once "${repeat}" \
-        "${BIN}" "${N_SCALE}" --case "${CASE_NAME}" --solver "${SOLVER_NAME}" --no-out
+for N_SCALE_VALUE in "${SCALES[@]}"; do
+    for CASE_VALUE in "${CASES[@]}"; do
+        comparison_set_case_scale "${CASE_VALUE}" "${N_SCALE_VALUE}"
+        for ((repeat = 1; repeat <= NUM_REPEATS; ++repeat)); do
+            comparison_run_once "${repeat}" \
+                "${BIN}" "${N_SCALE}" --case "${CASE_NAME}" --solver "${SOLVER_NAME}" --no-out
+        done
+    done
 done
 
 comparison_finish

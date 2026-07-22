@@ -15,20 +15,20 @@ comparison_init_config() {
     fi
 
     local task_id="${SLURM_ARRAY_TASK_ID:-0}"
-    if ! [[ "${task_id}" =~ ^[0-9]+$ ]] || [ "${task_id}" -ge 32 ]; then
-        echo "[ERROR] SLURM_ARRAY_TASK_ID must be in [0, 31]; got '${task_id}'."
+    if ! [[ "${task_id}" =~ ^[0-9]+$ ]] || [ "${task_id}" -ge 4 ]; then
+        echo "[ERROR] SLURM_ARRAY_TASK_ID must be in [0, 3]; got '${task_id}'."
         exit 2
     fi
 
-    local configs_per_scale=8
-    local within_scale=$((task_id % configs_per_scale))
-    SCALE_INDEX=$((task_id / configs_per_scale))
-    CASE_INDEX=$((within_scale / 4))
-    SOLVER_INDEX=$((within_scale % 4))
-
-    N_SCALE="${SCALES[${SCALE_INDEX}]}"
-    CASE_NAME="${CASES[${CASE_INDEX}]}"
+    # One Slurm array task owns one solver.  Cases and scales are executed
+    # sequentially inside that allocation, so each solver is compiled once.
+    SOLVER_INDEX="${task_id}"
     SOLVER_NAME="${SOLVERS[${SOLVER_INDEX}]}"
+}
+
+comparison_set_case_scale() {
+    CASE_NAME="$1"
+    N_SCALE="$2"
 
     if ! [[ "${N_SCALE}" =~ ^[1-9][0-9]*$ ]]; then
         echo "[ERROR] Scale must be a positive integer; got '${N_SCALE}'."
@@ -86,7 +86,7 @@ comparison_prepare_paths() {
     BIN_ROOT="${WORKDIR}/bin/final_comparison/${RUN_ID}/${BACKEND}"
     mkdir -p logs "${RESULT_DIR}/runs" "${BUILD_ROOT}" "${BIN_ROOT}"
 
-    SUMMARY_FILE="${RESULT_DIR}/${BACKEND}_${CASE_NAME}_${SOLVER_NAME}_n${N_SCALE}.csv"
+    SUMMARY_FILE="${RESULT_DIR}/${BACKEND}_${SOLVER_NAME}.csv"
     METADATA_FILE="${RESULT_DIR}/metadata.txt"
 
     echo "backend,case,solver,n,repeat,repeats_requested,build_variant,threads,ranks,nx,ny,total_cells,steps,app_elapsed_s,steps_per_s,Mcell_updates_s,wall_seconds,user_seconds,sys_seconds,cpu_percent,max_rss_kb,major_page_faults,minor_page_faults,voluntary_context_switches,involuntary_context_switches,start_utc,end_utc,exit_status,hostname,git_branch,git_commit" > "${SUMMARY_FILE}"
@@ -101,10 +101,11 @@ comparison_write_metadata() {
     {
         echo "===== EXPERIMENT ====="
         echo "backend=${BACKEND}"
-        echo "case=${CASE_NAME}"
+        echo "cases=${CASES[*]}"
         echo "solver=${SOLVER_NAME}"
-        echo "n=${N_SCALE}"
-        echo "repeats=${NUM_REPEATS}"
+        echo "scales=${SCALES[*]}"
+        echo "small_n_repeats=${SMALL_N_REPEATS:-3}"
+        echo "large_n_repeats=${LARGE_N_REPEATS:-1}"
         echo "array_job_id=${SLURM_ARRAY_JOB_ID:-${SLURM_JOB_ID}}"
         echo "array_task_id=${SLURM_ARRAY_TASK_ID}"
         echo "job_id=${SLURM_JOB_ID}"
@@ -161,7 +162,7 @@ comparison_run_once() {
     shift
     local -a command=("$@")
 
-    local stem="${RESULT_DIR}/runs/repeat_${repeat_index}"
+    local stem="${RESULT_DIR}/runs/${CASE_NAME}_${SOLVER_NAME}_n${N_SCALE}_repeat_${repeat_index}"
     local console_file="${stem}.log"
     local time_file="${stem}.time"
     local start_utc end_utc start_ns end_ns wall_seconds status

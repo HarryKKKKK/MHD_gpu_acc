@@ -6,7 +6,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=76
 #SBATCH --exclusive
-#SBATCH --array=0-31%4
+#SBATCH --array=0-3%4
 #SBATCH -t 36:00:00
 #SBATCH -o logs/%x_%A_%a.out
 #SBATCH -e logs/%x_%A_%a.err
@@ -14,8 +14,9 @@
 set -euo pipefail
 
 # Final OpenMP CPU time-to-solution matrix on one 76-core CSD3 Ice Lake node.
-# Each of the 32 array tasks runs one case/solver/n configuration.  n=1/2 are
-# repeated three times and n=4/8 once.  --no-out suppresses all field CSVs.
+# Each of the four array tasks owns one solver/node, builds once, and runs both
+# cases and all four scales sequentially.  n=1/2 are repeated three times and
+# n=4/8 once.  --no-out suppresses all field CSVs.
 #
 # If mybalance shows a different CPU project, override the account at submit:
 #   mkdir -p logs
@@ -70,9 +71,14 @@ if [ ! -x "${BIN}" ]; then
     exit 1
 fi
 
-for ((repeat = 1; repeat <= NUM_REPEATS; ++repeat)); do
-    comparison_run_once "${repeat}" \
-        "${BIN}" "${CASE_NAME}" --n "${N_SCALE}" --solver "${SOLVER_NAME}" --no-out
+for N_SCALE_VALUE in "${SCALES[@]}"; do
+    for CASE_VALUE in "${CASES[@]}"; do
+        comparison_set_case_scale "${CASE_VALUE}" "${N_SCALE_VALUE}"
+        for ((repeat = 1; repeat <= NUM_REPEATS; ++repeat)); do
+            comparison_run_once "${repeat}" \
+                "${BIN}" "${CASE_NAME}" --n "${N_SCALE}" --solver "${SOLVER_NAME}" --no-out
+        done
+    done
 done
 
 comparison_finish
