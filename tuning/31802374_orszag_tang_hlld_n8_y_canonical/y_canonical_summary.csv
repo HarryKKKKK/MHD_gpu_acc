@@ -1,0 +1,5 @@
+variant,canonicalize_y,y_lb,registers,stack_bytes,spill_store_bytes,spill_load_bytes,repeats,measured_steps,median_wall_ms,median_ms_per_step,median_x_ms_per_step,median_y_ms_per_step,state_hash,correctness
+native_y_lb0,0,0,201,0,0,0,5,500,1561.901710000,3.123803420,1.221980161,1.706649603,b5b8bfe2431aff9b,PASS
+canonical_y_lb0,1,0,197,0,0,0,5,500,1559.970849000,3.119941698,1.219284991,1.705015297,b5b8bfe2431aff9b,PASS
+canonical_y_lb2,1,2,197,0,0,0,5,500,1560.083130000,3.120166260,1.219891200,1.705019394,b5b8bfe2431aff9b,PASS
+canonical_y_lb3,1,3,168,96,40,52,5,500,1441.712546000,2.883425092,1.220560896,1.466980356,b5b8bfe2431aff9b,PASS
