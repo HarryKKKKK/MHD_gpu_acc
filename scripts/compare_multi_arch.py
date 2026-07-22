@@ -39,6 +39,7 @@ Exit code:
 import argparse
 import csv
 import itertools
+import math
 import sys
 from pathlib import Path
 
@@ -79,13 +80,22 @@ def diff_stats(a, b):
     sum_sq = 0.0
     max_abs = 0.0
     max_rel = 0.0
+    nonfinite_values = 0
     for row_a, row_b in zip(a, b):
         if len(row_a) != len(row_b):
             return None
         for va, vb in zip(row_a, row_b):
+            if not math.isfinite(va) or not math.isfinite(vb):
+                nonfinite_values += 1
+                n += 1
+                continue
             d = abs(va - vb)
             ref = max(abs(va), abs(vb))
             rel = d / ref if ref > 0 else 0.0
+            if not math.isfinite(d) or not math.isfinite(rel):
+                nonfinite_values += 1
+                n += 1
+                continue
             if d > max_abs:
                 max_abs = d
             if rel > max_rel:
@@ -95,11 +105,20 @@ def diff_stats(a, b):
             n += 1
     if n == 0:
         return None
+    if nonfinite_values:
+        max_abs = math.inf
+        max_rel = math.inf
+        mean_abs = math.inf
+        l2_abs = math.inf
+    else:
+        mean_abs = sum_abs / n
+        l2_abs = (sum_sq / n) ** 0.5
     return {
         "max_abs": max_abs,
-        "mean_abs": sum_abs / n,
+        "mean_abs": mean_abs,
         "max_rel": max_rel,
-        "l2_abs": (sum_sq / n) ** 0.5,
+        "l2_abs": l2_abs,
+        "nonfinite_values": nonfinite_values,
     }
 
 
@@ -207,6 +226,7 @@ def main():
                 if missing_a or missing_b:
                     print(f"  [WARN] {case}/{solver}/{pair_label}: {len(missing_a)} file(s) only in {arch_b}, "
                           f"{len(missing_b)} file(s) only in {arch_a} (run may have exited early / diverged)")
+                    any_fail = True
 
                 shape_fail = [k for k, s, err in rows if s is None]
                 valid = [(k, s) for k, s, err in rows if s is not None]
@@ -240,7 +260,7 @@ def main():
                 worst_field = worst_key.rsplit("_", 1)[-1].replace(".csv", "")
 
                 passed = (worst_stats["max_abs"] <= args.tol) or (worst_stats["max_rel"] <= args.rtol)
-                passed = passed and not shape_fail
+                passed = passed and not shape_fail and not missing_a and not missing_b
                 tag = "PASS" if passed else "FAIL"
                 if not passed:
                     any_fail = True
