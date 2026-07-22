@@ -1,0 +1,98 @@
+===== EXPERIMENT =====
+backend=cpu_openmp
+case=orszag_tang
+solver=force
+n=2
+repeats=3
+array_job_id=31849381
+array_task_id=11
+job_id=31851410
+hostname=cpu-q-268
+start_utc=2026-07-22T14:39:31+00:00
+workdir=/rds/user/hk597/hpc-work/MHD_gpu_acc
+git_branch=final_version
+git_commit=60bfad123585d99ab745cb36f263ebe346421731
+git_status_begin
+?? timing/final_comparison/
+git_status_end
+slurm_partition=icelake
+slurm_nodes=1
+slurm_ntasks=1
+slurm_cpus_per_task=76
+build_variant=repository_default_openmp
+compiler_begin
+g++ (GCC) 8.5.0 20210514 (Red Hat 8.5.0-28)
+Copyright (C) 2018 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+compiler_end
+modules_begin
+Currently Loaded Modulefiles:
+ 1) rhel8/slurm           6) intel-oneapi-compilers/2022.1.0/gcc/b6zld2mz  
+ 2) singularity/current   7) ucx/1.15.0                                    
+ 3) rhel8/global          8) intel-oneapi-mpi/2021.6.0/intel/guxuvcpm      
+ 4) cuda/11.4             9) rhel8/default-icl                             
+ 5) vgl/2.5.1/64         
+modules_end
+lscpu_begin
+Architecture:        x86_64
+CPU op-mode(s):      32-bit, 64-bit
+Byte Order:          Little Endian
+CPU(s):              76
+On-line CPU(s) list: 0-75
+Thread(s) per core:  1
+Core(s) per socket:  38
+Socket(s):           2
+NUMA node(s):        2
+Vendor ID:           GenuineIntel
+CPU family:          6
+Model:               106
+Model name:          Intel(R) Xeon(R) Platinum 8368Q CPU @ 2.60GHz
+Stepping:            6
+CPU MHz:             3700.000
+CPU max MHz:         3700.0000
+CPU min MHz:         800.0000
+BogoMIPS:            5200.00
+L1d cache:           48K
+L1i cache:           32K
+L2 cache:            1280K
+L3 cache:            58368K
+NUMA node0 CPU(s):   0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52,54,56,58,60,62,64,66,68,70,72,74
+NUMA node1 CPU(s):   1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51,53,55,57,59,61,63,65,67,69,71,73,75
+Flags:               fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf pni pclmulqdq dtes64 monitor ds_cpl smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid dca sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb cat_l3 invpcid_single intel_ppin ssbd mba ibrs ibpb stibp ibrs_enhanced fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb intel_pt avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local split_lock_detect wbnoinvd dtherm ida arat pln pts avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg tme avx512_vpopcntdq la57 rdpid fsrm md_clear pconfig flush_l1d arch_capabilities
+lscpu_end
+slurm_job_begin
+JobId=31851410 ArrayJobId=31849381 ArrayTaskId=11 ArrayTaskThrottle=4 JobName=mhd_cmp_cpu
+   UserId=hk597(110142) GroupId=hk597(110142) MCS_label=N/A
+   Priority=626 Nice=0 Account=mphil-nikiforakis-hk597-sl2-cpu QOS=cpu1
+   JobState=RUNNING Reason=None Dependency=(null)
+   Requeue=1 Restarts=0 BatchFlag=1 Reboot=0 ExitCode=0:0
+   RunTime=00:00:34 TimeLimit=1-12:00:00 TimeMin=N/A
+   SubmitTime=2026-07-22T15:19:19 EligibleTime=2026-07-22T15:19:23
+   AccrueTime=2026-07-22T15:19:23
+   StartTime=2026-07-22T15:38:58 EndTime=2026-07-24T03:38:58 Deadline=N/A
+   SuspendTime=None SecsPreSuspend=0 LastSchedEval=2026-07-22T15:38:58 Scheduler=Main
+   Partition=icelake AllocNode:Sid=login-q-4:1816186
+   ReqNodeList=(null) ExcNodeList=(null)
+   NodeList=cpu-q-268
+   BatchHost=cpu-q-268
+   NumNodes=1 NumCPUs=76 NumTasks=1 CPUs/Task=76 ReqB:S:C:T=0:0:*:*
+   ReqTRES=cpu=76,mem=256120M,node=1,billing=76
+   AllocTRES=cpu=76,mem=256120M,node=1,billing=76
+   Socks/Node=* NtasksPerN:B:S:C=0:0:*:* CoreSpec=*
+   MinCPUsNode=76 MinMemoryCPU=3370M MinTmpDiskNode=0
+   Features=(null) DelayBoot=00:00:00
+   OverSubscribe=NO Contiguous=0 Licenses=(null) Network=(null)
+   Command=/rds/user/hk597/hpc-work/MHD_gpu_acc/scripts/csd3_slurm/slurm_compare_cpu.sh
+   WorkDir=/rds/user/hk597/hpc-work/MHD_gpu_acc
+   StdErr=/rds/user/hk597/hpc-work/MHD_gpu_acc/logs/mhd_cmp_cpu_31849381_11.err
+   StdIn=/dev/null
+   StdOut=/rds/user/hk597/hpc-work/MHD_gpu_acc/logs/mhd_cmp_cpu_31849381_11.out
+   TresPerTask=cpu=76
+   
+
+slurm_job_end
+OMP_NUM_THREADS=76
+OMP_PROC_BIND=close
+OMP_PLACES=cores
+build_wall_seconds=1.100826112
