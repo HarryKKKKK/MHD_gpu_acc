@@ -1,0 +1,18 @@
+date=2026-07-22T08:47:04+01:00
+host=gpu-q-5
+job_id=31803730
+workdir=/rds/user/hk597/hpc-work/MHD_gpu_acc
+N=8
+case=orszag_tang
+solver=hlld
+warmup_steps=10
+profile_steps=3
+ncu_kernel_regex=advance_y_kernel
+ncu_set=targeted
+hlld_canonicalize_y=1
+advance_x_min_blocks_per_sm=3
+advance_y_min_blocks_per_sm=3
+git_branch=7.sweep_y_kernel
+git_commit=f10fb19506462507342eb61f6367d1def9d566c9
+ncu=NVIDIA (R) Nsight Compute Command Line Profiler Copyright (c) 2018-2021 NVIDIA Corporation Version 2021.2.0.0 (build 30066266) (public-release) 
+NVIDIA A100-SXM4-80GB, GPU-28632f9e-b28a-11ae-3db6-11cceeba267d, 595.71.05, 1155 MHz, 1593 MHz
