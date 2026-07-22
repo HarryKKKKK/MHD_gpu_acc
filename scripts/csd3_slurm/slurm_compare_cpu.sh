@@ -21,9 +21,15 @@ set -euo pipefail
 #   mkdir -p logs
 #   sbatch -A YOUR_PROJECT-CPU scripts/csd3_slurm/slurm_compare_cpu.sh
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SUBMIT_ROOT="${WORKDIR:-${SLURM_SUBMIT_DIR:-$(pwd)}}"
+COMMON_SCRIPT="${SUBMIT_ROOT}/scripts/csd3_slurm/comparison_common.sh"
+if [ ! -f "${COMMON_SCRIPT}" ]; then
+    echo "[ERROR] Cannot find comparison helper: ${COMMON_SCRIPT}"
+    echo "[ERROR] Submit this job from the MHD repository root, or set WORKDIR."
+    exit 1
+fi
 # shellcheck source=comparison_common.sh
-source "${SCRIPT_DIR}/comparison_common.sh"
+source "${COMMON_SCRIPT}"
 
 BACKEND="cpu_openmp"
 BUILD_VARIANT="repository_default_openmp"
