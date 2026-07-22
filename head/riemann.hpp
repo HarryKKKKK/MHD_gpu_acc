@@ -423,13 +423,16 @@ HD inline Conserved hlld_flux_dir(
     const double SL = fmin(uL, uR) - cmax;
     const double SR = fmax(uL, uR) + cmax;
 
-    const Conserved FL = (Dir == Direction::X) ? phys::flux_x(UL, ch)
-                                               : phys::flux_y(UL, ch);
-    const Conserved FR = (Dir == Direction::X) ? phys::flux_x(UR, ch)
-                                               : phys::flux_y(UR, ch);
-
-    if (SL >= 0.0) return FL;
-    if (SR <= 0.0) return FR;
+    // Do not keep both nine-component physical fluxes live throughout the
+    // complete HLLD construction.  Most wave regions consume only one side.
+    if (SL >= 0.0) {
+        return (Dir == Direction::X) ? phys::flux_x(UL, ch)
+                                     : phys::flux_y(UL, ch);
+    }
+    if (SR <= 0.0) {
+        return (Dir == Direction::X) ? phys::flux_x(UR, ch)
+                                     : phys::flux_y(UR, ch);
+    }
 
     const double denomRL = SR - SL;
     if (!finite_number(SL) || !finite_number(SR) ||
@@ -456,14 +459,29 @@ HD inline Conserved hlld_flux_dir(
         return fallback_hll();
     }
 
+    // The two star densities and rotational-wave speeds are enough to select
+    // the outer wave regions.  Compute those scalars first so an outer branch
+    // never has to materialise the unused side's nine-component star state.
+    const double rhosL = WL.rho * (SL - uL) / (SL - SM);
+    const double rhosR = WR.rho * (SR - uR) / (SR - SM);
+    if (!(rhosL > 0.0) || !(rhosR > 0.0) ||
+        !finite_number(rhosL) || !finite_number(rhosR)) {
+        return fallback_hll();
+    }
+
+    const double sqrtL = sqrt(rhosL);
+    const double sqrtR = sqrt(rhosR);
+    const double SsL = SM - fabs(Bx) / sqrtL;
+    const double SsR = SM + fabs(Bx) / sqrtR;
+    if (!finite_number(SsL) || !finite_number(SsR)) {
+        return fallback_hll();
+    }
+
     auto star_state = [&](const Primitive& W, double E, double S,
-                          Conserved& Us, double& rhos) -> bool {
+                          double rhoS, Conserved& Us) -> bool {
         const double u  = (Dir == Direction::X) ? W.u  : W.v;
         const double v  = (Dir == Direction::X) ? W.v  : W.u;
         const double Bt = (Dir == Direction::X) ? W.By : W.Bx;
-        const double rhoS = W.rho * (S - u) / (S - SM);
-        rhos = rhoS;
-        if (!(rhoS > 0.0) || !finite_number(rhoS)) return false;
 
         const double denom = W.rho*(S - u)*(S - SM) - Bx*Bx;
         double vs, ws, Bys, Bzs;
@@ -495,105 +513,127 @@ HD inline Conserved hlld_flux_dir(
                primitive_is_physical(phys::cons_to_prim(Us));
     };
 
-    Conserved UsL, UsR;
-    double rhosL, rhosR;
-    if (!star_state(WL, UL.E, SL, UsL, rhosL) ||
-        !star_state(WR, UR.E, SR, UsR, rhosR)) {
-        return fallback_hll();
-    }
-
-    const double sqrtL = sqrt(rhosL);
-    const double sqrtR = sqrt(rhosR);
-    const double SsL = SM - fabs(Bx) / sqrtL;
-    const double SsR = SM + fabs(Bx) / sqrtR;
-    if (!finite_number(SsL) || !finite_number(SsR)) {
-        return fallback_hll();
-    }
-
     const bool degenerate =
         fabs(Bx) < 1.0e-12 * (1.0 + fabs(SR - SL));
-    const Conserved FsL = FL + SL*(UsL - UL);
-    const Conserved FsR = FR + SR*(UsR - UR);
+    const bool left_outer = degenerate
+        ? (SL <= 0.0 && 0.0 <= SM)
+        : (SL <= 0.0 && 0.0 <= SsL);
+    const bool right_outer = degenerate
+        ? (SM <= 0.0 && 0.0 <= SR)
+        : (SsR <= 0.0 && 0.0 <= SR);
+
     Conserved F;
 
-    if (!degenerate) {
-        if (SL <= 0.0 && 0.0 <= SsL) {
-            F = FsL;
-        } else if (SsR <= 0.0 && 0.0 <= SR) {
-            F = FsR;
-        } else {
-            const double sgn = (Bx > 0.0) ? 1.0 : -1.0;
-            const double denomV = sqrtL + sqrtR;
-            if (!finite_number(denomV) || denomV <= 0.0) {
-                return fallback_hll();
-            }
-            auto tangential_momentum = [](const Conserved& U) -> double {
-                if constexpr (Dir == Direction::X) return U.rhov;
-                return U.rhou;
-            };
-            auto tangential_field = [](const Conserved& U) -> double {
-                if constexpr (Dir == Direction::X) return U.By;
-                return U.Bx;
-            };
-            const double vss =
-                (sqrtL*tangential_momentum(UsL)/rhosL
-                 + sqrtR*tangential_momentum(UsR)/rhosR
-                 + (tangential_field(UsR) - tangential_field(UsL))*sgn)
-                / denomV;
-            const double wss =
-                (sqrtL*UsL.rhow/rhosL + sqrtR*UsR.rhow/rhosR
-                 + (UsR.Bz - UsL.Bz)*sgn) / denomV;
-            const double Byss =
-                (sqrtL*tangential_field(UsR)
-                 + sqrtR*tangential_field(UsL)
-                 + sqrtL*sqrtR*(tangential_momentum(UsR)/rhosR
-                                 - tangential_momentum(UsL)/rhosL)*sgn)
-                / denomV;
-            const double Bzss =
-                (sqrtL*UsR.Bz + sqrtR*UsL.Bz
-                 + sqrtL*sqrtR*(UsR.rhow/rhosR - UsL.rhow/rhosL)*sgn)
-                / denomV;
-            const double vssdotB = SM*Bx + vss*Byss + wss*Bzss;
-
-            auto inner_state = [&](const Conserved& Us, double rhos,
-                                   double sign_side) -> Conserved {
-                const double vsdotB =
-                    SM*Bx
-                    + (tangential_momentum(Us)/rhos)*tangential_field(Us)
-                    + (Us.rhow/rhos)*Us.Bz;
-                const double Ess =
-                    Us.E + sign_side*sqrt(rhos)*(vsdotB - vssdotB)*sgn;
-                if constexpr (Dir == Direction::X) {
-                    return Conserved(rhos, rhos*SM, rhos*vss, rhos*wss,
-                                     Bx, Byss, Bzss, Ess, psi_s);
-                }
-                return Conserved(rhos, rhos*vss, rhos*SM, rhos*wss,
-                                 Byss, Bx, Bzss, Ess, psi_s);
-            };
-
-            if (SsL <= 0.0 && 0.0 <= SM) {
-                const Conserved UssL = inner_state(UsL, rhosL, -1.0);
-                if (!conserved_is_finite(UssL) ||
-                    !primitive_is_physical(phys::cons_to_prim(UssL))) {
-                    return fallback_hll();
-                }
-                F = FsL + SsL*(UssL - UsL);
-            } else if (SM <= 0.0 && 0.0 <= SsR) {
-                const Conserved UssR = inner_state(UsR, rhosR, +1.0);
-                if (!conserved_is_finite(UssR) ||
-                    !primitive_is_physical(phys::cons_to_prim(UssR))) {
-                    return fallback_hll();
-                }
-                F = FsR + SsR*(UssR - UsR);
-            } else {
+    if (left_outer) {
+        // Preserve the original fallback contract: the opposite star state
+        // must still be physical, but its storage can die before UsL exists.
+        {
+            Conserved unused_UsR;
+            if (!star_state(WR, UR.E, SR, rhosR, unused_UsR)) {
                 return fallback_hll();
             }
         }
+        Conserved UsL;
+        if (!star_state(WL, UL.E, SL, rhosL, UsL)) {
+            return fallback_hll();
+        }
+        const Conserved FL = (Dir == Direction::X) ? phys::flux_x(UL, ch)
+                                                   : phys::flux_y(UL, ch);
+        F = FL + SL*(UsL - UL);
+    } else if (right_outer) {
+        {
+            Conserved unused_UsL;
+            if (!star_state(WL, UL.E, SL, rhosL, unused_UsL)) {
+                return fallback_hll();
+            }
+        }
+        Conserved UsR;
+        if (!star_state(WR, UR.E, SR, rhosR, UsR)) {
+            return fallback_hll();
+        }
+        const Conserved FR = (Dir == Direction::X) ? phys::flux_x(UR, ch)
+                                                   : phys::flux_y(UR, ch);
+        F = FR + SR*(UsR - UR);
     } else {
-        if (SL <= 0.0 && 0.0 <= SM) {
-            F = FsL;
-        } else if (SM <= 0.0 && 0.0 <= SR) {
-            F = FsR;
+        // Only the double-star region needs both complete star states at the
+        // same time.  Degenerate fans have no valid inner branch here.
+        if (degenerate) return fallback_hll();
+
+        Conserved UsL, UsR;
+        if (!star_state(WL, UL.E, SL, rhosL, UsL) ||
+            !star_state(WR, UR.E, SR, rhosR, UsR)) {
+            return fallback_hll();
+        }
+
+        const double sgn = (Bx > 0.0) ? 1.0 : -1.0;
+        const double denomV = sqrtL + sqrtR;
+        if (!finite_number(denomV) || denomV <= 0.0) {
+            return fallback_hll();
+        }
+        auto tangential_momentum = [](const Conserved& U) -> double {
+            if constexpr (Dir == Direction::X) return U.rhov;
+            return U.rhou;
+        };
+        auto tangential_field = [](const Conserved& U) -> double {
+            if constexpr (Dir == Direction::X) return U.By;
+            return U.Bx;
+        };
+        const double vss =
+            (sqrtL*tangential_momentum(UsL)/rhosL
+             + sqrtR*tangential_momentum(UsR)/rhosR
+             + (tangential_field(UsR) - tangential_field(UsL))*sgn)
+            / denomV;
+        const double wss =
+            (sqrtL*UsL.rhow/rhosL + sqrtR*UsR.rhow/rhosR
+             + (UsR.Bz - UsL.Bz)*sgn) / denomV;
+        const double Byss =
+            (sqrtL*tangential_field(UsR)
+             + sqrtR*tangential_field(UsL)
+             + sqrtL*sqrtR*(tangential_momentum(UsR)/rhosR
+                             - tangential_momentum(UsL)/rhosL)*sgn)
+            / denomV;
+        const double Bzss =
+            (sqrtL*UsR.Bz + sqrtR*UsL.Bz
+             + sqrtL*sqrtR*(UsR.rhow/rhosR - UsL.rhow/rhosL)*sgn)
+            / denomV;
+        const double vssdotB = SM*Bx + vss*Byss + wss*Bzss;
+
+        auto inner_state = [&](const Conserved& Us, double rhos,
+                               double sign_side) -> Conserved {
+            const double vsdotB =
+                SM*Bx
+                + (tangential_momentum(Us)/rhos)*tangential_field(Us)
+                + (Us.rhow/rhos)*Us.Bz;
+            const double Ess =
+                Us.E + sign_side*sqrt(rhos)*(vsdotB - vssdotB)*sgn;
+            if constexpr (Dir == Direction::X) {
+                return Conserved(rhos, rhos*SM, rhos*vss, rhos*wss,
+                                 Bx, Byss, Bzss, Ess, psi_s);
+            }
+            return Conserved(rhos, rhos*vss, rhos*SM, rhos*wss,
+                             Byss, Bx, Bzss, Ess, psi_s);
+        };
+
+        if (SsL <= 0.0 && 0.0 <= SM) {
+            const Conserved UssL = inner_state(UsL, rhosL, -1.0);
+            if (!conserved_is_finite(UssL) ||
+                !primitive_is_physical(phys::cons_to_prim(UssL))) {
+                return fallback_hll();
+            }
+            const Conserved FL = (Dir == Direction::X)
+                ? phys::flux_x(UL, ch) : phys::flux_y(UL, ch);
+            const Conserved FsL = FL + SL*(UsL - UL);
+            F = FsL + SsL*(UssL - UsL);
+        } else if (SM <= 0.0 && 0.0 <= SsR) {
+            const Conserved UssR = inner_state(UsR, rhosR, +1.0);
+            if (!conserved_is_finite(UssR) ||
+                !primitive_is_physical(phys::cons_to_prim(UssR))) {
+                return fallback_hll();
+            }
+            const Conserved FR = (Dir == Direction::X)
+                ? phys::flux_x(UR, ch) : phys::flux_y(UR, ch);
+            const Conserved FsR = FR + SR*(UsR - UR);
+            F = FsR + SsR*(UssR - UsR);
         } else {
             return fallback_hll();
         }
