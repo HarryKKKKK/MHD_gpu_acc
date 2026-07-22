@@ -527,15 +527,27 @@ HD inline Conserved hlld_flux_dir(
             if (!finite_number(denomV) || denomV <= 0.0) {
                 return fallback_hll();
             }
+            auto tangential_momentum = [](const Conserved& U) -> double {
+                if constexpr (Dir == Direction::X) return U.rhov;
+                return U.rhou;
+            };
+            auto tangential_field = [](const Conserved& U) -> double {
+                if constexpr (Dir == Direction::X) return U.By;
+                return U.Bx;
+            };
             const double vss =
-                (sqrtL*UsL.rhov/rhosL + sqrtR*UsR.rhov/rhosR
-                 + (UsR.By - UsL.By)*sgn) / denomV;
+                (sqrtL*tangential_momentum(UsL)/rhosL
+                 + sqrtR*tangential_momentum(UsR)/rhosR
+                 + (tangential_field(UsR) - tangential_field(UsL))*sgn)
+                / denomV;
             const double wss =
                 (sqrtL*UsL.rhow/rhosL + sqrtR*UsR.rhow/rhosR
                  + (UsR.Bz - UsL.Bz)*sgn) / denomV;
             const double Byss =
-                (sqrtL*UsR.By + sqrtR*UsL.By
-                 + sqrtL*sqrtR*(UsR.rhov/rhosR - UsL.rhov/rhosL)*sgn)
+                (sqrtL*tangential_field(UsR)
+                 + sqrtR*tangential_field(UsL)
+                 + sqrtL*sqrtR*(tangential_momentum(UsR)/rhosR
+                                 - tangential_momentum(UsL)/rhosL)*sgn)
                 / denomV;
             const double Bzss =
                 (sqrtL*UsR.Bz + sqrtR*UsL.Bz
@@ -546,12 +558,17 @@ HD inline Conserved hlld_flux_dir(
             auto inner_state = [&](const Conserved& Us, double rhos,
                                    double sign_side) -> Conserved {
                 const double vsdotB =
-                    SM*Bx + (Us.rhov/rhos)*Us.By + (Us.rhow/rhos)*Us.Bz;
-                return Conserved(
-                    rhos, rhos*SM, rhos*vss, rhos*wss,
-                    Bx, Byss, Bzss,
-                    Us.E + sign_side*sqrt(rhos)*(vsdotB - vssdotB)*sgn,
-                    psi_s);
+                    SM*Bx
+                    + (tangential_momentum(Us)/rhos)*tangential_field(Us)
+                    + (Us.rhow/rhos)*Us.Bz;
+                const double Ess =
+                    Us.E + sign_side*sqrt(rhos)*(vsdotB - vssdotB)*sgn;
+                if constexpr (Dir == Direction::X) {
+                    return Conserved(rhos, rhos*SM, rhos*vss, rhos*wss,
+                                     Bx, Byss, Bzss, Ess, psi_s);
+                }
+                return Conserved(rhos, rhos*vss, rhos*SM, rhos*wss,
+                                 Byss, Bx, Bzss, Ess, psi_s);
             };
 
             if (SsL <= 0.0 && 0.0 <= SM) {
@@ -582,7 +599,8 @@ HD inline Conserved hlld_flux_dir(
         }
     }
 
-    F.Bx = psi_s;
+    if constexpr (Dir == Direction::X) F.Bx = psi_s;
+    else                               F.By = psi_s;
     F.psi = ch*ch*Bx;
     return conserved_is_finite(F) ? F : fallback_hll();
 }
@@ -593,8 +611,9 @@ HD inline Conserved hlld_flux(
     Direction        dir,
     double           ch
 ) {
-    if (dir == Direction::X) return hlld_flux_x(UL, UR, ch);
-    return swap_xy(hlld_flux_x(swap_xy(UL), swap_xy(UR), ch));
+    return (dir == Direction::X)
+        ? hlld_flux_dir<Direction::X>(UL, UR, ch)
+        : hlld_flux_dir<Direction::Y>(UL, UR, ch);
 }
 
 HD inline Conserved force_flux(
