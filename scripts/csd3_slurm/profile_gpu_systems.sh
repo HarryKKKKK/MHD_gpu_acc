@@ -150,12 +150,40 @@ if [ "${STATUS}" -ne 0 ]; then
 fi
 
 if [ ! -f "${REPORT}" ]; then
-    # Nsight Systems bundled with some CUDA 11.x installations still uses
-    # the older .qdrep extension.
+    # Nsight Systems bundled with CUDA 11.x may use .qdrep, or may leave the
+    # intermediate .qdstrm when its host-side importer is not on PATH.
     if [ -f "${BASE}.qdrep" ]; then
         REPORT="${BASE}.qdrep"
+    elif [ -f "${BASE}.qdstrm" ]; then
+        RAW_REPORT="${BASE}.qdstrm"
+        IMPORTER="$(command -v QdstrmImporter 2>/dev/null || true)"
+
+        if [ -z "${IMPORTER}" ]; then
+            NSYS_BIN="$(readlink -f "$(command -v nsys)")"
+            NSYS_SEARCH_ROOT="$(dirname "$(dirname "${NSYS_BIN}")")"
+            IMPORTER="$(find "${NSYS_SEARCH_ROOT}" -type f \
+                -name QdstrmImporter -perm -u+x -print -quit 2>/dev/null || true)"
+        fi
+
+        if [ -n "${IMPORTER}" ]; then
+            echo "[INFO] Converting ${RAW_REPORT} with ${IMPORTER}."
+            "${IMPORTER}" \
+                -i "${RAW_REPORT}" \
+                -o "${BASE}.qdrep"
+            REPORT="${BASE}.qdrep"
+        else
+            echo "[WARN] Timeline capture succeeded, but this CUDA module only"
+            echo "[WARN] provides the target-side collector. QdstrmImporter was"
+            echo "[WARN] not found, so stats and SQLite cannot be generated here."
+            echo "[WARN] Preserve and download: ${RAW_REPORT}"
+            echo "[WARN] It must be imported with matching Nsight Systems 2021.2.4."
+            echo "===== GENERATED FILES ====="
+            ls -lh "${PROFILE_DIR}"
+            exit 0
+        fi
     else
-        echo "[ERROR] Expected report was not produced: ${BASE}.nsys-rep/.qdrep"
+        echo "[ERROR] Expected report was not produced:"
+        echo "[ERROR] ${BASE}.nsys-rep/.qdrep/.qdstrm"
         exit 1
     fi
 fi
