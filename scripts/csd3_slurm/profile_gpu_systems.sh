@@ -28,6 +28,7 @@ BENCHMARK_STEPS="${BENCHMARK_STEPS:-50}"
 PROFILE_NVCC_FLAGS="${PROFILE_NVCC_FLAGS:--lineinfo -Xptxas=-v}"
 ADVANCE_X_MIN_BLOCKS_PER_SM="${ADVANCE_X_MIN_BLOCKS_PER_SM:-3}"
 ADVANCE_Y_MIN_BLOCKS_PER_SM="${ADVANCE_Y_MIN_BLOCKS_PER_SM:-0}"
+HLLD_CANONICALIZE_Y="${HLLD_CANONICALIZE_Y:-0}"
 MAKE_CLEAN="${MAKE_CLEAN:-1}"
 
 SLURM_JOB_ID="${SLURM_JOB_ID:-manual}"
@@ -45,6 +46,11 @@ for value_name in N WARMUP_STEPS BENCHMARK_STEPS \
         exit 2
     fi
 done
+
+if [[ "${HLLD_CANONICALIZE_Y}" != "0" && "${HLLD_CANONICALIZE_Y}" != "1" ]]; then
+    echo "[ERROR] HLLD_CANONICALIZE_Y must be 0 or 1."
+    exit 2
+fi
 
 if [ "${N}" -eq 0 ] || [ "${BENCHMARK_STEPS}" -eq 0 ]; then
     echo "[ERROR] N and BENCHMARK_STEPS must be positive."
@@ -101,6 +107,7 @@ METADATA_FILE="${PROFILE_DIR}/metadata.txt"
     echo "benchmark_steps=${BENCHMARK_STEPS}"
     echo "advance_x_min_blocks_per_sm=${ADVANCE_X_MIN_BLOCKS_PER_SM}"
     echo "advance_y_min_blocks_per_sm=${ADVANCE_Y_MIN_BLOCKS_PER_SM}"
+    echo "hlld_canonicalize_y=${HLLD_CANONICALIZE_Y}"
     echo "git_branch=$(git branch --show-current 2>/dev/null || echo unknown)"
     echo "git_commit=$(git rev-parse HEAD 2>/dev/null || echo unknown)"
     echo "nsys=$(nsys --version 2>&1 | tr '\n' ' ')"
@@ -112,6 +119,7 @@ echo "===== BUILD ====="
 BUILD_NVCC_FLAGS="${PROFILE_NVCC_FLAGS}"
 BUILD_NVCC_FLAGS+=" -DMHD_ADVANCE_X_MIN_BLOCKS_PER_SM=${ADVANCE_X_MIN_BLOCKS_PER_SM}"
 BUILD_NVCC_FLAGS+=" -DMHD_ADVANCE_Y_MIN_BLOCKS_PER_SM=${ADVANCE_Y_MIN_BLOCKS_PER_SM}"
+BUILD_NVCC_FLAGS+=" -DMHD_HLLD_CANONICALIZE_Y=${HLLD_CANONICALIZE_Y}"
 
 if [ "${MAKE_CLEAN}" = "1" ]; then
     make clean

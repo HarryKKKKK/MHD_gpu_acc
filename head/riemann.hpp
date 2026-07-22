@@ -5,6 +5,14 @@
 #include "physics.hpp"
 #include "types.hpp"
 
+#ifndef MHD_HLLD_CANONICALIZE_Y
+#define MHD_HLLD_CANONICALIZE_Y 0
+#endif
+
+#if MHD_HLLD_CANONICALIZE_Y != 0 && MHD_HLLD_CANONICALIZE_Y != 1
+#error "MHD_HLLD_CANONICALIZE_Y must be 0 or 1"
+#endif
+
 enum class Direction { X, Y };
 
 enum class RiemannSolver { HLL, HLLC, HLLD, FORCE };
@@ -373,7 +381,7 @@ HD inline Conserved hll_glm_flux_x(
 // from huangyu701/mhd-cuda-solver.  In particular, the GLM interface state is
 // installed before primitive conversion, wave-speed estimation and fluxes.
 template <Direction Dir>
-HD inline Conserved hlld_flux_dir(
+HD inline Conserved hlld_flux_dir_native(
     const Conserved& UL_in,
     const Conserved& UR_in,
     double           ch
@@ -643,6 +651,27 @@ HD inline Conserved hlld_flux_dir(
     else                               F.By = psi_s;
     F.psi = ch*ch*Bx;
     return conserved_is_finite(F) ? F : fallback_hll();
+}
+
+// The native implementation above expresses both coordinate directions in
+// one templated body.  This optional experiment instead maps a y-interface to
+// the canonical x problem, reuses the x specialization, then maps its flux
+// back.  Keeping the dispatch outside hlld_flux_dir_native is important: the
+// y kernel then cannot retain any of the native-y HLLD body after inlining.
+template <Direction Dir>
+HD inline Conserved hlld_flux_dir(
+    const Conserved& UL,
+    const Conserved& UR,
+    double           ch
+) {
+#if MHD_HLLD_CANONICALIZE_Y
+    if constexpr (Dir == Direction::Y) {
+        const Conserved Fx = hlld_flux_dir_native<Direction::X>(
+            swap_xy(UL), swap_xy(UR), ch);
+        return swap_xy(Fx);
+    }
+#endif
+    return hlld_flux_dir_native<Dir>(UL, UR, ch);
 }
 
 HD inline Conserved hlld_flux(
