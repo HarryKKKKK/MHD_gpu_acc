@@ -1,0 +1,15 @@
+date=2026-07-22T04:18:20+01:00
+host=gpu-q-8
+job_id=31792225
+workdir=/rds/user/hk597/hpc-work/MHD_gpu_acc
+N=8
+case=orszag_tang
+solver=hlld
+warmup_steps=10
+benchmark_steps=50
+advance_x_min_blocks_per_sm=3
+advance_y_min_blocks_per_sm=0
+git_branch=6.time_step_opt
+git_commit=b47a93497a8f84fd09d220f79c9c9b59045b0817
+nsys=NVIDIA Nsight Systems version 2021.2.4.12-a25c8fd 
+NVIDIA A100-SXM4-80GB, GPU-9bbb56af-ea8d-e3cc-c574-c18a44946cb1, 595.71.05, 1155 MHz, 1593 MHz
