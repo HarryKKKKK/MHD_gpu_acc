@@ -1,0 +1,8 @@
+phase,tag,x_bx,x_by,x_lb,y_bx,y_by,y_lb,repeats,measured_steps,median_wall_ms,median_ms_per_step,median_x_ms_per_step,median_y_ms_per_step,state_hash,correctness,binary
+x,x_x16x8_lb0_y16x8_lb0,16,8,0,16,8,0,5,500,1751.608190000,3.503216380,1.595930624,1.711466493,b5b8bfe2431aff9b,PASS,/rds/user/hk597/hpc-work/MHD_gpu_acc/tuning/31790673_orszag_tang_hlld_n8/bin/x_x16x8_lb0_y16x8_lb0/main_gpu
+x,x_x16x8_lb2_y16x8_lb0,16,8,2,16,8,0,5,500,1754.410965000,3.508821930,1.601906688,1.711441917,b5b8bfe2431aff9b,PASS,/rds/user/hk597/hpc-work/MHD_gpu_acc/tuning/31790673_orszag_tang_hlld_n8/bin/x_x16x8_lb2_y16x8_lb0/main_gpu
+x,x_x16x8_lb3_y16x8_lb0,16,8,3,16,8,0,5,500,1652.150789000,3.304301578,1.397215232,1.711644669,b5b8bfe2431aff9b,PASS,/rds/user/hk597/hpc-work/MHD_gpu_acc/tuning/31790673_orszag_tang_hlld_n8/bin/x_x16x8_lb3_y16x8_lb0/main_gpu
+x,x_x32x4_lb0_y16x8_lb0,32,4,0,16,8,0,5,500,1749.775131000,3.499550262,1.591820287,1.711808511,b5b8bfe2431aff9b,PASS,/rds/user/hk597/hpc-work/MHD_gpu_acc/tuning/31790673_orszag_tang_hlld_n8/bin/x_x32x4_lb0_y16x8_lb0/main_gpu
+x,x_x32x4_lb2_y16x8_lb0,32,4,2,16,8,0,5,500,1751.492369000,3.502984738,1.594064896,1.712295937,b5b8bfe2431aff9b,PASS,/rds/user/hk597/hpc-work/MHD_gpu_acc/tuning/31790673_orszag_tang_hlld_n8/bin/x_x32x4_lb2_y16x8_lb0/main_gpu
+x,x_x32x4_lb3_y16x8_lb0,32,4,3,16,8,0,5,500,1651.282824000,3.302565648,1.395234820,1.711523837,b5b8bfe2431aff9b,PASS,/rds/user/hk597/hpc-work/MHD_gpu_acc/tuning/31790673_orszag_tang_hlld_n8/bin/x_x32x4_lb3_y16x8_lb0/main_gpu
+x,x_x8x16_lb0_y16x8_lb0,8,16,0,16,8,0,5,500,1795.980923000,3.591961846,1.683427328,1.712111613,b5b8bfe2431aff9b,PASS,/rds/user/hk597/hpc-work/MHD_gpu_acc/tuning/31790673_orszag_tang_hlld_n8/bin/x_x8x16_lb0_y16x8_lb0/main_gpu
