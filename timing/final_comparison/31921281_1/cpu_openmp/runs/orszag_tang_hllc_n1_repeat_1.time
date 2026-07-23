@@ -1,0 +1,10 @@
+real_seconds=0.90
+user_seconds=67.25
+sys_seconds=0.06
+cpu_percent=7479%
+max_rss_kb=26164
+major_page_faults=23
+minor_page_faults=5033
+voluntary_context_switches=65
+involuntary_context_switches=713
+time_exit_status=0
