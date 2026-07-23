@@ -109,6 +109,30 @@ HD inline Conserved flux_y(const Conserved& U, double ch) {
     );
 }
 
+HD inline Conserved flux_z(const Conserved& U, double ch) {
+    const double inv_rho = 1.0 / U.rho;
+    const double ux = U.rhou * inv_rho;
+    const double uy = U.rhov * inv_rho;
+    const double uz = U.rhow * inv_rho;
+    const double Bmag2 = U.Bx*U.Bx + U.By*U.By + U.Bz*U.Bz;
+    const double ke    = 0.5 * U.rho * (ux*ux + uy*uy + uz*uz);
+    const double p     = (get_gamma() - 1.0) * (U.E - ke - 0.5*Bmag2);
+    const double p_tot = p + 0.5*Bmag2;
+    const double BdotU = U.Bx*ux + U.By*uy + U.Bz*uz;
+
+    return Conserved(
+        U.rhow,
+        U.rhow*ux         - U.Bz*U.Bx,
+        U.rhow*uy         - U.Bz*U.By,
+        U.rhow*uz + p_tot - U.Bz*U.Bz,
+        U.Bx*uz - U.Bz*ux,
+        U.By*uz - U.Bz*uy,
+        U.psi,
+        (U.E + p_tot)*uz  - U.Bz*BdotU,
+        ch*ch * U.Bz
+    );
+}
+
 HD inline double fast_speed_x(const Primitive& V) {
     const double a2  = get_gamma() * V.p / V.rho;
     const double b2  = (V.Bx*V.Bx + V.By*V.By + V.Bz*V.Bz) / V.rho;
@@ -125,6 +149,14 @@ HD inline double fast_speed_y(const Primitive& V) {
     return sqrt(0.5 * (a2 + b2 + sqrt(disc > 0.0 ? disc : 0.0)));
 }
 
+HD inline double fast_speed_z(const Primitive& V) {
+    const double a2  = get_gamma() * V.p / V.rho;
+    const double b2  = (V.Bx*V.Bx + V.By*V.By + V.Bz*V.Bz) / V.rho;
+    const double bz2 = V.Bz * V.Bz / V.rho;
+    const double disc = (a2 + b2)*(a2 + b2) - 4.0*a2*bz2;
+    return sqrt(0.5 * (a2 + b2 + sqrt(disc > 0.0 ? disc : 0.0)));
+}
+
 HD inline double sound_speed(const Primitive& V) {
     return sqrt(get_gamma() * V.p / V.rho);
 }
@@ -137,6 +169,11 @@ HD inline double max_signal_speed_x(const Primitive& V, double ch) {
 HD inline double max_signal_speed_y(const Primitive& V, double ch) {
     const double cf = fast_speed_y(V);
     return fmax(fabs(V.v) + cf, ch);
+}
+
+HD inline double max_signal_speed_z(const Primitive& V, double ch) {
+    const double cf = fast_speed_z(V);
+    return fmax(fabs(V.w) + cf, ch);
 }
 
 HD inline double pressure(const Conserved& U) {

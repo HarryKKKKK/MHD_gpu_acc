@@ -57,11 +57,13 @@ BIN_DIR := bin
 
 CPU_TARGET := $(BIN_DIR)/main_cpu
 CPU_SERIAL_TARGET := $(BIN_DIR)/main_cpu_serial
+CPU_3D_TARGET := $(BIN_DIR)/main_cpu_3d
 GPU_TARGET := $(BIN_DIR)/main_gpu
 MPI_TARGET := $(BIN_DIR)/main_mpi
 MPI_OMP_TARGET := $(BIN_DIR)/main_mpi_omp
 
 CPU_MAIN := scripts/cpu/main_cpu.cpp
+CPU_3D_MAIN := scripts/cpu/main_cpu_3d.cpp
 GPU_MAIN := scripts/gpu/main_gpu.cu
 MPI_MAIN := scripts/cpu/main_mpi.cpp
 
@@ -76,6 +78,12 @@ CPU_SERIAL_OBJS := \
 	$(CPU_BUILD_DIR)/test_cases_serial.o \
 	$(CPU_BUILD_DIR)/init_serial.o \
 	$(CPU_BUILD_DIR)/solver_cpu_serial.o
+
+CPU_3D_OBJS := \
+	$(CPU_BUILD_DIR)/main_cpu_3d.o \
+	$(CPU_BUILD_DIR)/solver3d_cpu.o
+
+CPU_3D_TEST_TARGET := $(BIN_DIR)/test_solver3d
 
 GPU_OBJS := \
 	$(GPU_BUILD_DIR)/main_gpu.o \
@@ -154,6 +162,32 @@ $(CPU_BUILD_DIR)/init_serial.o: src/init.cpp
 $(CPU_BUILD_DIR)/solver_cpu_serial.o: src/cpu/solver_cpu.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS_BASE) -c $< -o $@
+
+# =========================
+# 3D CPU baseline
+# =========================
+.PHONY: cpu_3d
+cpu_3d: $(CPU_3D_TARGET)
+
+$(CPU_3D_TARGET): $(CPU_3D_OBJS)
+	@mkdir -p $(BIN_DIR)
+	$(CXX) $(CXXFLAGS) $(CPU_3D_OBJS) -o $@ -lstdc++fs
+
+$(CPU_BUILD_DIR)/main_cpu_3d.o: $(CPU_3D_MAIN)
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(CPU_BUILD_DIR)/solver3d_cpu.o: src/cpu/solver3d_cpu.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+.PHONY: test_3d
+test_3d: $(CPU_3D_TEST_TARGET)
+	$(CPU_3D_TEST_TARGET)
+
+$(CPU_3D_TEST_TARGET): validation/test_solver3d.cpp $(CPU_BUILD_DIR)/solver3d_cpu.o
+	@mkdir -p $(BIN_DIR)
+	$(CXX) $(CXXFLAGS) $^ -o $@ -lstdc++fs
 
 # =========================
 # Pure MPI
