@@ -9,10 +9,10 @@ Directory layouts:
   MPI: mpi_<case>_<solver>_n1
 
 Usage:
-  python visualization/plot_all_cpu.py \
+  python3 visualization/plot_all_cpu.py \
       --arch gpu \
-      --root outputs/csd3_gpu_n1_plots/JOB_ID \
-      --out-dir figs/csd3_gpu_n1_plots/JOB_ID \
+      --root outputs/csd3_gpu_n1_plots/31930327 \
+      --out-dir figs/csd3_gpu_n1_plots/31930327\
       --cases brio_wu,orszag_tang,rotor \
       --solvers force,hll,hllc,hlld
 """
