@@ -15,7 +15,7 @@
 // Pure-MPI counterpart of solver_cpu.hpp / solver_cpu.cpp.
 //
 // Algorithm and optimisations are identical to the OpenMP CPU solver:
-// second-order MUSCL-Hancock reconstruction with symmetric Strang
+// second-order MUSCL-Hancock reconstruction with x-then-y dimensional
 // splitting, a precomputed conserved-state cache, a precomputed
 // per-cell left/right reconstruction cache, and precomputed x-/y-face
 // Riemann flux caches (see src/cpu/solver_mpi.cpp).
@@ -152,8 +152,7 @@ struct MpiWorkspace {
 double compute_dt_mpi(const Grid2D& grid, double cfl, MPI_Comm comm);
 
 // ============================================================
-// Second-order MUSCL-Hancock with symmetric
-// D(dt/2)-X(dt/2)-Y(dt)-X(dt/2)-D(dt/2) Strang splitting.
+// Second-order MUSCL-Hancock, x-then-y dimensional splitting.
 // Identical algorithm/caching structure to advance_cpu() in
 // solver_cpu.cpp; ghost cells are refreshed via MPI halo exchange
 // instead of apply_boundary().

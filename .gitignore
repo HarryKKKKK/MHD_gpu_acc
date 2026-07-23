@@ -40,6 +40,4 @@ Thumbs.db
 *.pem
 *.key
 outputs/
-output/
-paper/
 note1.txt

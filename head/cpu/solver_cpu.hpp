@@ -56,8 +56,7 @@ struct CpuWorkspace {
 double compute_dt_cpu(const Grid2D& grid, double cfl);
 
 // ============================================================
-// Second-order MUSCL-Hancock with symmetric
-// D(dt/2)-X(dt/2)-Y(dt)-X(dt/2)-D(dt/2) Strang splitting.
+// Second-order MUSCL-Hancock with dimensional (Strang) splitting.
 // ws must be initialised with ws.init(cfg.nx, cfg.ny) before the loop.
 // ============================================================
 void advance_cpu(
