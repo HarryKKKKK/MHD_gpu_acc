@@ -243,7 +243,9 @@ template <RiemannSolver Solver>
 __global__ void MHD_ADVANCE_X_LAUNCH_BOUNDS advance_x_kernel(
     ConstGrid2DGPUView Uin,
     Grid2DGPUView      Uout,
-    double             dt
+    double             dt,
+    double             input_psi_factor,
+    double             output_psi_factor
 ) {
     const int local_i = blockIdx.x * blockDim.x + threadIdx.x;
     const int local_j = blockIdx.y * blockDim.y + threadIdx.y;
@@ -280,7 +282,8 @@ __global__ void MHD_ADVANCE_X_LAUNCH_BOUNDS advance_x_kernel(
             const int li_clamp = clamp_i(li_raw, -Uin.ng, Uin.nx + Uin.ng - 1);
             const int gi = Uin.i_begin() + li_clamp;
             const int gj = Uin.j_begin() + lj;
-            const Conserved U = gload(Uin, gi, gj);
+            Conserved U = gload(Uin, gi, gj);
+            U.psi *= input_psi_factor;
             S.store(lin, U);
         }
     }
@@ -338,7 +341,8 @@ __global__ void MHD_ADVANCE_X_LAUNCH_BOUNDS advance_x_kernel(
 
     const int sc = sj * sw + threadIdx.x + 2;
     const Conserved Uc     = S.load(sc);
-    const Conserved Unew_c = Uc - dt_dx * (F.load(fp) - F.load(fm));
+    Conserved Unew_c = Uc - dt_dx * (F.load(fp) - F.load(fm));
+    Unew_c.psi *= output_psi_factor;
 
     gstore(Uout,
            Uin.i_begin() + local_i,
@@ -350,8 +354,7 @@ template <RiemannSolver Solver>
 __global__ void MHD_ADVANCE_Y_LAUNCH_BOUNDS advance_y_kernel(
     ConstGrid2DGPUView Uin,
     Grid2DGPUView      Uout,
-    double             dt,
-    double             psi_damping_factor
+    double             dt
 ) {
     const int local_i = blockIdx.x * blockDim.x + threadIdx.x;
     const int local_j = blockIdx.y * blockDim.y + threadIdx.y;
@@ -449,16 +452,11 @@ __global__ void MHD_ADVANCE_Y_LAUNCH_BOUNDS advance_y_kernel(
     const int sc  = (threadIdx.y + 2) * sw + si;
     const Conserved Uc     = S.load(sc);
     const Conserved Unew_c = Uc - dt_dy * (F.load(fp) - F.load(fm));
-    Conserved Unew_damped = Unew_c;
-
-    // Apply GLM damping after the completed split update, matching the peer
-    // implementation's post-update damping stage.
-    Unew_damped.psi *= psi_damping_factor;
 
     gstore(Uout,
            Uin.i_begin() + local_i,
            Uin.j_begin() + local_j,
-           Unew_damped);
+           Unew_c);
 }
 
 } // anonymous namespace
@@ -589,53 +587,64 @@ static void advance_gpu_specialized(
     }
 
     static bool timing_events_ready = false;
-    static cudaEvent_t x_start, x_stop, y_start, y_stop;
+    static cudaEvent_t x1_start, x1_stop, x2_start, x2_stop, y_start, y_stop;
     if (timings && !timing_events_ready) {
-        CUDA_CHECK(cudaEventCreate(&x_start));
-        CUDA_CHECK(cudaEventCreate(&x_stop));
+        CUDA_CHECK(cudaEventCreate(&x1_start));
+        CUDA_CHECK(cudaEventCreate(&x1_stop));
+        CUDA_CHECK(cudaEventCreate(&x2_start));
+        CUDA_CHECK(cudaEventCreate(&x2_stop));
         CUDA_CHECK(cudaEventCreate(&y_start));
         CUDA_CHECK(cudaEventCreate(&y_stop));
         timing_events_ready = true;
     }
 
-    if (timings) CUDA_CHECK(cudaEventRecord(x_start));
-    advance_x_kernel<Solver><<<x_blocks, x_threads, x_smem>>>(
-        make_view(static_cast<const Grid2DGPU&>(Uold)),
-        make_view(Utmp), dt);
-    CUDA_CHECK(cudaGetLastError());
-    if (timings) CUDA_CHECK(cudaEventRecord(x_stop));
-    // The y sweep only reads bottom/top ghosts of Utmp.
-    apply_boundary_y_gpu(Utmp, bc);
-
-    // ch was already computed as `max_speed` by compute_dt_gpu() this same
-    // step and pushed to both phys::d_ch_glm (device) and phys::ch_glm
-    // (host) via set_gpu_physics_ch().  Dedner damping uses the same fixed
-    // c_r = c_p^2/c_h value as the CPU/MPI paths; it is deliberately not
-    // scaled by dx or dy.  Computing this while the boundary launch is queued
-    // avoids adding host work before advance_x.
+    // Symmetric source/directional composition:
+    // D(dt/2) X(dt/2) Y(dt) X(dt/2) D(dt/2).
     const double ch  = phys::get_ch_glm();
     const double l_d = phys::cr_glm;
-    const double psi_damping_factor =
-        (ch > 0.0 && l_d > 0.0) ? std::exp(-dt * ch / l_d) : 1.0;
+    const double psi_half_factor =
+        (ch > 0.0 && l_d > 0.0) ? std::exp(-0.5 * dt * ch / l_d) : 1.0;
+    const double half_dt = 0.5 * dt;
+
+    if (timings) CUDA_CHECK(cudaEventRecord(x1_start));
+    advance_x_kernel<Solver><<<x_blocks, x_threads, x_smem>>>(
+        make_view(static_cast<const Grid2DGPU&>(Uold)),
+        make_view(Unew), half_dt, psi_half_factor, 1.0);
+    CUDA_CHECK(cudaGetLastError());
+    if (timings) CUDA_CHECK(cudaEventRecord(x1_stop));
+    // The full y sweep only reads bottom/top ghosts of the first x stage.
+    apply_boundary_y_gpu(Unew, bc);
 
     if (timings) CUDA_CHECK(cudaEventRecord(y_start));
     advance_y_kernel<Solver><<<y_blocks, y_threads, y_smem>>>(
-        make_view(static_cast<const Grid2DGPU&>(Utmp)),
-        make_view(Unew), dt, psi_damping_factor);
+        make_view(static_cast<const Grid2DGPU&>(Unew)),
+        make_view(Utmp), dt);
     CUDA_CHECK(cudaGetLastError());
     if (timings) CUDA_CHECK(cudaEventRecord(y_stop));
 
-    // The next timestep starts with an x sweep.  Refresh only left/right
-    // ghosts, after damping, so ghost psi matches its source cell.
+    // The final x half-step needs left/right ghosts of the y-stage state.
+    apply_boundary_x_gpu(Utmp, bc);
+
+    if (timings) CUDA_CHECK(cudaEventRecord(x2_start));
+    advance_x_kernel<Solver><<<x_blocks, x_threads, x_smem>>>(
+        make_view(static_cast<const Grid2DGPU&>(Utmp)),
+        make_view(Unew), half_dt, 1.0, psi_half_factor);
+    CUDA_CHECK(cudaGetLastError());
+    if (timings) CUDA_CHECK(cudaEventRecord(x2_stop));
+
+    // The next Strang step starts with an x half-sweep.
     apply_boundary_x_gpu(Unew, bc);
 
     if (timings) {
-        CUDA_CHECK(cudaEventSynchronize(y_stop));
-        float x_elapsed_ms = 0.0f;
+        CUDA_CHECK(cudaEventSynchronize(x2_stop));
+        float x1_elapsed_ms = 0.0f;
+        float x2_elapsed_ms = 0.0f;
         float y_elapsed_ms = 0.0f;
-        CUDA_CHECK(cudaEventElapsedTime(&x_elapsed_ms, x_start, x_stop));
+        CUDA_CHECK(cudaEventElapsedTime(&x1_elapsed_ms, x1_start, x1_stop));
+        CUDA_CHECK(cudaEventElapsedTime(&x2_elapsed_ms, x2_start, x2_stop));
         CUDA_CHECK(cudaEventElapsedTime(&y_elapsed_ms, y_start, y_stop));
-        timings->x_ms += static_cast<double>(x_elapsed_ms);
+        timings->x_ms +=
+            static_cast<double>(x1_elapsed_ms + x2_elapsed_ms);
         timings->y_ms += static_cast<double>(y_elapsed_ms);
         ++timings->samples;
     }

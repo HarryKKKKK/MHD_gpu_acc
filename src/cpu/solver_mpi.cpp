@@ -586,18 +586,12 @@ double compute_dt_mpi(const Grid2D& grid, double cfl, MPI_Comm comm) {
 }
 
 // ============================================================
-// Second-order MUSCL-Hancock, x-then-y dimensional splitting (MPI).
+// Second-order MUSCL-Hancock with symmetric Strang splitting (MPI).
 //
 // Steps (identical to advance_cpu() in solver_cpu.cpp, except
-// steps 3 and 7 use directional MPI halo exchange in place of the matching
+// directional MPI halo exchanges replace the matching
 // single-domain boundary refresh):
-//   1. Fill x-face cache from Uold
-//   2. x-update: Uold -> Utmp (interior only)
-//   3. y-halo exchange on Utmp
-//   4. Fill y-face cache from Utmp
-//   5. y-update: Utmp -> Unew (interior only)
-//   6. Mixed-GLM psi damping on Unew
-//   7. x-halo exchange on Unew for the next timestep
+//   D(dt/2) X(dt/2) Y(dt) X(dt/2) D(dt/2).
 // ============================================================
 
 void advance_mpi(
@@ -624,8 +618,13 @@ void advance_mpi(
     const int nx_faces = (ie - ib) + 1;
     const int nx_cells  = ie - ib;
 
-    const double dt_over_dx = dt / Uold.dx();
-    const double dt_over_dy = dt / Uold.dy();
+    const double half_dt_over_dx = 0.5 * dt / Uold.dx();
+    const double dt_over_dy      = dt / Uold.dy();
+    const double l_d             = phys::cr_glm;
+    const double psi_half_factor =
+        (phys::ch_glm > 0.0 && l_d > 0.0)
+            ? std::exp(-0.5 * dt * phys::ch_glm / l_d)
+            : 1.0;
 
     const int total_nx = Uold.total_nx();
     const int total_ny = Uold.total_ny();
@@ -635,18 +634,23 @@ void advance_mpi(
     ws.recon_R_cache.resize(total_cells);
 
     // ----------------------------------------------------------
-    // Steps 1-2: x-sweep  (Uold -> Utmp)
+    // First source and x half-steps: Uold -> Unew.
     // ----------------------------------------------------------
 
 #ifdef _OPENMP
 #pragma omp parallel for collapse(2) schedule(static)
 #endif
-    for (int jj = 0; jj < total_ny; ++jj)
-        for (int ii = 0; ii < total_nx; ++ii)
-            ws.state_cache[static_cast<std::size_t>(jj) * total_nx + ii] =
-                Uold(ii, jj);
+    for (int jj = 0; jj < total_ny; ++jj) {
+        for (int ii = 0; ii < total_nx; ++ii) {
+            const std::size_t idx =
+                static_cast<std::size_t>(jj) * total_nx + ii;
+            ws.state_cache[idx] = Uold(ii, jj);
+            ws.state_cache[idx].psi *= psi_half_factor;
+        }
+    }
 
-    fill_recon_x_cache(ws.state_cache, ib, ie, jb, je, total_nx, dt_over_dx,
+    fill_recon_x_cache(ws.state_cache, ib, ie, jb, je, total_nx,
+                       half_dt_over_dx,
                        ws.recon_L_cache, ws.recon_R_cache);
     fill_x_face_cache(Uold, ws.recon_L_cache, ws.recon_R_cache, ws.fx_cache, solver);
 
@@ -659,19 +663,21 @@ void advance_mpi(
             const int local_i_face_m = (i - 1) - (ib - 1);
             const int local_i_face_p =  i      - (ib - 1);
 
-            Utmp(i, j) = Uold(i, j)
-                - dt_over_dx * (
+            const std::size_t idx =
+                static_cast<std::size_t>(j) * total_nx + i;
+            Unew(i, j) = ws.state_cache[idx]
+                - half_dt_over_dx * (
                     ws.fx_cache[xface_idx(local_j, local_i_face_p, nx_faces)] -
                     ws.fx_cache[xface_idx(local_j, local_i_face_m, nx_faces)]
                 );
         }
     }
 
-    // Step 3: the y sweep only needs bottom/top halo rows of Utmp.
-    exchange_halo_y(Utmp, dom, bc);
+    // The full y sweep only needs bottom/top halo rows of the first x stage.
+    exchange_halo_y(Unew, dom, bc);
 
     // ----------------------------------------------------------
-    // Steps 4-5: y-sweep  (Utmp -> Unew)
+    // Full y sweep: Unew -> Utmp.
     // ----------------------------------------------------------
 
 #ifdef _OPENMP
@@ -680,11 +686,11 @@ void advance_mpi(
     for (int jj = 0; jj < total_ny; ++jj)
         for (int ii = 0; ii < total_nx; ++ii)
             ws.state_cache[static_cast<std::size_t>(jj) * total_nx + ii] =
-                Utmp(ii, jj);
+                Unew(ii, jj);
 
     fill_recon_y_cache(ws.state_cache, ib, ie, jb, je, total_nx, dt_over_dy,
                        ws.recon_L_cache, ws.recon_R_cache);
-    fill_y_face_cache(Utmp, ws.recon_L_cache, ws.recon_R_cache, ws.fy_cache, solver);
+    fill_y_face_cache(Unew, ws.recon_L_cache, ws.recon_R_cache, ws.fy_cache, solver);
 
 #ifdef _OPENMP
 #pragma omp parallel for collapse(2) schedule(static)
@@ -695,7 +701,7 @@ void advance_mpi(
             const int local_j_face_m = (j - 1) - (jb - 1);
             const int local_j_face_p =  j      - (jb - 1);
 
-            Unew(i, j) = Utmp(i, j)
+            Utmp(i, j) = Unew(i, j)
                 - dt_over_dy * (
                     ws.fy_cache[yface_idx(local_j_face_p, local_i, nx_cells)] -
                     ws.fy_cache[yface_idx(local_j_face_m, local_i, nx_cells)]
@@ -703,10 +709,43 @@ void advance_mpi(
         }
     }
 
-    // Step 6: Mixed-GLM psi damping (Dedner eq. 45)
-    apply_psi_damping(Unew, dt);
+    // Final x half-step: Utmp -> Unew.
+    exchange_halo_x(Utmp, dom, bc);
 
-    // Step 7: the next timestep starts with an x sweep.  Refresh only the
-    // left/right halo columns, after damping, so halo psi is current.
+#ifdef _OPENMP
+#pragma omp parallel for collapse(2) schedule(static)
+#endif
+    for (int jj = 0; jj < total_ny; ++jj)
+        for (int ii = 0; ii < total_nx; ++ii)
+            ws.state_cache[static_cast<std::size_t>(jj) * total_nx + ii] =
+                Utmp(ii, jj);
+
+    fill_recon_x_cache(ws.state_cache, ib, ie, jb, je, total_nx,
+                       half_dt_over_dx,
+                       ws.recon_L_cache, ws.recon_R_cache);
+    fill_x_face_cache(Utmp, ws.recon_L_cache, ws.recon_R_cache,
+                      ws.fx_cache, solver);
+
+#ifdef _OPENMP
+#pragma omp parallel for collapse(2) schedule(static)
+#endif
+    for (int j = jb; j < je; ++j) {
+        for (int i = ib; i < ie; ++i) {
+            const int local_j         = j - jb;
+            const int local_i_face_m  = (i - 1) - (ib - 1);
+            const int local_i_face_p  =  i      - (ib - 1);
+            const std::size_t idx =
+                static_cast<std::size_t>(j) * total_nx + i;
+
+            Unew(i, j) = ws.state_cache[idx]
+                - half_dt_over_dx * (
+                    ws.fx_cache[xface_idx(local_j, local_i_face_p, nx_faces)] -
+                    ws.fx_cache[xface_idx(local_j, local_i_face_m, nx_faces)]
+                );
+        }
+    }
+
+    apply_psi_damping(Unew, 0.5 * dt);
+    // The next Strang step starts with an x half-sweep.
     exchange_halo_x(Unew, dom, bc);
 }

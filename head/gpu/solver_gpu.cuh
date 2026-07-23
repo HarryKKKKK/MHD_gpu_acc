@@ -40,6 +40,7 @@ struct GpuLaunchConfig {
 };
 
 struct GpuAdvanceTimings {
+    // x_ms is the sum of both x half-sweeps in one Strang step.
     double      x_ms = 0.0;
     double      y_ms = 0.0;
     std::size_t samples = 0;
@@ -66,6 +67,7 @@ double compute_dt_gpu(const Grid2DGPU& grid, GpuWorkspace& ws, double cfl);
 
 GpuLaunchConfig get_gpu_launch_config();
 
+// Symmetric D(dt/2)-X(dt/2)-Y(dt)-X(dt/2)-D(dt/2) Strang step.
 void advance_gpu(
     const Grid2DGPU& Uold,
     Grid2DGPU&       Utmp,
