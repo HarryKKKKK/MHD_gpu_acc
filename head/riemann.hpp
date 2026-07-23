@@ -387,12 +387,14 @@ HD inline Conserved hlld_flux_dir_native(
     double           ch
 ) {
     auto fallback_hll = [&]() -> Conserved {
-        if constexpr (Dir == Direction::X) {
+        // A normal condition is intentional here. Dir is a template constant,
+        // so it is still folded at compile time, while CUDA 11.4 no longer
+        // misdiagnoses the lambda as missing a return statement.
+        if (Dir == Direction::X) {
             return hll_glm_flux_x(UL_in, UR_in, ch);
-        } else {
-            return swap_xy(hll_glm_flux_x(
-                swap_xy(UL_in), swap_xy(UR_in), ch));
         }
+        return swap_xy(hll_glm_flux_x(
+            swap_xy(UL_in), swap_xy(UR_in), ch));
     };
 
     Conserved UL = UL_in;
@@ -418,8 +420,6 @@ HD inline Conserved hlld_flux_dir_native(
 
     const double uL  = (Dir == Direction::X) ? WL.u  : WL.v;
     const double uR  = (Dir == Direction::X) ? WR.u  : WR.v;
-    const double vL  = (Dir == Direction::X) ? WL.v  : WL.u;
-    const double vR  = (Dir == Direction::X) ? WR.v  : WR.u;
     const double BtL = (Dir == Direction::X) ? WL.By : WL.Bx;
     const double BtR = (Dir == Direction::X) ? WR.By : WR.Bx;
 
@@ -801,6 +801,10 @@ HD inline Conserved riemann_flux(
         apply_glm_flux(F, UL, UR, dir, ch);
         return F;
     }
+
+    // Unreachable for every supported Solver specialization.  Kept to
+    // satisfy CUDA 11.4's incomplete if-constexpr control-flow analysis.
+    return hll_flux(UL, UR, dir, ch);
 }
 
 template <RiemannSolver Solver>

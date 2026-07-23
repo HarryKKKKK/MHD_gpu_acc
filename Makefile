@@ -19,7 +19,10 @@ NVCCFLAGS_BASE    := -std=c++17 -O3 -Ihead -Xcompiler="-Wall -Wextra" --fmad=fal
 # never affects normal builds. Override on the command line, e.g.:
 #   make gpu NVCC_EXTRA_FLAGS=-lineinfo
 NVCC_EXTRA_FLAGS  ?=
-MPICXXFLAGS_BASE  := -std=c++17 -O3 -Wall -Wextra -pedantic -Ihead -DOMPI_SKIP_MPICXX -ffp-contract=off
+# MPI wrappers do not necessarily use GCC.  GNU/OpenMPI builds keep the
+# default below; Intel classic builds can override this with -no-fma.
+MPI_FP_FLAGS      ?= -ffp-contract=off
+MPICXXFLAGS_BASE  := -std=c++17 -O3 -Wall -Wextra -pedantic -Ihead -DOMPI_SKIP_MPICXX $(MPI_FP_FLAGS)
 
 # CUDA_ARCH := -arch=sm_90
 CUDA_ARCH := -arch=sm_80

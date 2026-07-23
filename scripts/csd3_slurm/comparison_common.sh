@@ -175,7 +175,9 @@ comparison_run_once() {
     printf ' %q' "${command[@]}"
     printf '\n'
 
-    start_utc="$(date --utc --iso-8601=nanoseconds)"
+    # GNU coreutils on CSD3 accepts "ns" (not "nanoseconds") as the
+    # nanosecond-resolution --iso-8601 argument.
+    start_utc="$(date --utc --iso-8601=ns)"
     start_ns="$(date +%s%N)"
 
     set +e
@@ -187,7 +189,7 @@ comparison_run_once() {
     set -e
 
     end_ns="$(date +%s%N)"
-    end_utc="$(date --utc --iso-8601=nanoseconds)"
+    end_utc="$(date --utc --iso-8601=ns)"
     wall_seconds="$(awk -v start="${start_ns}" -v end="${end_ns}" 'BEGIN {printf "%.9f", (end-start)/1.0e9}')"
 
     local nx ny cells steps app_elapsed steps_per_s mcell

@@ -43,6 +43,9 @@ comparison_prepare_paths
 
 RANKS_REPORTED="${RANKS:-${SLURM_NTASKS:-76}}"
 export OMP_NUM_THREADS=1
+# rhel8/default-icl routes mpicxx through Intel classic icpc.  Its direct
+# equivalent of GCC's -ffp-contract=off is -no-fma.
+MPI_FP_FLAGS="${MPI_FP_FLAGS:--no-fma}"
 
 for required in mpicxx mpirun; do
     if ! command -v "${required}" >/dev/null 2>&1; then
@@ -57,11 +60,15 @@ comparison_write_metadata "${COMPILER_INFO}"
     echo "mpirun=$(command -v mpirun)"
     echo "mpi_ranks=${RANKS_REPORTED}"
     echo "OMP_NUM_THREADS=${OMP_NUM_THREADS}"
+    echo "MPI_FP_FLAGS=${MPI_FP_FLAGS}"
 } >> "${METADATA_FILE}"
 
 echo "===== BUILD PURE MPI ====="
 BUILD_START_NS="$(date +%s%N)"
-make -j "${MAKE_JOBS:-8}" mpi BUILD_DIR="${BUILD_ROOT}" BIN_DIR="${BIN_ROOT}"
+make -j "${MAKE_JOBS:-8}" mpi \
+    BUILD_DIR="${BUILD_ROOT}" \
+    BIN_DIR="${BIN_ROOT}" \
+    MPI_FP_FLAGS="${MPI_FP_FLAGS}"
 BUILD_END_NS="$(date +%s%N)"
 awk -v start="${BUILD_START_NS}" -v end="${BUILD_END_NS}" 'BEGIN {printf "build_wall_seconds=%.9f\n", (end-start)/1.0e9}' >> "${METADATA_FILE}"
 
