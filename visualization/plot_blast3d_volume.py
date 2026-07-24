@@ -228,7 +228,11 @@ def main():
     paths = sorted(folder.glob("*.mhd3d"))
     if not paths:
         raise SystemExit(f"No *.mhd3d snapshots in {folder}")
-    loaded = [(path, read_snapshot(path)) for path in paths]
+    print(f"[1/5] Loading {len(paths)} snapshots from {folder}", flush=True)
+    loaded = []
+    for number, path in enumerate(paths, start=1):
+        print(f"      read {number}/{len(paths)}: {path.name}", flush=True)
+        loaded.append((path, read_snapshot(path)))
     if args.max_time is not None:
         loaded = [item for item in loaded if item[1][1][6] <= args.max_time]
     if not loaded:
@@ -245,8 +249,11 @@ def main():
     is_imtg = dataset_stem.startswith("imtg")
     case_title = ("Weakly compressible IMTG: Ms0.2_Ma1"
                   if is_imtg else "3D magnetized blast")
+    print(f"[2/5] Computing {args.field} and visibility masks "
+          f"(stride={args.stride})", flush=True)
     frames, threshold, norm = prepare_frames(
         snapshots, args.field, args.fraction, args.level, args.stride)
+    print(f"      threshold={threshold:.6g}", flush=True)
     # `matplotlib.colormaps` is unavailable on older CSD3 installations.
     # Turbo itself appeared in Matplotlib 3.3, so fall back to the widely
     # available viridis map when needed.
@@ -255,6 +262,7 @@ def main():
     except ValueError:
         cmap = plt.get_cmap("viridis")
 
+    print("[3/5] Rendering final-time image", flush=True)
     fig = plt.figure(figsize=(8.4, 7.2), facecolor="white")
     ax = fig.add_subplot(111, projection="3d")
     fig.subplots_adjust(left=0.02, right=0.88, bottom=0.03, top=0.91)
@@ -271,7 +279,7 @@ def main():
     # Passing Path directly is unreliable with the Python 3.6 Matplotlib
     # bundled on CSD3.
     fig.savefig(str(png), dpi=190)
-    print(f"Wrote {png}")
+    print(f"      wrote {png}", flush=True)
 
     # Select evenly spaced physical times that actually contain a visible
     # structure. For density, the t=0 state is spatially uniform and is
@@ -285,16 +293,21 @@ def main():
         if index not in selected_indices:
             selected_indices.append(index)
 
-    # Write one full-resolution image per selected physical time.
-    for index in selected_indices:
+    print(f"[4/5] Rendering {len(selected_indices)} selected time images",
+          flush=True)
+    for frame_number, index in enumerate(selected_indices, start=1):
+        frame_time = frames[index][3][6]
+        print(f"      frame {frame_number}/{len(selected_indices)}: "
+              f"snapshot={index:03d}, t={frame_time:.6f}", flush=True)
         draw_frame(ax, frames[index], args.field, threshold, norm, cmap,
                    case_title, show_uniform_field=not is_imtg)
         frame_png = folder / (
             f"{dataset_stem}_{args.field}_3d_frame_{index:03d}.png")
         fig.savefig(str(frame_png), dpi=190)
-        print(f"Wrote {frame_png}")
+        print(f"      wrote {frame_png}", flush=True)
 
     # Also produce a single contact sheet for papers and presentations.
+    print("[5/5] Rendering evolution contact sheet", flush=True)
     if len(selected_indices) >= 5:
         columns = 3
     elif len(selected_indices) >= 2:
@@ -306,6 +319,7 @@ def main():
         figsize=(5.2 * columns + 0.8, 4.6 * rows), facecolor="white")
     overview_axes = []
     for panel, index in enumerate(selected_indices, start=1):
+        print(f"      panel {panel}/{len(selected_indices)}", flush=True)
         panel_ax = overview.add_subplot(rows, columns, panel, projection="3d")
         draw_frame(panel_ax, frames[index], args.field, threshold, norm, cmap,
                    case_title, show_uniform_field=not is_imtg)
@@ -320,7 +334,8 @@ def main():
     overview_png = folder / f"{dataset_stem}_{args.field}_3d_evolution.png"
     overview.savefig(str(overview_png), dpi=180)
     plt.close(overview)
-    print(f"Wrote {overview_png}")
+    print(f"      wrote {overview_png}", flush=True)
+    print(f"Completed {args.field} rendering.", flush=True)
 
     if args.rotation_gif and not args.no_rotation:
         gif = folder / f"{dataset_stem}_{args.field}_3d_rotation.gif"

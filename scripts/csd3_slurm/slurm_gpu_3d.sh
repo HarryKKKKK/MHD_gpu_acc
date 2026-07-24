@@ -61,16 +61,16 @@ if [[ "${CASE}" == "imtg" ]]; then
     # SNAPSHOTS is the number of intervals. Five intervals plus the t=0
     # initial condition produce exactly six uniformly spaced output files.
     DEFAULT_SNAPSHOTS=5
-    DEFAULT_FIELD=current
-    DEFAULT_FRACTION=0.12
-    DEFAULT_PLOT_STRIDE=1
+    DEFAULT_PLOT_FIELDS=rho,current,Bmag
+    DEFAULT_RHO_FRACTION=0.10
+    DEFAULT_PLOT_STRIDE=2
     CASE_STEM=imtg3d
 elif [[ "${CASE}" == "blast" ]]; then
     DEFAULT_RESOLUTION=128
     DEFAULT_T_END=0.01
     DEFAULT_SNAPSHOTS=5
-    DEFAULT_FIELD=rho
-    DEFAULT_FRACTION=0.12
+    DEFAULT_PLOT_FIELDS=rho
+    DEFAULT_RHO_FRACTION=0.12
     DEFAULT_PLOT_STRIDE=1
     CASE_STEM=blast3d
 else
@@ -85,14 +85,12 @@ SOLVER="${SOLVER:-hlld}"
 CFL="${CFL:-0.20}"
 RUN_TEST="${RUN_TEST:-1}"
 VISUALIZE="${VISUALIZE:-1}"
-FIELD="${FIELD:-${DEFAULT_FIELD}}"
-FRACTION="${FRACTION:-${DEFAULT_FRACTION}}"
+PLOT_FIELDS="${PLOT_FIELDS:-${FIELD:-${DEFAULT_PLOT_FIELDS}}}"
+RHO_FRACTION="${RHO_FRACTION:-${DEFAULT_RHO_FRACTION}}"
+CURRENT_LEVEL="${CURRENT_LEVEL:-4.5}"
+BMAG_FRACTION="${BMAG_FRACTION:-0.15}"
+FRACTION="${FRACTION:-0.18}"
 LEVEL="${LEVEL:-}"
-if [[ -z "${LEVEL}" && "${CASE}" == "imtg" && "${FIELD}" == "current" ]]; then
-    # The analytic t=0 current peaks near 5.62. An absolute level of 4.5
-    # keeps the initial condition visible, so all six saved times appear.
-    LEVEL=4.5
-fi
 PNG_FRAMES="${PNG_FRAMES:-6}"
 PLOT_STRIDE="${PLOT_STRIDE:-${DEFAULT_PLOT_STRIDE}}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
@@ -164,6 +162,8 @@ echo "Solver              : ${SOLVER}"
 echo "t_end / CFL         : ${T_END} / ${CFL}"
 echo "Output intervals    : ${SNAPSHOTS}"
 echo "Output files        : $((SNAPSHOTS + 1)) (including t=0)"
+echo "Plot fields         : ${PLOT_FIELDS}"
+echo "Plot stride         : ${PLOT_STRIDE}"
 echo "Output              : ${OUT_DIR}"
 echo "Build root          : ${BUILD_ROOT}"
 echo "Binary root         : ${BIN_ROOT}"
@@ -207,18 +207,48 @@ if [[ "${VISUALIZE}" == "1" ]]; then
     export MPLBACKEND=Agg
     if command -v "${PYTHON_BIN}" >/dev/null 2>&1 &&
        "${PYTHON_BIN}" -c "import numpy, matplotlib, PIL" >/dev/null 2>&1; then
-        PLOT_ARGS=(
-            --input "${OUT_DIR}"
-            --field "${FIELD}"
-            --fraction "${FRACTION}"
-            --png-frames "${PNG_FRAMES}"
-            --stride "${PLOT_STRIDE}"
-        )
-        if [[ -n "${LEVEL}" ]]; then
-            PLOT_ARGS+=(--level "${LEVEL}")
-        fi
-        "${PYTHON_BIN}" visualization/plot_blast3d_volume.py "${PLOT_ARGS[@]}"
-        echo "Evolution plot      : ${OUT_DIR}/${CASE_STEM}_${FIELD}_3d_evolution.png"
+        IFS=',' read -r -a RENDER_FIELDS <<< "${PLOT_FIELDS}"
+        RENDER_TOTAL="${#RENDER_FIELDS[@]}"
+        RENDER_INDEX=0
+        for RENDER_FIELD in "${RENDER_FIELDS[@]}"; do
+            RENDER_INDEX=$((RENDER_INDEX + 1))
+            RENDER_FIELD="${RENDER_FIELD//[[:space:]]/}"
+            PLOT_ARGS=(
+                --input "${OUT_DIR}"
+                --field "${RENDER_FIELD}"
+                --png-frames "${PNG_FRAMES}"
+                --stride "${PLOT_STRIDE}"
+            )
+            case "${RENDER_FIELD}" in
+                rho)
+                    PLOT_ARGS+=(--fraction "${RHO_FRACTION}")
+                    ;;
+                current)
+                    # |J|=4.5 keeps the analytic t=0 state visible.
+                    PLOT_ARGS+=(--level "${CURRENT_LEVEL}")
+                    ;;
+                Bmag)
+                    PLOT_ARGS+=(--fraction "${BMAG_FRACTION}")
+                    ;;
+                *)
+                    PLOT_ARGS+=(--fraction "${FRACTION}")
+                    if [[ -n "${LEVEL}" ]]; then
+                        PLOT_ARGS+=(--level "${LEVEL}")
+                    fi
+                    ;;
+            esac
+            echo
+            echo "----- RENDER ${RENDER_INDEX}/${RENDER_TOTAL}: ${RENDER_FIELD} -----"
+            echo "Start: $(date --iso-8601=seconds)"
+            printf "Command: %q -u visualization/plot_blast3d_volume.py" "${PYTHON_BIN}"
+            printf " %q" "${PLOT_ARGS[@]}"
+            printf "\n"
+            RENDER_START="${SECONDS}"
+            PYTHONUNBUFFERED=1 "${PYTHON_BIN}" -u \
+                visualization/plot_blast3d_volume.py "${PLOT_ARGS[@]}"
+            echo "Done : ${RENDER_FIELD} in $((SECONDS - RENDER_START)) s"
+            echo "Plot : ${OUT_DIR}/${CASE_STEM}_${RENDER_FIELD}_3d_evolution.png"
+        done
     else
         echo "[WARN] CUDA run succeeded, but rendering dependencies are absent."
         echo "[WARN] Render later with visualization/plot_blast3d_volume.py."

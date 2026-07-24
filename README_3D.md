@@ -151,9 +151,13 @@ sbatch --export=ALL,CASE=imtg,RESOLUTION=128 \
 The literature default is `1024^3`, HLLD, CFL 0.20, and `t_end=6T`. The Slurm
 script uses five equal output intervals, so the initial condition plus the five
 evolved states give exactly six files at `t/T = 0, 1.2, 2.4, 3.6, 4.8, 6`.
-It automatically renders a six-panel current-density evolution figure after a
-successful run (`VISUALIZE=1`, the default). The automatic current plot uses
-the absolute level `|J|=4.5`, which keeps the analytic initial state visible.
+It automatically renders six-panel `rho`, `current`, and `Bmag` evolution
+figures after a successful run (`VISUALIZE=1`, the default). Rendering uses
+`stride=2`; the current plot uses the absolute level `|J|=4.5`, which keeps
+the analytic initial state visible. The Slurm log reports each field, snapshot,
+individual frame, and contact-sheet rendering step. Set, for example,
+`PLOT_FIELDS=current` to render only one field or `PLOT_STRIDE=1` for the full
+display grid.
 A `1024^3` grid does **not** fit the current single-GPU double-precision
 implementation: four full 9-variable state grids alone need
 about 292 GiB before overhead. The Slurm script detects this and exits instead
