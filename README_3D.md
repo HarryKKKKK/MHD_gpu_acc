@@ -61,6 +61,35 @@ Useful exported variables are `RESOLUTION`, `T_END`, `SNAPSHOTS`, `SOLVER`,
 not installed on compute nodes, use `VISUALIZE=0` and run the visualization
 script later against the generated snapshot directory.
 
+### True CUDA 3D on CSD3
+
+The CUDA backend has its own `main_gpu_3d` executable; it does not reserve a
+GPU merely to run the OpenMP solver. The CSD3 script builds this executable,
+runs an 8-cubed CPU/GPU one-step HLLD parity check, and only then starts the
+production simulation:
+
+```bash
+mkdir -p logs
+sbatch scripts/csd3_slurm/slurm_gpu_3d.sh
+```
+
+The default is a 96-cubed HLLD run with ten output intervals on one Ampere GPU.
+For a larger run without rendering on the compute node:
+
+```bash
+sbatch --export=ALL,RESOLUTION=128,SNAPSHOTS=12,VISUALIZE=0 \
+  scripts/csd3_slurm/slurm_gpu_3d.sh
+```
+
+Build and test interactively on a CUDA node with:
+
+```bash
+module purge
+module load rhel8/default-amp
+make gpu_3d
+make test_gpu_3d
+```
+
 For a quick smoke test:
 
 ```bash

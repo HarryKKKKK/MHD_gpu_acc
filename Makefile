@@ -59,12 +59,14 @@ CPU_TARGET := $(BIN_DIR)/main_cpu
 CPU_SERIAL_TARGET := $(BIN_DIR)/main_cpu_serial
 CPU_3D_TARGET := $(BIN_DIR)/main_cpu_3d
 GPU_TARGET := $(BIN_DIR)/main_gpu
+GPU_3D_TARGET := $(BIN_DIR)/main_gpu_3d
 MPI_TARGET := $(BIN_DIR)/main_mpi
 MPI_OMP_TARGET := $(BIN_DIR)/main_mpi_omp
 
 CPU_MAIN := scripts/cpu/main_cpu.cpp
 CPU_3D_MAIN := scripts/cpu/main_cpu_3d.cpp
 GPU_MAIN := scripts/gpu/main_gpu.cu
+GPU_3D_MAIN := scripts/gpu/main_gpu_3d.cu
 MPI_MAIN := scripts/cpu/main_mpi.cpp
 
 CPU_OBJS := \
@@ -91,6 +93,13 @@ GPU_OBJS := \
 	$(GPU_BUILD_DIR)/init.o \
 	$(GPU_BUILD_DIR)/solver_gpu.o \
 	$(GPU_BUILD_DIR)/boundary_gpu.o
+
+GPU_3D_OBJS := \
+	$(GPU_BUILD_DIR)/main_gpu_3d.o \
+	$(GPU_BUILD_DIR)/solver3d_gpu.o \
+	$(GPU_BUILD_DIR)/boundary3d_gpu.o
+
+GPU_3D_TEST_TARGET := $(BIN_DIR)/test_solver3d_gpu
 
 # Pure MPI: do not link solver_cpu.o
 MPI_OBJS := \
@@ -270,6 +279,43 @@ $(GPU_BUILD_DIR)/solver_gpu.o: src/gpu/solver_gpu.cu
 $(GPU_BUILD_DIR)/boundary_gpu.o: src/gpu/boundary_gpu.cu
 	@mkdir -p $(dir $@)
 	$(NVCC) $(NVCCFLAGS) -c $< -o $@
+
+# =========================
+# 3D GPU baseline
+# =========================
+.PHONY: gpu_3d
+gpu_3d: $(GPU_3D_TARGET)
+
+$(GPU_3D_TARGET): $(GPU_3D_OBJS)
+	@mkdir -p $(BIN_DIR)
+	$(NVCC) $(NVCCFLAGS) $(GPU_3D_OBJS) -o $@ -lstdc++fs
+
+$(GPU_BUILD_DIR)/main_gpu_3d.o: $(GPU_3D_MAIN)
+	@mkdir -p $(dir $@)
+	$(NVCC) $(NVCCFLAGS) -c $< -o $@
+
+$(GPU_BUILD_DIR)/solver3d_gpu.o: src/gpu/solver3d_gpu.cu
+	@mkdir -p $(dir $@)
+	$(NVCC) $(NVCCFLAGS) -c $< -o $@
+
+$(GPU_BUILD_DIR)/boundary3d_gpu.o: src/gpu/boundary3d_gpu.cu
+	@mkdir -p $(dir $@)
+	$(NVCC) $(NVCCFLAGS) -c $< -o $@
+
+$(GPU_BUILD_DIR)/solver3d_cpu_reference.o: src/cpu/solver3d_cpu.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS_BASE) -c $< -o $@
+
+.PHONY: test_gpu_3d
+test_gpu_3d: $(GPU_3D_TEST_TARGET)
+	$(GPU_3D_TEST_TARGET)
+
+$(GPU_3D_TEST_TARGET): validation/test_solver3d_gpu.cu \
+		$(GPU_BUILD_DIR)/solver3d_gpu.o \
+		$(GPU_BUILD_DIR)/boundary3d_gpu.o \
+		$(GPU_BUILD_DIR)/solver3d_cpu_reference.o
+	@mkdir -p $(BIN_DIR)
+	$(NVCC) $(NVCCFLAGS) $^ -o $@ -lstdc++fs
 
 # =========================
 # Run helpers
