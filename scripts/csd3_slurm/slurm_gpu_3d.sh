@@ -15,7 +15,7 @@
 # Submit from the repository root after `mkdir -p logs`.
 #
 # Override example:
-#   sbatch --export=ALL,RESOLUTION=128,SNAPSHOTS=12,VISUALIZE=0 \
+#   sbatch --export=ALL,CASE=imtg,RESOLUTION=128 \
 #     scripts/csd3_slurm/slurm_gpu_3d.sh
 
 set -euo pipefail
@@ -58,10 +58,12 @@ if [[ "${CASE}" == "imtg" ]]; then
     # Glines, Grete & O'Shea (PRE 103, 043203), Ms0.2_Ma1.
     DEFAULT_RESOLUTION=1024
     DEFAULT_T_END=5.809475019311126
-    DEFAULT_SNAPSHOTS=12
+    # SNAPSHOTS is the number of intervals. Five intervals plus the t=0
+    # initial condition produce exactly six uniformly spaced output files.
+    DEFAULT_SNAPSHOTS=5
     DEFAULT_FIELD=current
-    DEFAULT_FRACTION=0.45
-    DEFAULT_PLOT_STRIDE=2
+    DEFAULT_FRACTION=0.12
+    DEFAULT_PLOT_STRIDE=1
     CASE_STEM=imtg3d
 elif [[ "${CASE}" == "blast" ]]; then
     DEFAULT_RESOLUTION=128
@@ -85,6 +87,12 @@ RUN_TEST="${RUN_TEST:-1}"
 VISUALIZE="${VISUALIZE:-1}"
 FIELD="${FIELD:-${DEFAULT_FIELD}}"
 FRACTION="${FRACTION:-${DEFAULT_FRACTION}}"
+LEVEL="${LEVEL:-}"
+if [[ -z "${LEVEL}" && "${CASE}" == "imtg" && "${FIELD}" == "current" ]]; then
+    # The analytic t=0 current peaks near 5.62. An absolute level of 4.5
+    # keeps the initial condition visible, so all six saved times appear.
+    LEVEL=4.5
+fi
 PNG_FRAMES="${PNG_FRAMES:-6}"
 PLOT_STRIDE="${PLOT_STRIDE:-${DEFAULT_PLOT_STRIDE}}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
@@ -154,7 +162,8 @@ echo "Case                : ${CASE}"
 echo "Resolution          : ${RESOLUTION}^3"
 echo "Solver              : ${SOLVER}"
 echo "t_end / CFL         : ${T_END} / ${CFL}"
-echo "Snapshots           : ${SNAPSHOTS}"
+echo "Output intervals    : ${SNAPSHOTS}"
+echo "Output files        : $((SNAPSHOTS + 1)) (including t=0)"
 echo "Output              : ${OUT_DIR}"
 echo "Build root          : ${BUILD_ROOT}"
 echo "Binary root         : ${BIN_ROOT}"
@@ -193,15 +202,23 @@ else
     srun --ntasks=1 "${APP[@]}"
 fi
 
-echo "===== OPTIONAL RENDERING ====="
+echo "===== AUTOMATIC RENDERING ====="
 if [[ "${VISUALIZE}" == "1" ]]; then
     export MPLBACKEND=Agg
     if command -v "${PYTHON_BIN}" >/dev/null 2>&1 &&
        "${PYTHON_BIN}" -c "import numpy, matplotlib, PIL" >/dev/null 2>&1; then
-        "${PYTHON_BIN}" visualization/plot_blast3d_volume.py \
-            --input "${OUT_DIR}" --field "${FIELD}" \
-            --fraction "${FRACTION}" --png-frames "${PNG_FRAMES}" \
+        PLOT_ARGS=(
+            --input "${OUT_DIR}"
+            --field "${FIELD}"
+            --fraction "${FRACTION}"
+            --png-frames "${PNG_FRAMES}"
             --stride "${PLOT_STRIDE}"
+        )
+        if [[ -n "${LEVEL}" ]]; then
+            PLOT_ARGS+=(--level "${LEVEL}")
+        fi
+        "${PYTHON_BIN}" visualization/plot_blast3d_volume.py "${PLOT_ARGS[@]}"
+        echo "Evolution plot      : ${OUT_DIR}/${CASE_STEM}_${FIELD}_3d_evolution.png"
     else
         echo "[WARN] CUDA run succeeded, but rendering dependencies are absent."
         echo "[WARN] Render later with visualization/plot_blast3d_volume.py."

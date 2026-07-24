@@ -144,13 +144,18 @@ CSD3 CUDA run:
 
 ```bash
 mkdir -p logs
-sbatch --export=ALL,CASE=imtg,VISUALIZE=0 \
+sbatch --export=ALL,CASE=imtg,RESOLUTION=128 \
   scripts/csd3_slurm/slurm_gpu_3d.sh
 ```
 
-The literature default is `1024^3`, HLLD, CFL 0.20, `t_end=6T`, and twelve
-output intervals. A `1024^3` grid does **not** fit the current single-GPU
-double-precision implementation: four full 9-variable state grids alone need
+The literature default is `1024^3`, HLLD, CFL 0.20, and `t_end=6T`. The Slurm
+script uses five equal output intervals, so the initial condition plus the five
+evolved states give exactly six files at `t/T = 0, 1.2, 2.4, 3.6, 4.8, 6`.
+It automatically renders a six-panel current-density evolution figure after a
+successful run (`VISUALIZE=1`, the default). The automatic current plot uses
+the absolute level `|J|=4.5`, which keeps the analytic initial state visible.
+A `1024^3` grid does **not** fit the current single-GPU double-precision
+implementation: four full 9-variable state grids alone need
 about 292 GiB before overhead. The Slurm script detects this and exits instead
 of failing inside CUDA. Until multi-GPU domain decomposition is implemented,
 use the same physical initial condition at the largest grid accepted by the
