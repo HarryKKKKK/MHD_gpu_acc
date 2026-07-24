@@ -24,7 +24,7 @@ namespace {
 enum class Case3D { Blast, IMTG };
 
 struct Options {
-    int n=128,snapshots=-1;
+    int n=-1,snapshots=-1;
     double t_end=-1.0,cfl=-1.0;
     std::string out;
     RiemannSolver solver=RiemannSolver::HLLD;
@@ -62,7 +62,8 @@ Options parse_args(int argc,char** argv) {
         } else throw std::runtime_error("unknown argument: "+s);
     }
     const bool imtg=o.test_case==Case3D::IMTG;
-    if(o.snapshots<0)o.snapshots=imtg?8:5;
+    if(o.n<0)o.n=imtg?imtg3d::reference_resolution:128;
+    if(o.snapshots<0)o.snapshots=imtg?12:5;
     if(o.t_end<0)o.t_end=imtg?imtg3d::t_end:blast3d::t_end;
     if(o.cfl<0)o.cfl=imtg?imtg3d::recommended_cfl:blast3d::recommended_cfl;
     if(o.out.empty())o.out=imtg?"output/imtg3d_gpu":"output/blast3d_gpu";
@@ -146,6 +147,19 @@ int main(int argc,char** argv) {
         cuda3d_check(cudaGetDevice(&device),"cudaGetDevice");
         cudaDeviceProp prop{};
         cuda3d_check(cudaGetDeviceProperties(&prop,device),"cudaGetDeviceProperties");
+        const std::size_t extent=static_cast<std::size_t>(o.n)+4;
+        const std::size_t state_bytes=
+            4*extent*extent*extent*sizeof(Conserved);
+        if(state_bytes>prop.totalGlobalMem*85/100) {
+            std::ostringstream message;
+            message<<"grid "<<o.n<<"^3 needs at least "
+                   <<state_bytes/(1024.0*1024.0*1024.0)
+                   <<" GiB for four state grids, but "<<prop.name
+                   <<" has "<<prop.totalGlobalMem/(1024.0*1024.0*1024.0)
+                   <<" GiB; choose a smaller --resolution or use a future "
+                     "multi-GPU domain-decomposed executable";
+            throw std::runtime_error(message.str());
+        }
         std::cout<<"=== CUDA 3D GLM-MHD case: "
                  <<(imtg?"IMTG":"magnetized blast")<<" ===\n"
                  <<"  GPU        : "<<prop.name<<"\n"
@@ -154,11 +168,15 @@ int main(int argc,char** argv) {
                  <<"  boundaries : periodic\n";
         if(imtg) {
             std::cout
-                 <<"  reference  : Pouquet et al., arXiv:0906.1384, IMTG\n"
-                 <<"  model      : compressible ideal-MHD counterpart\n"
-                 <<"  domain     : [0,2*pi]^3\n"
-                 <<"  v0 / b0    : 1 / 1/sqrt(3), EV=EM=0.125\n"
-                 <<"  rho / p    : 1 / "<<imtg3d::thermal_pressure<<"\n";
+                 <<"  reference  : Glines et al., PRE 103, 043203 (2021)\n"
+                 <<"  setup      : Ms0.2_Ma1 compressible ideal MHD\n"
+                 <<"  domain     : [-0.5,0.5]^3, L=1/(2*pi)\n"
+                 <<"  u0 / B0    : "<<imtg3d::velocity_amplitude<<" / "
+                 <<imtg3d::magnetic_amplitude<<"\n"
+                 <<"  P0 / rho0  : 1 / 1 with paper TG perturbations\n"
+                 <<"  T          : "<<imtg3d::dynamical_time
+                 <<", t_end/T="<<o.t_end/imtg3d::dynamical_time<<"\n"
+                 <<"  div(B)     : GLM (paper uses CT)\n";
         } else {
             std::cout
                  <<"  reference  : Derigs et al., JCP 317 (2016), Sec. 5.6\n"

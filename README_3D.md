@@ -110,27 +110,27 @@ Snapshot files use the compact `MHD3D01` binary format documented directly in
 `scripts/cpu/main_cpu_3d.cpp`: dimensions, bounds/time/gamma, then eight
 float32 primitive fields per x-fastest cell.
 
-## Taylor-Green MHD compatibility case
+## Weakly compressible Taylor-Green MHD reference case
 
-The same CPU and CUDA executables also provide `--case imtg`. This uses the
-Insulating Magnetic Taylor-Green initial condition from Pouquet et al.,
-arXiv:0906.1384:
+The CPU and CUDA executables provide `--case imtg`. Its defaults reproduce the
+`Ms0.2_Ma1` initial conditions of Glines, Grete & O'Shea, *Phys. Rev. E* 103,
+043203 (2021), arXiv:2009.01331:
 
 ```text
-u = (sin(x) cos(y) cos(z), -cos(x) sin(y) cos(z), 0)
-B = (cos(x) sin(y) sin(z),
-     sin(x) cos(y) sin(z),
-    -2 sin(x) sin(y) cos(z)) / sqrt(3)
+u_x =  u0 sin(x/L) cos(y/L) cos(z/L)
+u_y = -u0 cos(x/L) sin(y/L) cos(z/L),  u_z = 0
+P   = P0 + rho0*u0^2/16
+      * [cos(2x/L)+cos(2y/L)] * [cos(2z/L)+2]
+rho = P*rho0/P0
 ```
 
-The domain is `[0,2*pi]^3` with periodic boundaries. The amplitudes give
-`EV=EM=0.125` and total initial kinetic-plus-magnetic energy 0.25, as in the
-paper. Since this repository solves compressible ideal GLM-MHD rather than
-incompressible viscous-resistive MHD, this is explicitly a compatibility
-counterpart: it uses `rho=1`, `gamma=5/3`, and uniform thermal pressure `p=10`
-to keep the initial flow at low Mach number. It does not reproduce the
-paper's `nu=eta`, pressure projection, pseudo-spectral discretization, or
-2/3 dealiasing.
+The magnetic field is the paper's insulating TG field. The periodic domain is
+`[-0.5,0.5]^3`, `L=1/(2*pi)`, `P0=rho0=1`, `gamma=5/3`,
+`u0=0.5163977795`, and `B0=0.2981423970`. These values give
+`Ms_rms=0.2` and equal initial kinetic and magnetic energies (`Ma=1`).
+The reference dynamical time is `T=0.9682458366`; the default end time is
+`6T=5.8094750193`. The solver deliberately retains GLM divergence cleaning
+where the paper uses constrained transport.
 
 CPU smoke test:
 
@@ -148,12 +148,24 @@ sbatch --export=ALL,CASE=imtg,VISUALIZE=0 \
   scripts/csd3_slurm/slurm_gpu_3d.sh
 ```
 
-The IMTG Slurm defaults are `128^3`, HLLD, CFL 0.20, `t_end=2`, and eight
-output intervals. Render the current-sheet evolution as multiple PNGs:
+The literature default is `1024^3`, HLLD, CFL 0.20, `t_end=6T`, and twelve
+output intervals. A `1024^3` grid does **not** fit the current single-GPU
+double-precision implementation: four full 9-variable state grids alone need
+about 292 GiB before overhead. The Slurm script detects this and exits instead
+of failing inside CUDA. Until multi-GPU domain decomposition is implemented,
+use the same physical initial condition at the largest grid accepted by the
+GPU-memory preflight check. For example, on an 80-GiB A100:
+
+```bash
+sbatch --export=ALL,CASE=imtg,RESOLUTION=512,VISUALIZE=0 \
+  scripts/csd3_slurm/slurm_gpu_3d.sh
+```
+
+Render the current-sheet evolution as multiple PNGs:
 
 ```bash
 python3 visualization/plot_blast3d_volume.py \
-  --input outputs/imtg3d_gpu_n128_hlld_JOB_ID \
+  --input outputs/imtg3d_gpu_n512_hlld_JOB_ID \
   --field current --fraction 0.45 --stride 2 --png-frames 6
 ```
 
@@ -162,4 +174,4 @@ The visualization additionally supports `--field vorticity`, `speed`, and
 `--max-time` when a known failed tail must be excluded without altering the
 original data. `--stride 2` reduces only the rendered voxel grid after the
 curl has been evaluated at full resolution, making Matplotlib practical for a
-`128^3` dataset without changing the simulation.
+large dataset without changing the simulation.

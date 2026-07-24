@@ -5,33 +5,43 @@
 #include "cpu/boundary3d_cpu.hpp"
 #include "physics.hpp"
 
-// Compressible ideal-MHD counterpart of the Insulating Magnetic
-// Taylor-Green (IMTG) initial condition from Pouquet et al.,
-// arXiv:0906.1384, Eqs. (3) and (5)-(7).
+// Ms0.2_Ma1 weakly-compressible Insulating Magnetic Taylor-Green case from
+// Glines, Grete & O'Shea, Phys. Rev. E 103, 043203 (2021),
+// arXiv:2009.01331, Sec. II.B.
 //
-// The paper evolves incompressible, viscous-resistive MHD with a
-// pseudo-spectral solver. This project instead evolves the same normalized,
-// divergence-free velocity and magnetic fields with its existing ideal
-// compressible GLM-MHD finite-volume solver. A uniform thermal pressure keeps
-// the initial flow at low Mach number.
+// The paper uses compressible ideal MHD, a 1024^3 periodic Cartesian grid,
+// PLM+HLLD, and constrained transport. This project deliberately keeps its
+// GLM divergence control so CT versus GLM can be compared independently.
 namespace imtg3d {
 
 inline constexpr double pi = 3.141592653589793238462643383279502884;
-inline constexpr double x_min = 0.0;
-inline constexpr double x_max = 2.0*pi;
-inline constexpr double rho = 1.0;
+inline constexpr double x_min = -0.5;
+inline constexpr double x_max = 0.5;
+inline constexpr double length_scale = 1.0/(2.0*pi);
+inline constexpr int reference_resolution = 1024;
+inline constexpr double reference_mach_s = 0.2;
+inline constexpr double reference_mach_a = 1.0;
+inline constexpr double reference_pressure = 1.0;
+inline constexpr double reference_density = 1.0;
 inline constexpr double gamma = 5.0/3.0;
-inline constexpr double thermal_pressure = 10.0;
-inline constexpr double velocity_amplitude = 1.0;
+inline constexpr double sound_speed =
+    1.290994448735805628393088466594133; // sqrt(gamma P0/rho0)
+inline constexpr double velocity_amplitude =
+    2.0*reference_mach_s*sound_speed;
 inline constexpr double magnetic_amplitude =
-    0.577350269189625764509148780501957456; // 1/sqrt(3)
-inline constexpr double t_end = 2.0;
+    velocity_amplitude/1.732050807568877293527446341505872; // Ma0=1
+inline constexpr double dynamical_time =
+    pi*length_scale/velocity_amplitude;
+inline constexpr double t_end = 6.0*dynamical_time;
 inline constexpr double recommended_cfl = 0.20;
 
 inline Conserved initial_state(double x, double y, double z) {
-    const double sx=std::sin(x), cx=std::cos(x);
-    const double sy=std::sin(y), cy=std::cos(y);
-    const double sz=std::sin(z), cz=std::cos(z);
+    const double X=x/length_scale;
+    const double Y=y/length_scale;
+    const double Z=z/length_scale;
+    const double sx=std::sin(X), cx=std::cos(X);
+    const double sy=std::sin(Y), cy=std::cos(Y);
+    const double sz=std::sin(Z), cz=std::cos(Z);
 
     const double u= velocity_amplitude*sx*cy*cz;
     const double v=-velocity_amplitude*cx*sy*cz;
@@ -39,8 +49,14 @@ inline Conserved initial_state(double x, double y, double z) {
     const double bx= magnetic_amplitude*cx*sy*sz;
     const double by= magnetic_amplitude*sx*cy*sz;
     const double bz=-2.0*magnetic_amplitude*sx*sy*cz;
+    const double pressure =
+        reference_pressure
+        +(reference_density*velocity_amplitude*velocity_amplitude/16.0)
+         *(std::cos(2.0*X)+std::cos(2.0*Y))
+         *(std::cos(2.0*Z)+2.0);
+    const double rho=pressure*reference_density/reference_pressure;
     return phys::prim_to_cons(
-        Primitive(rho,u,v,w,bx,by,bz,thermal_pressure,0.0));
+        Primitive(rho,u,v,w,bx,by,bz,pressure,0.0));
 }
 
 inline BoundaryConfig3D boundary_conditions() {

@@ -28,7 +28,7 @@ namespace {
 enum class Case3D { Blast, IMTG };
 
 struct Options {
-    int n=48;
+    int n=-1;
     int snapshots=-1;
     double t_end=-1.0;
     double cfl=-1.0;
@@ -68,7 +68,8 @@ Options parse_args(int argc,char** argv) {
         } else throw std::runtime_error("unknown argument: "+s);
     }
     const bool imtg=o.test_case==Case3D::IMTG;
-    if(o.snapshots<0) o.snapshots=imtg?8:5;
+    if(o.n<0) o.n=imtg?imtg3d::reference_resolution:48;
+    if(o.snapshots<0) o.snapshots=imtg?12:5;
     if(o.t_end<0) o.t_end=imtg?imtg3d::t_end:blast3d::t_end;
     if(o.cfl<0) o.cfl=imtg?imtg3d::recommended_cfl:blast3d::recommended_cfl;
     if(o.out.empty()) o.out=imtg?"output/imtg3d":"output/blast3d";
@@ -162,10 +163,14 @@ int main(int argc,char** argv) {
                  <<"  domain : ["<<lo<<","<<hi<<"]^3\n";
         if(imtg) {
             std::cout
-                 <<"  reference: Pouquet et al., arXiv:0906.1384, IMTG\n"
-                 <<"  model  : compressible ideal-MHD counterpart\n"
-                 <<"  v0/b0  : 1 / 1/sqrt(3), EV=EM=0.125\n"
-                 <<"  rho/p  : 1 / "<<imtg3d::thermal_pressure<<"\n";
+                 <<"  reference: Glines et al., PRE 103, 043203 (2021)\n"
+                 <<"  setup  : Ms0.2_Ma1 compressible ideal MHD\n"
+                 <<"  u0/B0  : "<<imtg3d::velocity_amplitude<<" / "
+                 <<imtg3d::magnetic_amplitude<<"\n"
+                 <<"  P0/rho0: 1 / 1 with paper TG perturbations\n"
+                 <<"  T      : "<<imtg3d::dynamical_time
+                 <<", t_end/T="<<o.t_end/imtg3d::dynamical_time<<"\n"
+                 <<"  div(B) : GLM (paper uses CT)\n";
         } else {
             std::cout
                  <<"  reference: Derigs et al., JCP 317 (2016), Sec. 5.6\n"

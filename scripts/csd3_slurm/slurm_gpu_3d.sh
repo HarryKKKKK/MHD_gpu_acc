@@ -55,13 +55,16 @@ done
 
 CASE="${CASE:-blast}"
 if [[ "${CASE}" == "imtg" ]]; then
-    DEFAULT_T_END=2.0
-    DEFAULT_SNAPSHOTS=8
+    # Glines, Grete & O'Shea (PRE 103, 043203), Ms0.2_Ma1.
+    DEFAULT_RESOLUTION=1024
+    DEFAULT_T_END=5.809475019311126
+    DEFAULT_SNAPSHOTS=12
     DEFAULT_FIELD=current
     DEFAULT_FRACTION=0.45
     DEFAULT_PLOT_STRIDE=2
     CASE_STEM=imtg3d
 elif [[ "${CASE}" == "blast" ]]; then
+    DEFAULT_RESOLUTION=128
     DEFAULT_T_END=0.01
     DEFAULT_SNAPSHOTS=5
     DEFAULT_FIELD=rho
@@ -73,7 +76,7 @@ else
     exit 2
 fi
 
-RESOLUTION="${RESOLUTION:-128}"
+RESOLUTION="${RESOLUTION:-${DEFAULT_RESOLUTION}}"
 T_END="${T_END:-${DEFAULT_T_END}}"
 SNAPSHOTS="${SNAPSHOTS:-${DEFAULT_SNAPSHOTS}}"
 SOLVER="${SOLVER:-hlld}"
@@ -123,6 +126,14 @@ if [[ "${TOTAL_GPU_MIB}" =~ ^[0-9]+$ ]] &&
    (( EST_GPU_MIB > TOTAL_GPU_MIB * 85 / 100 )); then
     echo "[ERROR] Estimated GPU allocation ${EST_GPU_MIB} MiB is too close to"
     echo "        the available ${TOTAL_GPU_MIB} MiB. Reduce RESOLUTION."
+    if [[ "${CASE}" == "imtg" && "${RESOLUTION}" == "1024" ]]; then
+        echo "        1024^3 is the paper grid, but this implementation stores"
+        echo "        four double-precision 9-variable grids on one GPU."
+        echo "        An exact-grid run requires multi-GPU domain decomposition,"
+        echo "        which this single-GPU executable does not yet provide."
+        echo "        Use RESOLUTION=512 on an 80-GiB A100, or a lower value"
+        echo "        accepted by this preflight check, for the same physical case."
+    fi
     exit 2
 fi
 

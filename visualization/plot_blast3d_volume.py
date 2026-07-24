@@ -243,7 +243,8 @@ def main():
     snapshots = [item[1] for item in loaded]
     dataset_stem = paths[0].stem.rsplit("_", 1)[0]
     is_imtg = dataset_stem.startswith("imtg")
-    case_title = "IMTG compressible proxy" if is_imtg else "3D magnetized blast"
+    case_title = ("Weakly compressible IMTG: Ms0.2_Ma1"
+                  if is_imtg else "3D magnetized blast")
     frames, threshold, norm = prepare_frames(
         snapshots, args.field, args.fraction, args.level, args.stride)
     # `matplotlib.colormaps` is unavailable on older CSD3 installations.
