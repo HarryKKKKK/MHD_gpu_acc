@@ -13,17 +13,16 @@
 #include <string>
 #include <vector>
 
-#include "cpu/boundary3d_cpu.hpp"
+#include "blast3d_case.hpp"
 #include "gpu/boundary3d_gpu.cuh"
 #include "gpu/grid3d_gpu.cuh"
 #include "gpu/solver3d_gpu.cuh"
-#include "physics.hpp"
 
 namespace {
 
 struct Options {
-    int n=64,snapshots=8;
-    double t_end=0.08,cfl=0.32;
+    int n=128,snapshots=5;
+    double t_end=blast3d::t_end,cfl=blast3d::recommended_cfl;
     std::string out="output/blast3d_gpu";
     RiemannSolver solver=RiemannSolver::HLLD;
     bool write=true;
@@ -55,14 +54,6 @@ Options parse_args(int argc,char** argv) {
     if(o.n<8||o.snapshots<1||o.t_end<=0||o.cfl<=0)
         throw std::runtime_error("require resolution>=8, snapshots>=1, t_end>0, cfl>0");
     return o;
-}
-
-Conserved blast_state(double x,double y,double z) {
-    constexpr double radius=0.10,width=0.015;
-    const double r=std::sqrt(x*x+y*y+z*z);
-    const double blend=0.5*(1.0-std::tanh((r-radius)/width));
-    const double p=0.1+(10.0-0.1)*blend;
-    return phys::prim_to_cons(Primitive(1.0,0,0,0,3.0,0,0,p,0));
 }
 
 std::size_t flat(int i,int j,int k,int tx,int ty) {
@@ -127,23 +118,41 @@ int main(int argc,char** argv) {
                  <<"  GPU        : "<<prop.name<<"\n"
                  <<"  grid       : "<<o.n<<" x "<<o.n<<" x "<<o.n<<"\n"
                  <<"  solver     : "<<solver_name(o.solver)<<"\n"
-                 <<"  B0         : (3,0,0)\n"
+                 <<"  reference  : Derigs et al., JCP 317 (2016), Sec. 5.6\n"
+                 <<"  B0         : ("<<blast3d::magnetic_field_x()<<",0,0)\n"
+                 <<"  pressure   : p_inner=1000, p_outer=0.1\n"
+                 <<"  radii      : r_inner=0.09, r_outer=0.10\n"
+                 <<"  boundaries : periodic\n"
                  <<"  t_end      : "<<o.t_end<<"\n";
 
-        phys::gamma=5.0/3.0;
+        phys::gamma=blast3d::gamma;
         const int ng=2,tx=o.n+2*ng,ty=o.n+2*ng,tz=o.n+2*ng;
         std::vector<Conserved> initial(static_cast<std::size_t>(tx)*ty*tz);
-        const double d=1.0/o.n;
+        const double d=(blast3d::x_max-blast3d::x_min)/o.n;
         for(int k=0;k<tz;++k)for(int j=0;j<ty;++j)for(int i=0;i<tx;++i)
-            initial[flat(i,j,k,tx,ty)]=blast_state(
-                -0.5+(i-ng+0.5)*d,-0.5+(j-ng+0.5)*d,-0.5+(k-ng+0.5)*d);
+            initial[flat(i,j,k,tx,ty)]=blast3d::initial_state(
+                blast3d::x_min+(i-ng+0.5)*d,
+                blast3d::x_min+(j-ng+0.5)*d,
+                blast3d::x_min+(k-ng+0.5)*d);
 
-        Grid3DGPU old(o.n,o.n,o.n,ng,-0.5,0.5,-0.5,0.5,-0.5,0.5);
-        Grid3DGPU ux(o.n,o.n,o.n,ng,-0.5,0.5,-0.5,0.5,-0.5,0.5);
-        Grid3DGPU uy(o.n,o.n,o.n,ng,-0.5,0.5,-0.5,0.5,-0.5,0.5);
-        Grid3DGPU next(o.n,o.n,o.n,ng,-0.5,0.5,-0.5,0.5,-0.5,0.5);
+        Grid3DGPU old(o.n,o.n,o.n,ng,
+                      blast3d::x_min,blast3d::x_max,
+                      blast3d::x_min,blast3d::x_max,
+                      blast3d::x_min,blast3d::x_max);
+        Grid3DGPU ux(o.n,o.n,o.n,ng,
+                     blast3d::x_min,blast3d::x_max,
+                     blast3d::x_min,blast3d::x_max,
+                     blast3d::x_min,blast3d::x_max);
+        Grid3DGPU uy(o.n,o.n,o.n,ng,
+                     blast3d::x_min,blast3d::x_max,
+                     blast3d::x_min,blast3d::x_max,
+                     blast3d::x_min,blast3d::x_max);
+        Grid3DGPU next(o.n,o.n,o.n,ng,
+                       blast3d::x_min,blast3d::x_max,
+                       blast3d::x_min,blast3d::x_max,
+                       blast3d::x_min,blast3d::x_max);
         old.upload_from_aos(initial);
-        const BoundaryConfig3D bc;
+        const BoundaryConfig3D bc=blast3d::boundary_conditions();
         apply_boundary_gpu(old,bc);
         set_gpu3d_physics_gamma(phys::gamma);
         set_gpu3d_physics_ch(0.0);
@@ -187,4 +196,3 @@ int main(int argc,char** argv) {
         return 1;
     }
 }
-

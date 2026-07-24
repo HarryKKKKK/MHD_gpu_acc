@@ -23,17 +23,24 @@ python .\visualization\plot_blast3d.py --input output/blast3d
 python .\visualization\plot_blast3d_volume.py --input output/blast3d
 ```
 
-The test is a spherical pressure pulse in a strong, uniform x-directed magnetic field.
-At early time it is nearly spherical; magnetic pressure and tension then make
-the shock anisotropic. The plotting script writes a final three-plane figure
-and an animated GIF showing the density evolution. Use `--field pressure` to
-plot pressure instead.
+The test now reproduces the three-dimensional magnetized blast in Sec. 5.6 of
+Derigs et al., JCP 317 (2016), 223-256 (DOI:
+10.1016/j.jcp.2016.04.048). On `[-0.5,0.5]^3`, it uses `rho=1`, zero velocity,
+`gamma=1.4`, and `B=(100/sqrt(4*pi),0,0)`. Pressure is 1000 for `r<=0.09`,
+0.1 for `r>=0.10`, and linearly interpolated in between. All boundaries are
+periodic and the reference output time is `t=0.01`. These parameters live in
+`head/blast3d_case.hpp` and are shared by the CPU and CUDA drivers.
+
+The strong magnetic field makes the shock markedly anisotropic. Use
+`--field pressure` to render pressure instead of density.
 
 `plot_blast3d_volume.py` produces a genuine three-dimensional voxel surface
-rather than planar slices. It writes a static 3D view, a 360-degree rotating
-GIF, and a fixed-camera time-evolution GIF. The visible surface is selected by
+rather than planar slices. By default it writes several fixed-camera PNGs at
+different physical times and one combined evolution overview. The visible surface is selected by
 `abs(field - far_field) >= fraction * global_max_deviation`; adjust it with
-`--fraction 0.1`, or specify an absolute `--level`.
+`--fraction 0.1`, or specify an absolute `--level`. GIF output is disabled by
+default; it is available only when explicitly requested with `--rotation-gif`
+or `--evolution-gif`.
 
 ## Slurm
 
@@ -56,7 +63,7 @@ sbatch -A YOUR_ACCOUNT -p YOUR_PARTITION \
 ```
 
 Useful exported variables are `RESOLUTION`, `T_END`, `SNAPSHOTS`, `SOLVER`,
-`CFL`, `OUT_DIR`, `OMP_THREADS`, `FIELD`, `FRACTION`, `ROTATION_FRAMES`,
+`CFL`, `OUT_DIR`, `OMP_THREADS`, `FIELD`, `FRACTION`, `PNG_FRAMES`,
 `VISUALIZE`, `PYTHON_BIN`, and `MODULES_STR`. If Python rendering libraries are
 not installed on compute nodes, use `VISUALIZE=0` and run the visualization
 script later against the generated snapshot directory.
@@ -73,11 +80,13 @@ mkdir -p logs
 sbatch scripts/csd3_slurm/slurm_gpu_3d.sh
 ```
 
-The default is a 96-cubed HLLD run with ten output intervals on one Ampere GPU.
+The default is a 128-cubed HLLD run to the reference time `t=0.01`, with five
+output intervals on one Ampere GPU. This matches the maximum 3D resolution
+reported for the paper's Fig. 19; the default CFL is 0.20.
 For a larger run without rendering on the compute node:
 
 ```bash
-sbatch --export=ALL,RESOLUTION=128,SNAPSHOTS=12,VISUALIZE=0 \
+sbatch --export=ALL,RESOLUTION=192,SNAPSHOTS=8,VISUALIZE=0 \
   scripts/csd3_slurm/slurm_gpu_3d.sh
 ```
 

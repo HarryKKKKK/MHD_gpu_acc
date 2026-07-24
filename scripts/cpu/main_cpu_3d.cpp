@@ -2,7 +2,7 @@
 // uniform x-directed magnetic field.
 //
 // Usage:
-//   ./bin/main_cpu_3d [--resolution 48] [--t-end 0.08]
+//   ./bin/main_cpu_3d [--resolution 48] [--t-end 0.01]
 //                     [--snapshots 5] [--solver hll|hllc|hlld|force]
 //                     [--out output/blast3d] [--no-out]
 
@@ -19,18 +19,17 @@
 #include <string>
 #include <vector>
 
-#include "cpu/boundary3d_cpu.hpp"
+#include "blast3d_case.hpp"
 #include "cpu/grid3d_cpu.hpp"
 #include "cpu/solver3d_cpu.hpp"
-#include "physics.hpp"
 
 namespace {
 
 struct Options {
     int n=48;
     int snapshots=5;
-    double t_end=0.08;
-    double cfl=0.32;
+    double t_end=blast3d::t_end;
+    double cfl=blast3d::recommended_cfl;
     std::string out="output/blast3d";
     RiemannSolver solver=RiemannSolver::HLLD;
     bool write=true;
@@ -62,23 +61,6 @@ Options parse_args(int argc,char** argv) {
     if(o.n<8 || o.snapshots<1 || o.t_end<=0 || o.cfl<=0)
         throw std::runtime_error("require resolution>=8, snapshots>=1, t_end>0, cfl>0");
     return o;
-}
-
-Conserved blast_state(double x,double y,double z) {
-    constexpr double rho=1.0, p_outer=0.1, p_inner=10.0;
-    constexpr double radius=0.10;
-    // A dynamically important field makes the parallel/perpendicular shock
-    // speeds visibly different at modest display resolutions.
-    constexpr double bx=3.0, by=0.0, bz=0.0;
-    const double r2=x*x+y*y+z*z;
-    // A two-cell-wide smooth transition reduces grid imprinting while keeping
-    // the blast front visually sharp.
-    const double width=0.015;
-    const double r=std::sqrt(r2);
-    const double blend=0.5*(1.0-std::tanh((r-radius)/width));
-    const double p=p_outer+(p_inner-p_outer)*blend;
-    const Primitive v(rho,0,0,0,bx,by,bz,p,0);
-    return phys::prim_to_cons(v);
 }
 
 template<class T> void write_value(std::ofstream& f,const T& v) {
@@ -121,13 +103,17 @@ void write_snapshot(const Grid3D& q,const std::string& dir,int index,double time
 int main(int argc,char** argv) {
     try {
         const Options o=parse_args(argc,argv);
-        phys::gamma=5.0/3.0;
-        Grid3D old(o.n,o.n,o.n,2,-0.5,0.5,-0.5,0.5,-0.5,0.5);
+        phys::gamma=blast3d::gamma;
+        Grid3D old(o.n,o.n,o.n,2,
+                   blast3d::x_min,blast3d::x_max,
+                   blast3d::x_min,blast3d::x_max,
+                   blast3d::x_min,blast3d::x_max);
         for(int k=0;k<old.total_nz();++k)
             for(int j=0;j<old.total_ny();++j)
                 for(int i=0;i<old.total_nx();++i)
-                    old(i,j,k)=blast_state(old.x_center(i),old.y_center(j),old.z_center(k));
-        const BoundaryConfig3D bc;
+                    old(i,j,k)=blast3d::initial_state(
+                        old.x_center(i),old.y_center(j),old.z_center(k));
+        const BoundaryConfig3D bc=blast3d::boundary_conditions();
         apply_boundary(old,bc);
         Grid3D ux=old,uy=old,next=old;
         CpuWorkspace3D ws; ws.init(o.n,o.n,o.n);
@@ -140,7 +126,11 @@ int main(int argc,char** argv) {
         std::cout<<"=== 3D magnetized blast wave ===\n"
                  <<"  grid   : "<<o.n<<" x "<<o.n<<" x "<<o.n<<"\n"
                  <<"  domain : [-0.5,0.5]^3\n"
-                 <<"  B0     : (3,0,0),  p_inner/p_outer=100\n"
+                 <<"  reference: Derigs et al., JCP 317 (2016), Sec. 5.6\n"
+                 <<"  B0     : ("<<blast3d::magnetic_field_x()
+                 <<",0,0),  p_inner/p_outer=10000\n"
+                 <<"  radii  : r_inner=0.09, r_outer=0.10\n"
+                 <<"  gamma  : "<<phys::gamma<<", periodic boundaries\n"
                  <<"  t_end  : "<<o.t_end<<"\n";
         const auto start=std::chrono::steady_clock::now();
         int step=0,snapshot=1;
@@ -166,7 +156,7 @@ int main(int argc,char** argv) {
                  <<(static_cast<double>(step)*o.n*o.n*o.n/seconds/1e6)
                  <<" Mcell-updates/s\n";
         if(o.write)
-            std::cout<<"Plot with: python visualization/plot_blast3d.py --input "
+            std::cout<<"Plot with: python visualization/plot_blast3d_volume.py --input "
                      <<o.out<<"\n";
         return 0;
     } catch(const std::exception& e) {

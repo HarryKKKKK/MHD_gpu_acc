@@ -53,16 +53,16 @@ for tool in nvcc nvidia-smi make; do
     fi
 done
 
-RESOLUTION="${RESOLUTION:-96}"
-T_END="${T_END:-0.08}"
-SNAPSHOTS="${SNAPSHOTS:-10}"
+RESOLUTION="${RESOLUTION:-128}"
+T_END="${T_END:-0.01}"
+SNAPSHOTS="${SNAPSHOTS:-5}"
 SOLVER="${SOLVER:-hlld}"
-CFL="${CFL:-0.32}"
+CFL="${CFL:-0.20}"
 RUN_TEST="${RUN_TEST:-1}"
 VISUALIZE="${VISUALIZE:-1}"
 FIELD="${FIELD:-rho}"
 FRACTION="${FRACTION:-0.12}"
-ROTATION_FRAMES="${ROTATION_FRAMES:-48}"
+PNG_FRAMES="${PNG_FRAMES:-6}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 MAKE_JOBS="${MAKE_JOBS:-8}"
 OUT_DIR="${OUT_DIR:-outputs/blast3d_gpu_n${RESOLUTION}_${SOLVER}_${JOB_ID}}"
@@ -164,7 +164,7 @@ if [[ "${VISUALIZE}" == "1" ]]; then
        "${PYTHON_BIN}" -c "import numpy, matplotlib, PIL" >/dev/null 2>&1; then
         "${PYTHON_BIN}" visualization/plot_blast3d_volume.py \
             --input "${OUT_DIR}" --field "${FIELD}" \
-            --fraction "${FRACTION}" --rotation-frames "${ROTATION_FRAMES}"
+            --fraction "${FRACTION}" --png-frames "${PNG_FRAMES}"
     else
         echo "[WARN] CUDA run succeeded, but rendering dependencies are absent."
         echo "[WARN] Render later with visualization/plot_blast3d_volume.py."

@@ -48,13 +48,13 @@ if [[ -n "${MODULES_STR:-}" ]]; then
 fi
 
 RESOLUTION="${RESOLUTION:-64}"
-T_END="${T_END:-0.08}"
-SNAPSHOTS="${SNAPSHOTS:-8}"
+T_END="${T_END:-0.01}"
+SNAPSHOTS="${SNAPSHOTS:-5}"
 SOLVER="${SOLVER:-hlld}"
-CFL="${CFL:-0.32}"
+CFL="${CFL:-0.20}"
 FIELD="${FIELD:-rho}"
 FRACTION="${FRACTION:-0.12}"
-ROTATION_FRAMES="${ROTATION_FRAMES:-48}"
+PNG_FRAMES="${PNG_FRAMES:-6}"
 VISUALIZE="${VISUALIZE:-1}"
 RUN_TEST="${RUN_TEST:-1}"
 MAKE_JOBS="${MAKE_JOBS:-8}"
@@ -125,7 +125,7 @@ if [[ "${VISUALIZE}" == "1" ]]; then
             --input "${OUT_DIR}" \
             --field "${FIELD}" \
             --fraction "${FRACTION}" \
-            --rotation-frames "${ROTATION_FRAMES}"
+            --png-frames "${PNG_FRAMES}"
     else
         echo "[WARN] Simulation completed, but visualization was skipped."
         echo "[WARN] ${PYTHON_BIN} needs numpy, matplotlib and Pillow."
@@ -139,4 +139,3 @@ echo
 echo "===== COMPLETE ====="
 echo "Finished : $(date)"
 echo "Results  : ${WORKDIR}/${OUT_DIR}"
-
