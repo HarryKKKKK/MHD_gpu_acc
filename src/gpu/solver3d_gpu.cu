@@ -51,6 +51,8 @@ __device__ Conserved flux_axis(const Conserved& u) {
     } else {
         return phys::flux_z(u,ch);
     }
+    // CUDA 11.4 can fail to prove that the if-constexpr chain is exhaustive.
+    return Conserved{};
 }
 
 __device__ Conserved swap_xz_3d(const Conserved& u) {
@@ -68,10 +70,15 @@ __device__ Conserved riemann_axis(const Conserved& l,const Conserved& r) {
         return swap_xz_3d(riemann_flux<Solver>(
             swap_xz_3d(l),swap_xz_3d(r),Direction::X));
     }
+    // Unreachable for the three explicitly instantiated axes.
+    return Conserved{};
 }
 
 template<int Axis>
 __device__ void shift_index(int& i,int& j,int& k,int offset) {
+    // Suppress CUDA 11.4 warnings for the two coordinates discarded by each
+    // compile-time specialization.
+    (void)i; (void)j; (void)k;
     if constexpr(Axis==AXIS_X) i+=offset;
     if constexpr(Axis==AXIS_Y) j+=offset;
     if constexpr(Axis==AXIS_Z) k+=offset;
