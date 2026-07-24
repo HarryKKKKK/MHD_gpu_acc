@@ -53,19 +53,40 @@ for tool in nvcc nvidia-smi make; do
     fi
 done
 
+CASE="${CASE:-blast}"
+if [[ "${CASE}" == "imtg" ]]; then
+    DEFAULT_T_END=2.0
+    DEFAULT_SNAPSHOTS=8
+    DEFAULT_FIELD=current
+    DEFAULT_FRACTION=0.45
+    DEFAULT_PLOT_STRIDE=2
+    CASE_STEM=imtg3d
+elif [[ "${CASE}" == "blast" ]]; then
+    DEFAULT_T_END=0.01
+    DEFAULT_SNAPSHOTS=5
+    DEFAULT_FIELD=rho
+    DEFAULT_FRACTION=0.12
+    DEFAULT_PLOT_STRIDE=1
+    CASE_STEM=blast3d
+else
+    echo "[ERROR] CASE must be blast or imtg."
+    exit 2
+fi
+
 RESOLUTION="${RESOLUTION:-128}"
-T_END="${T_END:-0.01}"
-SNAPSHOTS="${SNAPSHOTS:-5}"
+T_END="${T_END:-${DEFAULT_T_END}}"
+SNAPSHOTS="${SNAPSHOTS:-${DEFAULT_SNAPSHOTS}}"
 SOLVER="${SOLVER:-hlld}"
 CFL="${CFL:-0.20}"
 RUN_TEST="${RUN_TEST:-1}"
 VISUALIZE="${VISUALIZE:-1}"
-FIELD="${FIELD:-rho}"
-FRACTION="${FRACTION:-0.12}"
+FIELD="${FIELD:-${DEFAULT_FIELD}}"
+FRACTION="${FRACTION:-${DEFAULT_FRACTION}}"
 PNG_FRAMES="${PNG_FRAMES:-6}"
+PLOT_STRIDE="${PLOT_STRIDE:-${DEFAULT_PLOT_STRIDE}}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 MAKE_JOBS="${MAKE_JOBS:-8}"
-OUT_DIR="${OUT_DIR:-outputs/blast3d_gpu_n${RESOLUTION}_${SOLVER}_${JOB_ID}}"
+OUT_DIR="${OUT_DIR:-outputs/${CASE_STEM}_gpu_n${RESOLUTION}_${SOLVER}_${JOB_ID}}"
 BUILD_ROOT="${BUILD_ROOT:-build/csd3_gpu3d_${JOB_ID}}"
 BIN_ROOT="${BIN_ROOT:-bin/csd3_gpu3d_${JOB_ID}}"
 
@@ -118,6 +139,7 @@ echo "GPU memory          : ${TOTAL_GPU_MIB:-unknown} MiB"
 echo "Compute capability  : ${COMPUTE_CAP:-unknown}"
 echo "CUDA architecture   : ${CUDA_ARCH_FLAG}"
 echo "Estimated allocation: ${EST_GPU_MIB} MiB"
+echo "Case                : ${CASE}"
 echo "Resolution          : ${RESOLUTION}^3"
 echo "Solver              : ${SOLVER}"
 echo "t_end / CFL         : ${T_END} / ${CFL}"
@@ -137,11 +159,14 @@ if [[ "${RUN_TEST}" == "1" ]]; then
     echo "===== CPU/GPU ONE-STEP PARITY TEST ====="
     make test_gpu_3d CUDA_ARCH="${CUDA_ARCH_FLAG}" \
         BUILD_DIR="${BUILD_ROOT}" BIN_DIR="${BIN_ROOT}"
+    echo "===== IMTG INITIAL-CONDITION TEST ====="
+    make test_imtg_3d BUILD_DIR="${BUILD_ROOT}" BIN_DIR="${BIN_ROOT}"
 fi
 
 echo "===== PRODUCTION RUN ====="
 APP=(
     "${BIN_ROOT}/main_gpu_3d"
+    --case "${CASE}"
     --resolution "${RESOLUTION}"
     --t-end "${T_END}"
     --snapshots "${SNAPSHOTS}"
@@ -164,7 +189,8 @@ if [[ "${VISUALIZE}" == "1" ]]; then
        "${PYTHON_BIN}" -c "import numpy, matplotlib, PIL" >/dev/null 2>&1; then
         "${PYTHON_BIN}" visualization/plot_blast3d_volume.py \
             --input "${OUT_DIR}" --field "${FIELD}" \
-            --fraction "${FRACTION}" --png-frames "${PNG_FRAMES}"
+            --fraction "${FRACTION}" --png-frames "${PNG_FRAMES}" \
+            --stride "${PLOT_STRIDE}"
     else
         echo "[WARN] CUDA run succeeded, but rendering dependencies are absent."
         echo "[WARN] Render later with visualization/plot_blast3d_volume.py."

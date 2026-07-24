@@ -86,6 +86,7 @@ CPU_3D_OBJS := \
 	$(CPU_BUILD_DIR)/solver3d_cpu.o
 
 CPU_3D_TEST_TARGET := $(BIN_DIR)/test_solver3d
+IMTG_3D_TEST_TARGET := $(BIN_DIR)/test_imtg3d
 
 GPU_OBJS := \
 	$(GPU_BUILD_DIR)/main_gpu.o \
@@ -182,7 +183,7 @@ $(CPU_3D_TARGET): $(CPU_3D_OBJS)
 	@mkdir -p $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) $(CPU_3D_OBJS) -o $@ -lstdc++fs
 
-$(CPU_BUILD_DIR)/main_cpu_3d.o: $(CPU_3D_MAIN) head/blast3d_case.hpp
+$(CPU_BUILD_DIR)/main_cpu_3d.o: $(CPU_3D_MAIN) head/blast3d_case.hpp head/imtg3d_case.hpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
@@ -197,6 +198,14 @@ test_3d: $(CPU_3D_TEST_TARGET)
 $(CPU_3D_TEST_TARGET): validation/test_solver3d.cpp $(CPU_BUILD_DIR)/solver3d_cpu.o
 	@mkdir -p $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) $^ -o $@ -lstdc++fs
+
+.PHONY: test_imtg_3d
+test_imtg_3d: $(IMTG_3D_TEST_TARGET)
+	$(IMTG_3D_TEST_TARGET)
+
+$(IMTG_3D_TEST_TARGET): validation/test_imtg3d.cpp head/imtg3d_case.hpp
+	@mkdir -p $(BIN_DIR)
+	$(CXX) $(CXXFLAGS) $< -o $@ -lstdc++fs
 
 # =========================
 # Pure MPI
@@ -290,7 +299,7 @@ $(GPU_3D_TARGET): $(GPU_3D_OBJS)
 	@mkdir -p $(BIN_DIR)
 	$(NVCC) $(NVCCFLAGS) $(GPU_3D_OBJS) -o $@ -lstdc++fs
 
-$(GPU_BUILD_DIR)/main_gpu_3d.o: $(GPU_3D_MAIN) head/blast3d_case.hpp
+$(GPU_BUILD_DIR)/main_gpu_3d.o: $(GPU_3D_MAIN) head/blast3d_case.hpp head/imtg3d_case.hpp
 	@mkdir -p $(dir $@)
 	$(NVCC) $(NVCCFLAGS) -c $< -o $@
 

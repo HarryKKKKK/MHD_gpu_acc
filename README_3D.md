@@ -62,8 +62,9 @@ sbatch -A YOUR_ACCOUNT -p YOUR_PARTITION \
   scripts/cpu/slurm_cpu_3d.sh
 ```
 
-Useful exported variables are `RESOLUTION`, `T_END`, `SNAPSHOTS`, `SOLVER`,
-`CFL`, `OUT_DIR`, `OMP_THREADS`, `FIELD`, `FRACTION`, `PNG_FRAMES`,
+Useful exported variables are `CASE`, `RESOLUTION`, `T_END`, `SNAPSHOTS`,
+`SOLVER`, `CFL`, `OUT_DIR`, `OMP_THREADS`, `FIELD`, `FRACTION`,
+`PNG_FRAMES`, `PLOT_STRIDE`,
 `VISUALIZE`, `PYTHON_BIN`, and `MODULES_STR`. If Python rendering libraries are
 not installed on compute nodes, use `VISUALIZE=0` and run the visualization
 script later against the generated snapshot directory.
@@ -108,3 +109,57 @@ For a quick smoke test:
 Snapshot files use the compact `MHD3D01` binary format documented directly in
 `scripts/cpu/main_cpu_3d.cpp`: dimensions, bounds/time/gamma, then eight
 float32 primitive fields per x-fastest cell.
+
+## Taylor-Green MHD compatibility case
+
+The same CPU and CUDA executables also provide `--case imtg`. This uses the
+Insulating Magnetic Taylor-Green initial condition from Pouquet et al.,
+arXiv:0906.1384:
+
+```text
+u = (sin(x) cos(y) cos(z), -cos(x) sin(y) cos(z), 0)
+B = (cos(x) sin(y) sin(z),
+     sin(x) cos(y) sin(z),
+    -2 sin(x) sin(y) cos(z)) / sqrt(3)
+```
+
+The domain is `[0,2*pi]^3` with periodic boundaries. The amplitudes give
+`EV=EM=0.125` and total initial kinetic-plus-magnetic energy 0.25, as in the
+paper. Since this repository solves compressible ideal GLM-MHD rather than
+incompressible viscous-resistive MHD, this is explicitly a compatibility
+counterpart: it uses `rho=1`, `gamma=5/3`, and uniform thermal pressure `p=10`
+to keep the initial flow at low Mach number. It does not reproduce the
+paper's `nu=eta`, pressure projection, pseudo-spectral discretization, or
+2/3 dealiasing.
+
+CPU smoke test:
+
+```bash
+make cpu_3d
+./bin/main_cpu_3d --case imtg --resolution 32 --t-end 0.2 \
+  --snapshots 4 --out output/imtg3d
+```
+
+CSD3 CUDA run:
+
+```bash
+mkdir -p logs
+sbatch --export=ALL,CASE=imtg,VISUALIZE=0 \
+  scripts/csd3_slurm/slurm_gpu_3d.sh
+```
+
+The IMTG Slurm defaults are `128^3`, HLLD, CFL 0.20, `t_end=2`, and eight
+output intervals. Render the current-sheet evolution as multiple PNGs:
+
+```bash
+python3 visualization/plot_blast3d_volume.py \
+  --input outputs/imtg3d_gpu_n128_hlld_JOB_ID \
+  --field current --fraction 0.45 --stride 2 --png-frames 6
+```
+
+The visualization additionally supports `--field vorticity`, `speed`, and
+`Bmag`. It checks every selected snapshot for NaN/Inf and accepts
+`--max-time` when a known failed tail must be excluded without altering the
+original data. `--stride 2` reduces only the rendered voxel grid after the
+curl has been evaluated at full resolution, making Matplotlib practical for a
+`128^3` dataset without changing the simulation.

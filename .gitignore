@@ -41,5 +41,6 @@ Thumbs.db
 *.key
 outputs/
 output/
+validation/*_smoke/
 paper/
 note1.txt

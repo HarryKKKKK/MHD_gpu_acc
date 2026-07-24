@@ -47,19 +47,40 @@ if [[ -n "${MODULES_STR:-}" ]]; then
     module load ${MODULES_STR}
 fi
 
+CASE="${CASE:-blast}"
+if [[ "${CASE}" == "imtg" ]]; then
+    DEFAULT_T_END=2.0
+    DEFAULT_SNAPSHOTS=8
+    DEFAULT_FIELD=current
+    DEFAULT_FRACTION=0.45
+    DEFAULT_PLOT_STRIDE=2
+    CASE_STEM=imtg3d
+elif [[ "${CASE}" == "blast" ]]; then
+    DEFAULT_T_END=0.01
+    DEFAULT_SNAPSHOTS=5
+    DEFAULT_FIELD=rho
+    DEFAULT_FRACTION=0.12
+    DEFAULT_PLOT_STRIDE=1
+    CASE_STEM=blast3d
+else
+    echo "[ERROR] CASE must be blast or imtg."
+    exit 2
+fi
+
 RESOLUTION="${RESOLUTION:-64}"
-T_END="${T_END:-0.01}"
-SNAPSHOTS="${SNAPSHOTS:-5}"
+T_END="${T_END:-${DEFAULT_T_END}}"
+SNAPSHOTS="${SNAPSHOTS:-${DEFAULT_SNAPSHOTS}}"
 SOLVER="${SOLVER:-hlld}"
 CFL="${CFL:-0.20}"
-FIELD="${FIELD:-rho}"
-FRACTION="${FRACTION:-0.12}"
+FIELD="${FIELD:-${DEFAULT_FIELD}}"
+FRACTION="${FRACTION:-${DEFAULT_FRACTION}}"
 PNG_FRAMES="${PNG_FRAMES:-6}"
+PLOT_STRIDE="${PLOT_STRIDE:-${DEFAULT_PLOT_STRIDE}}"
 VISUALIZE="${VISUALIZE:-1}"
 RUN_TEST="${RUN_TEST:-1}"
 MAKE_JOBS="${MAKE_JOBS:-8}"
 JOB_TAG="${SLURM_JOB_ID:-manual}"
-OUT_DIR="${OUT_DIR:-outputs/blast3d_n${RESOLUTION}_${SOLVER}_${JOB_TAG}}"
+OUT_DIR="${OUT_DIR:-outputs/${CASE_STEM}_n${RESOLUTION}_${SOLVER}_${JOB_TAG}}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 
 OMP_THREADS="${OMP_THREADS:-${SLURM_CPUS_PER_TASK:-1}}"
@@ -77,6 +98,7 @@ echo "Start           : $(date)"
 echo "Workdir         : ${WORKDIR}"
 echo "Git commit      : $(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 echo "OMP threads     : ${OMP_NUM_THREADS}"
+echo "Case            : ${CASE}"
 echo "Resolution      : ${RESOLUTION}^3"
 echo "t_end           : ${T_END}"
 echo "Snapshots       : ${SNAPSHOTS}"
@@ -101,6 +123,7 @@ fi
 echo "===== RUN ====="
 RUN_CMD=(
     ./bin/main_cpu_3d
+    --case "${CASE}"
     --resolution "${RESOLUTION}"
     --t-end "${T_END}"
     --snapshots "${SNAPSHOTS}"
@@ -125,7 +148,8 @@ if [[ "${VISUALIZE}" == "1" ]]; then
             --input "${OUT_DIR}" \
             --field "${FIELD}" \
             --fraction "${FRACTION}" \
-            --png-frames "${PNG_FRAMES}"
+            --png-frames "${PNG_FRAMES}" \
+            --stride "${PLOT_STRIDE}"
     else
         echo "[WARN] Simulation completed, but visualization was skipped."
         echo "[WARN] ${PYTHON_BIN} needs numpy, matplotlib and Pillow."

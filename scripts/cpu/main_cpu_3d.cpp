@@ -1,8 +1,7 @@
-// 3D GLM-MHD demonstration: a spherical over-pressure expands through a
-// uniform x-directed magnetic field.
+// 3D GLM-MHD cases: magnetized blast and a compressible IMTG counterpart.
 //
 // Usage:
-//   ./bin/main_cpu_3d [--resolution 48] [--t-end 0.01]
+//   ./bin/main_cpu_3d [--case blast|imtg] [--resolution 48]
 //                     [--snapshots 5] [--solver hll|hllc|hlld|force]
 //                     [--out output/blast3d] [--no-out]
 
@@ -22,16 +21,20 @@
 #include "blast3d_case.hpp"
 #include "cpu/grid3d_cpu.hpp"
 #include "cpu/solver3d_cpu.hpp"
+#include "imtg3d_case.hpp"
 
 namespace {
 
+enum class Case3D { Blast, IMTG };
+
 struct Options {
     int n=48;
-    int snapshots=5;
-    double t_end=blast3d::t_end;
-    double cfl=blast3d::recommended_cfl;
-    std::string out="output/blast3d";
+    int snapshots=-1;
+    double t_end=-1.0;
+    double cfl=-1.0;
+    std::string out;
     RiemannSolver solver=RiemannSolver::HLLD;
+    Case3D test_case=Case3D::Blast;
     bool write=true;
 };
 
@@ -43,7 +46,13 @@ Options parse_args(int argc,char** argv) {
             if(a+1>=argc) throw std::runtime_error("missing value after "+s);
             return argv[++a];
         };
-        if(s=="--resolution") o.n=std::stoi(value());
+        if(s=="--case") {
+            const auto v=value();
+            if(v=="blast") o.test_case=Case3D::Blast;
+            else if(v=="imtg") o.test_case=Case3D::IMTG;
+            else throw std::runtime_error("unknown case: "+v);
+        }
+        else if(s=="--resolution") o.n=std::stoi(value());
         else if(s=="--t-end") o.t_end=std::stod(value());
         else if(s=="--snapshots") o.snapshots=std::stoi(value());
         else if(s=="--cfl") o.cfl=std::stod(value());
@@ -58,6 +67,11 @@ Options parse_args(int argc,char** argv) {
             else throw std::runtime_error("unknown solver: "+v);
         } else throw std::runtime_error("unknown argument: "+s);
     }
+    const bool imtg=o.test_case==Case3D::IMTG;
+    if(o.snapshots<0) o.snapshots=imtg?8:5;
+    if(o.t_end<0) o.t_end=imtg?imtg3d::t_end:blast3d::t_end;
+    if(o.cfl<0) o.cfl=imtg?imtg3d::recommended_cfl:blast3d::recommended_cfl;
+    if(o.out.empty()) o.out=imtg?"output/imtg3d":"output/blast3d";
     if(o.n<8 || o.snapshots<1 || o.t_end<=0 || o.cfl<=0)
         throw std::runtime_error("require resolution>=8, snapshots>=1, t_end>0, cfl>0");
     return o;
@@ -67,10 +81,19 @@ template<class T> void write_value(std::ofstream& f,const T& v) {
     f.write(reinterpret_cast<const char*>(&v),sizeof(T));
 }
 
-void write_snapshot(const Grid3D& q,const std::string& dir,int index,double time) {
+bool valid_primitive(const Primitive& v) {
+    return v.rho>0.0 && v.p>0.0 &&
+        std::isfinite(v.rho) && std::isfinite(v.p) &&
+        std::isfinite(v.u) && std::isfinite(v.v) && std::isfinite(v.w) &&
+        std::isfinite(v.Bx) && std::isfinite(v.By) && std::isfinite(v.Bz);
+}
+
+void write_snapshot(const Grid3D& q,const std::string& dir,
+                    const std::string& stem,int index,double time) {
     std::filesystem::create_directories(dir);
     std::ostringstream name;
-    name<<dir<<"/blast3d_"<<std::setw(3)<<std::setfill('0')<<index<<".mhd3d";
+    name<<dir<<"/"<<stem<<"_"<<std::setw(3)<<std::setfill('0')
+        <<index<<".mhd3d";
     const std::string tmp=name.str()+".tmp";
     std::ofstream f(tmp,std::ios::binary);
     if(!f) throw std::runtime_error("cannot open "+tmp);
@@ -85,6 +108,10 @@ void write_snapshot(const Grid3D& q,const std::string& dir,int index,double time
             for(int i=q.i_begin();i<q.i_end();++i) {
                 const Conserved& u=q(i,j,k);
                 const Primitive v=phys::cons_to_prim(u);
+                if(!valid_primitive(v))
+                    throw std::runtime_error(
+                        "non-physical state while writing snapshot "
+                        +std::to_string(index));
                 for(float field:{static_cast<float>(v.rho),static_cast<float>(v.p),
                                  static_cast<float>(v.u),static_cast<float>(v.v),
                                  static_cast<float>(v.w),static_cast<float>(v.Bx),
@@ -103,17 +130,24 @@ void write_snapshot(const Grid3D& q,const std::string& dir,int index,double time
 int main(int argc,char** argv) {
     try {
         const Options o=parse_args(argc,argv);
-        phys::gamma=blast3d::gamma;
+        const bool imtg=o.test_case==Case3D::IMTG;
+        const double lo=imtg?imtg3d::x_min:blast3d::x_min;
+        const double hi=imtg?imtg3d::x_max:blast3d::x_max;
+        const std::string stem=imtg?"imtg3d":"blast3d";
+        phys::gamma=imtg?imtg3d::gamma:blast3d::gamma;
         Grid3D old(o.n,o.n,o.n,2,
-                   blast3d::x_min,blast3d::x_max,
-                   blast3d::x_min,blast3d::x_max,
-                   blast3d::x_min,blast3d::x_max);
+                   lo,hi,lo,hi,lo,hi);
         for(int k=0;k<old.total_nz();++k)
             for(int j=0;j<old.total_ny();++j)
                 for(int i=0;i<old.total_nx();++i)
-                    old(i,j,k)=blast3d::initial_state(
-                        old.x_center(i),old.y_center(j),old.z_center(k));
-        const BoundaryConfig3D bc=blast3d::boundary_conditions();
+                    old(i,j,k)=imtg
+                        ? imtg3d::initial_state(
+                            old.x_center(i),old.y_center(j),old.z_center(k))
+                        : blast3d::initial_state(
+                            old.x_center(i),old.y_center(j),old.z_center(k));
+        const BoundaryConfig3D bc=imtg
+            ? imtg3d::boundary_conditions()
+            : blast3d::boundary_conditions();
         apply_boundary(old,bc);
         Grid3D ux=old,uy=old,next=old;
         CpuWorkspace3D ws; ws.init(o.n,o.n,o.n);
@@ -121,16 +155,25 @@ int main(int argc,char** argv) {
         std::vector<double> targets;
         for(int s=0;s<=o.snapshots;++s)
             targets.push_back(o.t_end*static_cast<double>(s)/o.snapshots);
-        if(o.write) write_snapshot(old,o.out,0,0.0);
+        if(o.write) write_snapshot(old,o.out,stem,0,0.0);
 
-        std::cout<<"=== 3D magnetized blast wave ===\n"
+        std::cout<<"=== 3D GLM-MHD case: "<<(imtg?"IMTG":"magnetized blast")<<" ===\n"
                  <<"  grid   : "<<o.n<<" x "<<o.n<<" x "<<o.n<<"\n"
-                 <<"  domain : [-0.5,0.5]^3\n"
+                 <<"  domain : ["<<lo<<","<<hi<<"]^3\n";
+        if(imtg) {
+            std::cout
+                 <<"  reference: Pouquet et al., arXiv:0906.1384, IMTG\n"
+                 <<"  model  : compressible ideal-MHD counterpart\n"
+                 <<"  v0/b0  : 1 / 1/sqrt(3), EV=EM=0.125\n"
+                 <<"  rho/p  : 1 / "<<imtg3d::thermal_pressure<<"\n";
+        } else {
+            std::cout
                  <<"  reference: Derigs et al., JCP 317 (2016), Sec. 5.6\n"
                  <<"  B0     : ("<<blast3d::magnetic_field_x()
                  <<",0,0),  p_inner/p_outer=10000\n"
-                 <<"  radii  : r_inner=0.09, r_outer=0.10\n"
-                 <<"  gamma  : "<<phys::gamma<<", periodic boundaries\n"
+                 <<"  radii  : r_inner=0.09, r_outer=0.10\n";
+        }
+        std::cout<<"  gamma  : "<<phys::gamma<<", periodic boundaries\n"
                  <<"  t_end  : "<<o.t_end<<"\n";
         const auto start=std::chrono::steady_clock::now();
         int step=0,snapshot=1;
@@ -143,7 +186,7 @@ int main(int argc,char** argv) {
             advance_cpu(old,ux,uy,next,dt,ws,o.solver,bc);
             std::swap(old,next); t+=dt; ++step;
             if(t>=target-1e-12) {
-                if(o.write) write_snapshot(old,o.out,snapshot,t);
+                if(o.write) write_snapshot(old,o.out,stem,snapshot,t);
                 ++snapshot;
             }
             if(step%10==0 || t>=o.t_end-1e-14)
