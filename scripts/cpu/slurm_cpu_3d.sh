@@ -55,15 +55,22 @@ if [[ "${CASE}" == "imtg" ]]; then
     DEFAULT_FRACTION=0.45
     DEFAULT_PLOT_STRIDE=2
     CASE_STEM=imtg3d
-elif [[ "${CASE}" == "blast" ]]; then
-    DEFAULT_T_END=0.01
+elif [[ "${CASE}" == "blast" || "${CASE}" == "blast_athena" ]]; then
+    DEFAULT_T_END=0.10
     DEFAULT_SNAPSHOTS=5
     DEFAULT_FIELD=rho
     DEFAULT_FRACTION=0.12
     DEFAULT_PLOT_STRIDE=1
     CASE_STEM=blast3d
+elif [[ "${CASE}" == "blast_extreme" ]]; then
+    DEFAULT_T_END=0.01
+    DEFAULT_SNAPSHOTS=5
+    DEFAULT_FIELD=rho
+    DEFAULT_FRACTION=0.12
+    DEFAULT_PLOT_STRIDE=1
+    CASE_STEM=blast3d_extreme
 else
-    echo "[ERROR] CASE must be blast or imtg."
+    echo "[ERROR] CASE must be blast, blast_athena, blast_extreme, or imtg."
     exit 2
 fi
 

@@ -1,7 +1,7 @@
 // 3D GLM-MHD cases: magnetized blast and a compressible IMTG counterpart.
 //
 // Usage:
-//   ./bin/main_cpu_3d [--case blast|imtg] [--resolution 48]
+//   ./bin/main_cpu_3d [--case blast|blast_extreme|imtg] [--resolution 48]
 //                     [--snapshots 5] [--solver hll|hllc|hlld|force]
 //                     [--out output/blast3d] [--no-out]
 
@@ -19,13 +19,14 @@
 #include <vector>
 
 #include "blast3d_case.hpp"
+#include "blast3d_extreme_case.hpp"
 #include "cpu/grid3d_cpu.hpp"
 #include "cpu/solver3d_cpu.hpp"
 #include "imtg3d_case.hpp"
 
 namespace {
 
-enum class Case3D { Blast, IMTG };
+enum class Case3D { Blast, BlastExtreme, IMTG };
 
 struct Options {
     int n=-1;
@@ -48,7 +49,8 @@ Options parse_args(int argc,char** argv) {
         };
         if(s=="--case") {
             const auto v=value();
-            if(v=="blast") o.test_case=Case3D::Blast;
+            if(v=="blast" || v=="blast_athena") o.test_case=Case3D::Blast;
+            else if(v=="blast_extreme") o.test_case=Case3D::BlastExtreme;
             else if(v=="imtg") o.test_case=Case3D::IMTG;
             else throw std::runtime_error("unknown case: "+v);
         }
@@ -68,11 +70,15 @@ Options parse_args(int argc,char** argv) {
         } else throw std::runtime_error("unknown argument: "+s);
     }
     const bool imtg=o.test_case==Case3D::IMTG;
+    const bool extreme=o.test_case==Case3D::BlastExtreme;
     if(o.n<0) o.n=imtg?imtg3d::reference_resolution:48;
     if(o.snapshots<0) o.snapshots=imtg?12:5;
-    if(o.t_end<0) o.t_end=imtg?imtg3d::t_end:blast3d::t_end;
-    if(o.cfl<0) o.cfl=imtg?imtg3d::recommended_cfl:blast3d::recommended_cfl;
-    if(o.out.empty()) o.out=imtg?"output/imtg3d":"output/blast3d";
+    if(o.t_end<0) o.t_end=imtg?imtg3d::t_end:
+        (extreme?blast3d_extreme::t_end:blast3d::t_end);
+    if(o.cfl<0) o.cfl=imtg?imtg3d::recommended_cfl:
+        (extreme?blast3d_extreme::recommended_cfl:blast3d::recommended_cfl);
+    if(o.out.empty()) o.out=imtg?"output/imtg3d":
+        (extreme?"output/blast3d_extreme":"output/blast3d");
     if(o.n<8 || o.snapshots<1 || o.t_end<=0 || o.cfl<=0)
         throw std::runtime_error("require resolution>=8, snapshots>=1, t_end>0, cfl>0");
     return o;
@@ -132,10 +138,15 @@ int main(int argc,char** argv) {
     try {
         const Options o=parse_args(argc,argv);
         const bool imtg=o.test_case==Case3D::IMTG;
-        const double lo=imtg?imtg3d::x_min:blast3d::x_min;
-        const double hi=imtg?imtg3d::x_max:blast3d::x_max;
-        const std::string stem=imtg?"imtg3d":"blast3d";
-        phys::gamma=imtg?imtg3d::gamma:blast3d::gamma;
+        const bool extreme=o.test_case==Case3D::BlastExtreme;
+        const double lo=imtg?imtg3d::x_min:
+            (extreme?blast3d_extreme::x_min:blast3d::x_min);
+        const double hi=imtg?imtg3d::x_max:
+            (extreme?blast3d_extreme::x_max:blast3d::x_max);
+        const std::string stem=imtg?"imtg3d":
+            (extreme?"blast3d_extreme":"blast3d");
+        phys::gamma=imtg?imtg3d::gamma:
+            (extreme?blast3d_extreme::gamma:blast3d::gamma);
         Grid3D old(o.n,o.n,o.n,2,
                    lo,hi,lo,hi,lo,hi);
         for(int k=0;k<old.total_nz();++k)
@@ -144,11 +155,16 @@ int main(int argc,char** argv) {
                     old(i,j,k)=imtg
                         ? imtg3d::initial_state(
                             old.x_center(i),old.y_center(j),old.z_center(k))
-                        : blast3d::initial_state(
-                            old.x_center(i),old.y_center(j),old.z_center(k));
+                        : (extreme
+                            ? blast3d_extreme::initial_state(
+                                old.x_center(i),old.y_center(j),old.z_center(k))
+                            : blast3d::initial_state(
+                                old.x_center(i),old.y_center(j),old.z_center(k)));
         const BoundaryConfig3D bc=imtg
             ? imtg3d::boundary_conditions()
-            : blast3d::boundary_conditions();
+            : (extreme
+                ? blast3d_extreme::boundary_conditions()
+                : blast3d::boundary_conditions());
         apply_boundary(old,bc);
         Grid3D ux=old,uy=old,next=old;
         CpuWorkspace3D ws; ws.init(o.n,o.n,o.n);
@@ -158,7 +174,9 @@ int main(int argc,char** argv) {
             targets.push_back(o.t_end*static_cast<double>(s)/o.snapshots);
         if(o.write) write_snapshot(old,o.out,stem,0,0.0);
 
-        std::cout<<"=== 3D GLM-MHD case: "<<(imtg?"IMTG":"magnetized blast")<<" ===\n"
+        const char* case_title=imtg?"IMTG":
+            (extreme?"extreme magnetized blast":"Athena magnetized blast");
+        std::cout<<"=== 3D GLM-MHD case: "<<case_title<<" ===\n"
                  <<"  grid   : "<<o.n<<" x "<<o.n<<" x "<<o.n<<"\n"
                  <<"  domain : ["<<lo<<","<<hi<<"]^3\n";
         if(imtg) {
@@ -171,12 +189,19 @@ int main(int argc,char** argv) {
                  <<"  T      : "<<imtg3d::dynamical_time
                  <<", t_end/T="<<o.t_end/imtg3d::dynamical_time<<"\n"
                  <<"  div(B) : GLM (paper uses CT)\n";
-        } else {
+        } else if(extreme) {
             std::cout
                  <<"  reference: Derigs et al., JCP 317 (2016), Sec. 5.6\n"
-                 <<"  B0     : ("<<blast3d::magnetic_field_x()
+                 <<"  B0     : ("<<blast3d_extreme::magnetic_field_x()
                  <<",0,0),  p_inner/p_outer=10000\n"
                  <<"  radii  : r_inner=0.09, r_outer=0.10\n";
+        } else {
+            std::cout
+                 <<"  reference: Athena spherical blast-wave parameters\n"
+                 <<"  B0     : ("<<blast3d::magnetic_field_x()<<","
+                 <<blast3d::magnetic_field_y()<<",0), |B0|=1\n"
+                 <<"  pressure: p_inner=10, p_outer=0.1, ratio=100\n"
+                 <<"  radii  : r_inner=0.09, r_outer=0.10 (smoothed)\n";
         }
         std::cout<<"  gamma  : "<<phys::gamma<<", periodic boundaries\n"
                  <<"  t_end  : "<<o.t_end<<"\n";

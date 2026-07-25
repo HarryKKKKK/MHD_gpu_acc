@@ -23,16 +23,20 @@ python .\visualization\plot_blast3d.py --input output/blast3d
 python .\visualization\plot_blast3d_volume.py --input output/blast3d
 ```
 
-The test now reproduces the three-dimensional magnetized blast in Sec. 5.6 of
-Derigs et al., JCP 317 (2016), 223-256 (DOI:
-10.1016/j.jcp.2016.04.048). On `[-0.5,0.5]^3`, it uses `rho=1`, zero velocity,
-`gamma=1.4`, and `B=(100/sqrt(4*pi),0,0)`. Pressure is 1000 for `r<=0.09`,
-0.1 for `r>=0.10`, and linearly interpolated in between. All boundaries are
-periodic and the reference output time is `t=0.01`. These parameters live in
+The default `--case blast` is a moderate, three-dimensional extension of the
+Athena magnetized blast-wave test. On `[-0.5,0.5]^3`, it uses `rho=1`, zero
+velocity, `gamma=5/3`, and
+`B=(1/sqrt(2),1/sqrt(2),0)`. Pressure is 10 for `r<=0.09`, 0.1 for
+`r>=0.10`, and linearly interpolated in between. All boundaries are periodic
+and the default output time is `t=0.10`. These parameters live in
 `head/blast3d_case.hpp` and are shared by the CPU and CUDA drivers.
 
-The strong magnetic field makes the shock markedly anisotropic. Use
-`--field pressure` to render pressure instead of density.
+The former Derigs et al. Sec. 5.6 setup is retained as
+`--case blast_extreme`. It uses pressure 1000/0.1,
+`B=(100/sqrt(4*pi),0,0)`, `gamma=1.4`, and `t_end=0.01`. It is an
+intentionally stringent positivity test and may not complete until the solver
+has an updated-cell positivity fallback. Use `--field pressure` to render
+pressure instead of density.
 
 `plot_blast3d_volume.py` produces a genuine three-dimensional voxel surface
 rather than planar slices. By default it writes several fixed-camera PNGs at
@@ -81,9 +85,10 @@ mkdir -p logs
 sbatch scripts/csd3_slurm/slurm_gpu_3d.sh
 ```
 
-The default is a 128-cubed HLLD run to the reference time `t=0.01`, with five
-output intervals on one Ampere GPU. This matches the maximum 3D resolution
-reported for the paper's Fig. 19; the default CFL is 0.20.
+The default is a 128-cubed HLLD run of the moderate Athena case to `t=0.10`,
+with five output intervals (six files including `t=0`) on one Ampere GPU; the
+default CFL is 0.20. Select the preserved stress test with
+`--export=ALL,CASE=blast_extreme`.
 For a larger run without rendering on the compute node:
 
 ```bash

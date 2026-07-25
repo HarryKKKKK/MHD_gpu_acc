@@ -5,34 +5,29 @@
 #include "cpu/boundary3d_cpu.hpp"
 #include "physics.hpp"
 
-// Moderately magnetized spherical blast based on the Athena blast-wave test:
-// https://www.astro.princeton.edu/~jstone/Athena/tests/blast/blast.html
+// Original extreme three-dimensional magnetized blast from:
+// Derigs et al., J. Comput. Phys. 317 (2016), 223-256, Sec. 5.6.
+// DOI: 10.1016/j.jcp.2016.04.048
 //
-// Athena specifies the two-dimensional test with rho=1, gamma=5/3,
-// p_inner=10, p_outer=0.1, and normalized magnetic field
-// (Bx,By)=(1/sqrt(2),1/sqrt(2)).  Here the same physical parameters are
-// extended spherically to 3D.  A one-cell-scale transition layer is retained
-// to make the cell-centred GLM implementation less sensitive to how the
-// spherical discontinuity cuts the Cartesian mesh.
-namespace blast3d {
+// This case is intentionally retained as a stringent robustness test.  The
+// current cell-centred GLM solver may require a positivity-preserving update
+// before it can complete this setup at useful resolutions.
+namespace blast3d_extreme {
 
-inline constexpr double gamma = 5.0 / 3.0;
+inline constexpr double gamma = 1.4;
 inline constexpr double rho = 1.0;
-inline constexpr double p_inner = 10.0;
+inline constexpr double p_inner = 1000.0;
 inline constexpr double p_outer = 0.1;
 inline constexpr double r_inner = 0.09;
 inline constexpr double r_outer = 0.10;
 inline constexpr double x_min = -0.5;
 inline constexpr double x_max = 0.5;
-inline constexpr double t_end = 0.10;
+inline constexpr double t_end = 0.01;
 inline constexpr double recommended_cfl = 0.20;
+inline constexpr double pi = 3.141592653589793238462643383279502884;
 
 inline double magnetic_field_x() {
-    return 1.0 / std::sqrt(2.0);
-}
-
-inline double magnetic_field_y() {
-    return 1.0 / std::sqrt(2.0);
+    return 100.0 / std::sqrt(4.0 * pi);
 }
 
 inline double pressure(double r) {
@@ -46,8 +41,7 @@ inline Conserved initial_state(double x, double y, double z) {
     const double r = std::sqrt(x*x+y*y+z*z);
     return phys::prim_to_cons(
         Primitive(rho, 0.0, 0.0, 0.0,
-                  magnetic_field_x(), magnetic_field_y(), 0.0,
-                  pressure(r), 0.0));
+                  magnetic_field_x(), 0.0, 0.0, pressure(r), 0.0));
 }
 
 inline BoundaryConfig3D boundary_conditions() {
@@ -58,4 +52,4 @@ inline BoundaryConfig3D boundary_conditions() {
     return bc;
 }
 
-} // namespace blast3d
+} // namespace blast3d_extreme

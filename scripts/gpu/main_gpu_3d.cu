@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "blast3d_case.hpp"
+#include "blast3d_extreme_case.hpp"
 #include "gpu/boundary3d_gpu.cuh"
 #include "gpu/grid3d_gpu.cuh"
 #include "gpu/solver3d_gpu.cuh"
@@ -21,7 +22,7 @@
 
 namespace {
 
-enum class Case3D { Blast, IMTG };
+enum class Case3D { Blast, BlastExtreme, IMTG };
 
 struct Options {
     int n=-1,snapshots=-1;
@@ -42,7 +43,8 @@ Options parse_args(int argc,char** argv) {
         };
         if(s=="--case") {
             const auto v=value();
-            if(v=="blast")o.test_case=Case3D::Blast;
+            if(v=="blast" || v=="blast_athena")o.test_case=Case3D::Blast;
+            else if(v=="blast_extreme")o.test_case=Case3D::BlastExtreme;
             else if(v=="imtg")o.test_case=Case3D::IMTG;
             else throw std::runtime_error("unknown case: "+v);
         }
@@ -62,11 +64,15 @@ Options parse_args(int argc,char** argv) {
         } else throw std::runtime_error("unknown argument: "+s);
     }
     const bool imtg=o.test_case==Case3D::IMTG;
+    const bool extreme=o.test_case==Case3D::BlastExtreme;
     if(o.n<0)o.n=imtg?imtg3d::reference_resolution:128;
     if(o.snapshots<0)o.snapshots=imtg?12:5;
-    if(o.t_end<0)o.t_end=imtg?imtg3d::t_end:blast3d::t_end;
-    if(o.cfl<0)o.cfl=imtg?imtg3d::recommended_cfl:blast3d::recommended_cfl;
-    if(o.out.empty())o.out=imtg?"output/imtg3d_gpu":"output/blast3d_gpu";
+    if(o.t_end<0)o.t_end=imtg?imtg3d::t_end:
+        (extreme?blast3d_extreme::t_end:blast3d::t_end);
+    if(o.cfl<0)o.cfl=imtg?imtg3d::recommended_cfl:
+        (extreme?blast3d_extreme::recommended_cfl:blast3d::recommended_cfl);
+    if(o.out.empty())o.out=imtg?"output/imtg3d_gpu":
+        (extreme?"output/blast3d_extreme_gpu":"output/blast3d_gpu");
     if(o.n<8||o.snapshots<1||o.t_end<=0||o.cfl<=0)
         throw std::runtime_error("require resolution>=8, snapshots>=1, t_end>0, cfl>0");
     return o;
@@ -140,9 +146,13 @@ int main(int argc,char** argv) {
     try {
         const Options o=parse_args(argc,argv);
         const bool imtg=o.test_case==Case3D::IMTG;
-        const double lo=imtg?imtg3d::x_min:blast3d::x_min;
-        const double hi=imtg?imtg3d::x_max:blast3d::x_max;
-        const std::string stem=imtg?"imtg3d":"blast3d";
+        const bool extreme=o.test_case==Case3D::BlastExtreme;
+        const double lo=imtg?imtg3d::x_min:
+            (extreme?blast3d_extreme::x_min:blast3d::x_min);
+        const double hi=imtg?imtg3d::x_max:
+            (extreme?blast3d_extreme::x_max:blast3d::x_max);
+        const std::string stem=imtg?"imtg3d":
+            (extreme?"blast3d_extreme":"blast3d");
         int device=0;
         cuda3d_check(cudaGetDevice(&device),"cudaGetDevice");
         cudaDeviceProp prop{};
@@ -160,8 +170,10 @@ int main(int argc,char** argv) {
                      "multi-GPU domain-decomposed executable";
             throw std::runtime_error(message.str());
         }
+        const char* case_title=imtg?"IMTG":
+            (extreme?"extreme magnetized blast":"Athena magnetized blast");
         std::cout<<"=== CUDA 3D GLM-MHD case: "
-                 <<(imtg?"IMTG":"magnetized blast")<<" ===\n"
+                 <<case_title<<" ===\n"
                  <<"  GPU        : "<<prop.name<<"\n"
                  <<"  grid       : "<<o.n<<" x "<<o.n<<" x "<<o.n<<"\n"
                  <<"  solver     : "<<solver_name(o.solver)<<"\n"
@@ -177,16 +189,25 @@ int main(int argc,char** argv) {
                  <<"  T          : "<<imtg3d::dynamical_time
                  <<", t_end/T="<<o.t_end/imtg3d::dynamical_time<<"\n"
                  <<"  div(B)     : GLM (paper uses CT)\n";
-        } else {
+        } else if(extreme) {
             std::cout
                  <<"  reference  : Derigs et al., JCP 317 (2016), Sec. 5.6\n"
-                 <<"  B0         : ("<<blast3d::magnetic_field_x()<<",0,0)\n"
+                 <<"  B0         : ("<<blast3d_extreme::magnetic_field_x()
+                 <<",0,0)\n"
                  <<"  pressure   : p_inner=1000, p_outer=0.1\n"
                  <<"  radii      : r_inner=0.09, r_outer=0.10\n";
+        } else {
+            std::cout
+                 <<"  reference  : Athena spherical blast-wave parameters\n"
+                 <<"  B0         : ("<<blast3d::magnetic_field_x()<<","
+                 <<blast3d::magnetic_field_y()<<",0), |B0|=1\n"
+                 <<"  pressure   : p_inner=10, p_outer=0.1\n"
+                 <<"  radii      : r_inner=0.09, r_outer=0.10 (smoothed)\n";
         }
         std::cout<<"  t_end      : "<<o.t_end<<"\n";
 
-        phys::gamma=imtg?imtg3d::gamma:blast3d::gamma;
+        phys::gamma=imtg?imtg3d::gamma:
+            (extreme?blast3d_extreme::gamma:blast3d::gamma);
         const int ng=2,tx=o.n+2*ng,ty=o.n+2*ng,tz=o.n+2*ng;
         std::vector<Conserved> initial(static_cast<std::size_t>(tx)*ty*tz);
         const double d=(hi-lo)/o.n;
@@ -194,8 +215,12 @@ int main(int argc,char** argv) {
             initial[flat(i,j,k,tx,ty)]=imtg
                 ? imtg3d::initial_state(
                     lo+(i-ng+0.5)*d,lo+(j-ng+0.5)*d,lo+(k-ng+0.5)*d)
-                : blast3d::initial_state(
-                    lo+(i-ng+0.5)*d,lo+(j-ng+0.5)*d,lo+(k-ng+0.5)*d);
+                : (extreme
+                    ? blast3d_extreme::initial_state(
+                        lo+(i-ng+0.5)*d,lo+(j-ng+0.5)*d,lo+(k-ng+0.5)*d)
+                    : blast3d::initial_state(
+                        lo+(i-ng+0.5)*d,lo+(j-ng+0.5)*d,
+                        lo+(k-ng+0.5)*d));
 
         Grid3DGPU old(o.n,o.n,o.n,ng,lo,hi,lo,hi,lo,hi);
         Grid3DGPU ux(o.n,o.n,o.n,ng,lo,hi,lo,hi,lo,hi);
@@ -204,7 +229,9 @@ int main(int argc,char** argv) {
         old.upload_from_aos(initial);
         const BoundaryConfig3D bc=imtg
             ? imtg3d::boundary_conditions()
-            : blast3d::boundary_conditions();
+            : (extreme
+                ? blast3d_extreme::boundary_conditions()
+                : blast3d::boundary_conditions());
         apply_boundary_gpu(old,bc);
         set_gpu3d_physics_gamma(phys::gamma);
         set_gpu3d_physics_ch(0.0);

@@ -43,4 +43,8 @@ outputs/
 output/
 validation/*_smoke/
 paper/
+.agents/
+.sandbox-home/
+.sandbox-tmp/
+
 note1.txt

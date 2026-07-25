@@ -183,7 +183,7 @@ $(CPU_3D_TARGET): $(CPU_3D_OBJS)
 	@mkdir -p $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) $(CPU_3D_OBJS) -o $@ -lstdc++fs
 
-$(CPU_BUILD_DIR)/main_cpu_3d.o: $(CPU_3D_MAIN) head/blast3d_case.hpp head/imtg3d_case.hpp
+$(CPU_BUILD_DIR)/main_cpu_3d.o: $(CPU_3D_MAIN) head/blast3d_case.hpp head/blast3d_extreme_case.hpp head/imtg3d_case.hpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
@@ -299,7 +299,7 @@ $(GPU_3D_TARGET): $(GPU_3D_OBJS)
 	@mkdir -p $(BIN_DIR)
 	$(NVCC) $(NVCCFLAGS) $(GPU_3D_OBJS) -o $@ -lstdc++fs
 
-$(GPU_BUILD_DIR)/main_gpu_3d.o: $(GPU_3D_MAIN) head/blast3d_case.hpp head/imtg3d_case.hpp
+$(GPU_BUILD_DIR)/main_gpu_3d.o: $(GPU_3D_MAIN) head/blast3d_case.hpp head/blast3d_extreme_case.hpp head/imtg3d_case.hpp
 	@mkdir -p $(dir $@)
 	$(NVCC) $(NVCCFLAGS) -c $< -o $@
 
