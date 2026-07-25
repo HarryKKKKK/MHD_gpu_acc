@@ -52,6 +52,7 @@ BUILD_DIR := build
 CPU_BUILD_DIR := $(BUILD_DIR)/cpu
 GPU_BUILD_DIR := $(BUILD_DIR)/gpu
 MPI_BUILD_DIR := $(BUILD_DIR)/mpi
+MPI_3D_BUILD_DIR := $(BUILD_DIR)/mpi_3d
 MPI_OMP_BUILD_DIR := $(BUILD_DIR)/mpi_omp
 BIN_DIR := bin
 
@@ -61,6 +62,7 @@ CPU_3D_TARGET := $(BIN_DIR)/main_cpu_3d
 GPU_TARGET := $(BIN_DIR)/main_gpu
 GPU_3D_TARGET := $(BIN_DIR)/main_gpu_3d
 MPI_TARGET := $(BIN_DIR)/main_mpi
+MPI_3D_TARGET := $(BIN_DIR)/main_mpi_3d
 MPI_OMP_TARGET := $(BIN_DIR)/main_mpi_omp
 
 CPU_MAIN := scripts/cpu/main_cpu.cpp
@@ -68,6 +70,7 @@ CPU_3D_MAIN := scripts/cpu/main_cpu_3d.cpp
 GPU_MAIN := scripts/gpu/main_gpu.cu
 GPU_3D_MAIN := scripts/gpu/main_gpu_3d.cu
 MPI_MAIN := scripts/cpu/main_mpi.cpp
+MPI_3D_MAIN := scripts/cpu/main_mpi_3d.cpp
 
 CPU_OBJS := \
 	$(CPU_BUILD_DIR)/main_cpu.o \
@@ -108,6 +111,10 @@ MPI_OBJS := \
 	$(MPI_BUILD_DIR)/test_cases.o \
 	$(MPI_BUILD_DIR)/init.o \
 	$(MPI_BUILD_DIR)/solver_mpi.o
+
+MPI_3D_OBJS := \
+	$(MPI_3D_BUILD_DIR)/main_mpi_3d.o \
+	$(MPI_3D_BUILD_DIR)/solver3d_cpu.o
 
 # Optional hybrid target: still only links solver_mpi.o.
 # Use this only if solver_mpi.cpp itself contains OpenMP pragmas later.
@@ -230,6 +237,24 @@ $(MPI_BUILD_DIR)/init.o: src/init.cpp
 	$(MPICXX) $(MPICXXFLAGS) -c $< -o $@
 
 $(MPI_BUILD_DIR)/solver_mpi.o: src/cpu/solver_mpi.cpp
+	@mkdir -p $(dir $@)
+	$(MPICXX) $(MPICXXFLAGS) -c $< -o $@
+
+# =========================
+# Pure MPI 3D z-slab decomposition
+# =========================
+.PHONY: mpi_3d
+mpi_3d: $(MPI_3D_TARGET)
+
+$(MPI_3D_TARGET): $(MPI_3D_OBJS)
+	@mkdir -p $(BIN_DIR)
+	$(MPICXX) $(MPICXXFLAGS) $(MPI_3D_OBJS) -o $@ -lstdc++fs
+
+$(MPI_3D_BUILD_DIR)/main_mpi_3d.o: $(MPI_3D_MAIN) head/blast3d_case.hpp head/blast3d_extreme_case.hpp head/imtg3d_case.hpp
+	@mkdir -p $(dir $@)
+	$(MPICXX) $(MPICXXFLAGS) -c $< -o $@
+
+$(MPI_3D_BUILD_DIR)/solver3d_cpu.o: src/cpu/solver3d_cpu.cpp head/cpu/solver3d_cpu.hpp
 	@mkdir -p $(dir $@)
 	$(MPICXX) $(MPICXXFLAGS) -c $< -o $@
 

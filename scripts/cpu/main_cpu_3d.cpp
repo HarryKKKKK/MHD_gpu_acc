@@ -18,6 +18,10 @@
 #include <string>
 #include <vector>
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 #include "blast3d_case.hpp"
 #include "blast3d_extreme_case.hpp"
 #include "cpu/grid3d_cpu.hpp"
@@ -228,6 +232,17 @@ int main(int argc,char** argv) {
         std::cout<<"Done: "<<step<<" steps, "<<seconds<<" s, "
                  <<(static_cast<double>(step)*o.n*o.n*o.n/seconds/1e6)
                  <<" Mcell-updates/s\n";
+        std::cout<<"[CPU3D] nx="<<o.n<<" ny="<<o.n<<" nz="<<o.n
+                 <<" threads="
+#ifdef _OPENMP
+                 <<omp_get_max_threads()
+#else
+                 <<1
+#endif
+                 <<" steps="<<step<<" elapsed_s="<<seconds
+                 <<" Mcell_updates_s="
+                 <<(static_cast<double>(step)*o.n*o.n*o.n/seconds/1e6)
+                 <<"\n";
         if(o.write)
             std::cout<<"Plot with: python visualization/plot_blast3d_volume.py --input "
                      <<o.out<<"\n";

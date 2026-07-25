@@ -229,14 +229,16 @@ double compute_dt_cpu(const Grid3D& q, double cfl) {
     return cfl*std::min({q.dx(),q.dy(),q.dz()})/max_speed;
 }
 
-void advance_cpu(const Grid3D& old, Grid3D& ux, Grid3D& uy, Grid3D& out,
-                 double dt, CpuWorkspace3D& ws, RiemannSolver solver,
-                 const BoundaryConfig3D& bc) {
+void advance_cpu_distributed_z(
+    const Grid3D& old, Grid3D& ux, Grid3D& uy, Grid3D& out,
+    double dt, CpuWorkspace3D& ws, RiemannSolver solver,
+    const BoundaryConfig3D& bc, ZHaloExchange3D exchange_z, void* context) {
     if(!ws.is_initialized()) throw std::runtime_error("CpuWorkspace3D not initialized");
     sweep_x(old,ux,dt/old.dx(),ws,solver);
     apply_boundary_y(ux,bc);
     sweep_y(ux,uy,dt/old.dy(),ws,solver);
-    apply_boundary_z(uy,bc);
+    if(exchange_z) exchange_z(uy,context);
+    else apply_boundary_z(uy,bc);
     sweep_z(uy,out,dt/old.dz(),ws,solver);
 
     const double damping=phys::cr_glm>0
@@ -247,5 +249,15 @@ void advance_cpu(const Grid3D& old, Grid3D& ux, Grid3D& uy, Grid3D& out,
     for(int k=out.k_begin();k<out.k_end();++k)
         for(int j=out.j_begin();j<out.j_end();++j)
             for(int i=out.i_begin();i<out.i_end();++i) out(i,j,k).psi*=damping;
-    apply_boundary(out,bc);
+    apply_boundary_x(out,bc);
+    apply_boundary_y(out,bc);
+    if(exchange_z) exchange_z(out,context);
+    else apply_boundary_z(out,bc);
+}
+
+void advance_cpu(const Grid3D& old, Grid3D& ux, Grid3D& uy, Grid3D& out,
+                 double dt, CpuWorkspace3D& ws, RiemannSolver solver,
+                 const BoundaryConfig3D& bc) {
+    advance_cpu_distributed_z(
+        old,ux,uy,out,dt,ws,solver,bc,nullptr,nullptr);
 }

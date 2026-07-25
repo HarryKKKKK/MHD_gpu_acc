@@ -29,8 +29,19 @@ struct CpuWorkspace3D {
 
 double compute_dt_cpu(const Grid3D& grid, double cfl);
 
+// Optional z-halo exchange used by the slab-decomposed MPI driver. The
+// callback must fill both z ghost layers. x/y boundaries remain local and are
+// handled by the solver.
+using ZHaloExchange3D = void (*)(Grid3D&, void*);
+
 void advance_cpu(
     const Grid3D& Uold, Grid3D& Ux, Grid3D& Uy, Grid3D& Unew,
     double dt, CpuWorkspace3D& ws, RiemannSolver solver,
     const BoundaryConfig3D& bc
+);
+
+void advance_cpu_distributed_z(
+    const Grid3D& Uold, Grid3D& Ux, Grid3D& Uy, Grid3D& Unew,
+    double dt, CpuWorkspace3D& ws, RiemannSolver solver,
+    const BoundaryConfig3D& bc, ZHaloExchange3D exchange_z, void* context
 );

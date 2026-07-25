@@ -105,6 +105,31 @@ make gpu_3d
 make test_gpu_3d
 ```
 
+### OpenMP/MPI/GPU 3D timing comparison
+
+The pure-MPI 3D executable uses a periodic z-slab decomposition with two
+exchanged ghost planes per rank:
+
+```bash
+make mpi_3d
+mpirun -np 8 ./bin/main_mpi_3d \
+  --case blast --resolution 64 --solver hlld --no-out
+```
+
+On CSD3, one script builds the OpenMP, pure-MPI and CUDA 3D executables and
+runs both `blast` and `imtg` exactly once per backend on the same Ampere node:
+
+```bash
+mkdir -p logs
+sbatch scripts/csd3_slurm/slurm_compare_3d_backends.sh
+```
+
+The default comparison uses `64^3`, eight OpenMP threads, eight MPI ranks and
+one GPU. Set `RESOLUTION=128` for the larger comparison. Results are written
+under `timing/compare3d_JOBID`, including raw logs, `backend_times.csv`, and
+`gpu_speedup_summary.csv`. The summary reports `T_CPU/T_GPU`, GPU time as a
+percentage of CPU time, and the corresponding percentage of time saved.
+
 For a quick smoke test:
 
 ```bash
