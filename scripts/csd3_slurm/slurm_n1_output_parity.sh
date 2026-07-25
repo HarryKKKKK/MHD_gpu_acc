@@ -230,10 +230,20 @@ python3 scripts/compare_multi_arch.py "${OUT_ROOT}" \
 COMPARE_STATUS="${PIPESTATUS[0]}"
 set -e
 
+echo ""
+echo "===== MAGNETIC-DIVERGENCE DIAGNOSTIC ====="
+set +e
+python3 scripts/check_magnetic_divergence.py "${OUT_ROOT}" \
+    --report "${OUT_ROOT}/magnetic_divergence_report.csv" \
+    2>&1 | tee "${OUT_ROOT}/magnetic_divergence.log"
+DIVB_STATUS="${PIPESTATUS[0]}"
+set -e
+
 {
     echo "end_utc=$(date --utc --iso-8601=seconds)"
     echo "failed_runs=${FAILED_RUNS}"
     echo "comparison_exit_status=${COMPARE_STATUS}"
+    echo "divergence_exit_status=${DIVB_STATUS}"
 } >> "${METADATA}"
 
 ARCHIVE="${OUT_ROOT}.tar.gz"
@@ -245,10 +255,13 @@ echo "Full outputs       : ${OUT_ROOT}"
 echo "Summary comparison : ${OUT_ROOT}/comparison_report.csv"
 echo "Per-field report   : ${OUT_ROOT}/comparison_report_full.csv"
 echo "Comparison log     : ${OUT_ROOT}/comparison.log"
+echo "Divergence report  : ${OUT_ROOT}/magnetic_divergence_report.csv"
+echo "Divergence log     : ${OUT_ROOT}/magnetic_divergence.log"
 echo "Download archive   : ${ARCHIVE}"
 echo "Failed runs        : ${FAILED_RUNS}"
 echo "Comparison status  : ${COMPARE_STATUS}"
+echo "Divergence status  : ${DIVB_STATUS}"
 
-if [ "${FAILED_RUNS}" -ne 0 ] || [ "${COMPARE_STATUS}" -ne 0 ]; then
+if [ "${FAILED_RUNS}" -ne 0 ] || [ "${COMPARE_STATUS}" -ne 0 ] || [ "${DIVB_STATUS}" -ne 0 ]; then
     exit 1
 fi
