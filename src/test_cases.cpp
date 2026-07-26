@@ -106,6 +106,34 @@ Conserved shock_bubble_state(double x, double y) {
 }
 
 // ============================================================
+// 2D Euler circular blast wave  (gamma = 1.4)
+//
+// Parameters match HarryKKKKK/large_sys_eq_opt at commit
+// f97d334c710ba9f0e3100ea2950d27c9e0a0e40b:
+//   domain [0,1]^2, rho=1, u=v=0,
+//   p=100 for r <= 0.1 about (0.5,0.5), p=1 outside.
+//
+// The Euler state is embedded in Conserved with B=psi=0, allowing the same
+// CPU, MPI, and GPU drivers to provide directly comparable timings.
+// ============================================================
+Conserved blast_wave_state(double x, double y) {
+    constexpr double gamma = 1.4;
+    constexpr double x0 = 0.5;
+    constexpr double y0 = 0.5;
+    constexpr double r0 = 0.1;
+
+    const double dx = x - x0;
+    const double dy = y - y0;
+    const double p = (dx*dx + dy*dy <= r0*r0) ? 100.0 : 1.0;
+
+    return make_mhd(
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0,
+        p, gamma
+    );
+}
+
+// ============================================================
 // Brio–Wu 1D MHD shock tube  (Brio & Wu 1988, γ = 2.0)
 //
 // Classic MHD shock-tube test with a compound wave structure.
@@ -196,13 +224,15 @@ Conserved rotor_state(double x, double y) {
 CaseId parse_case_id(const std::string& name) {
     if (name == "kelvin_helmholtz") return CaseId::KelvinHelmholtz;
     if (name == "shock_bubble")     return CaseId::ShockBubble;
+    if (name == "blast_wave")       return CaseId::BlastWave;
     if (name == "brio_wu")          return CaseId::BrioWu;
     if (name == "orszag_tang")      return CaseId::OrszagTang;
     if (name == "rotor")            return CaseId::Rotor;
 
     throw std::runtime_error(
         "Unknown MHD test case: '" + name + "'. "
-        "Valid names: kelvin_helmholtz, shock_bubble, brio_wu, orszag_tang, rotor."
+        "Valid names: kelvin_helmholtz, shock_bubble, blast_wave, "
+        "brio_wu, orszag_tang, rotor."
     );
 }
 
@@ -210,6 +240,7 @@ std::string case_id_to_string(CaseId id) {
     switch (id) {
         case CaseId::KelvinHelmholtz: return "kelvin_helmholtz";
         case CaseId::ShockBubble:     return "shock_bubble";
+        case CaseId::BlastWave:       return "blast_wave";
         case CaseId::BrioWu:          return "brio_wu";
         case CaseId::OrszagTang:      return "orszag_tang";
         case CaseId::Rotor:           return "rotor";
@@ -274,6 +305,18 @@ CaseConfig get_case_config(CaseId id) {
             cfg.t_end = cfg.snapshot_times.back();
             return cfg;
         }
+
+        case CaseId::BlastWave:
+            return CaseConfig{
+                500, 500, 2,
+                0.0, 1.0, 0.0, 1.0,
+                /*cfl=*/0.4, /*t_end=*/0.2,
+                /*gamma=*/1.4,
+                BoundaryConfig{
+                    BoundaryType::Transmissive, BoundaryType::Transmissive,
+                    BoundaryType::Transmissive, BoundaryType::Transmissive
+                }
+            };
 
         case CaseId::BrioWu:
             // 1D problem: periodic in y, transmissive in x
@@ -344,6 +387,7 @@ Conserved initial_state_at(CaseId id, double x, double y) {
     switch (id) {
         case CaseId::KelvinHelmholtz: return kh_state(x, y);
         case CaseId::ShockBubble:     return shock_bubble_state(x, y);
+        case CaseId::BlastWave:       return blast_wave_state(x, y);
         case CaseId::BrioWu:          return brio_wu_state(x, y);
         case CaseId::OrszagTang:      return orszag_tang_state(x, y);
         case CaseId::Rotor:           return rotor_state(x, y);
