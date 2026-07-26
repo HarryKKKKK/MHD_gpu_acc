@@ -1,0 +1,7 @@
+case,backend,resolution,workers,elapsed_s
+blast,openmp,128,8,9.45202e+01
+blast,mpi,128,8,71.0588
+blast,gpu,128,1,1.78994e+00
+imtg,openmp,128,8,2.08179e+03
+imtg,mpi,128,8,1625.18
+imtg,gpu,128,1,5.10792e+01
