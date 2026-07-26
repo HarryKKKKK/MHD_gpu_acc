@@ -43,7 +43,8 @@ python3 scripts/summarize_gpu_speedup.py \
     echo "speedup_definition=median_cpu_app_elapsed_s/median_gpu_app_elapsed_s"
     echo "cases=shock_bubble blast_wave"
     echo "solvers=hll hllc hlld force"
-    echo "scales=1 2 4 8"
+    echo "paired_speedup_scales=1 2 4"
+    echo "gpu_timing_scales=1 2 4 8"
 } > "${RESULT_DIR}/metadata.txt"
 
 cat "${RESULT_DIR}/gpu_speedup_summary.csv"

@@ -15,8 +15,8 @@ set -euo pipefail
 
 # Final OpenMP CPU time-to-solution matrix on one 76-core CSD3 Ice Lake node.
 # Each of the four array tasks owns one solver/node, builds once, and runs both
-# cases and all four scales sequentially.  n=1/2 are repeated three times and
-# n=4/8 once.  --no-out suppresses all field CSVs.
+# cases and n={1,2,4} sequentially.  n=1/2 are repeated three times and n=4
+# once.  n=8 is intentionally GPU-only.  --no-out suppresses field CSVs.
 #
 # If mybalance shows a different CPU project, override the account at submit:
 #   mkdir -p logs
@@ -37,6 +37,9 @@ BUILD_VARIANT="repository_default_openmp"
 FAILED_RUNS=0
 RANKS_REPORTED=0
 
+# OpenMP n=8 is intentionally omitted because its time-to-solution dominates
+# the allocation.  GPU retains n=8 in slurm_compare_gpu.sh.
+SCALES_STR="1 2 4"
 comparison_init_config
 comparison_load_module rhel8/default-icl
 comparison_prepare_paths

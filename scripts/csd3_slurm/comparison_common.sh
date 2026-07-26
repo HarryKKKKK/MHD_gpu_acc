@@ -8,8 +8,8 @@ comparison_init_config() {
     read -r -a SOLVERS <<< "${SOLVERS_STR:-hll hllc hlld force}"
     read -r -a SCALES <<< "${SCALES_STR:-1 2 4 8}"
 
-    if [ "${#CASES[@]}" -ne 2 ] || [ "${#SOLVERS[@]}" -ne 4 ] || [ "${#SCALES[@]}" -ne 4 ]; then
-        echo "[ERROR] The array mapping requires exactly 2 cases, 4 solvers, and 4 scales."
+    if [ "${#CASES[@]}" -ne 2 ] || [ "${#SOLVERS[@]}" -ne 4 ] || [ "${#SCALES[@]}" -lt 1 ]; then
+        echo "[ERROR] The array mapping requires exactly 2 cases, 4 solvers, and at least 1 scale."
         echo "[ERROR] cases=${CASES[*]} solvers=${SOLVERS[*]} scales=${SCALES[*]}"
         exit 2
     fi
@@ -242,7 +242,13 @@ comparison_run_once() {
 
     echo "[RESULT] status=${status} app_elapsed_s=${app_elapsed} wall_seconds=${wall_seconds} steps=${steps} Mcell_updates_s=${mcell:-unknown}"
 
-    echo "${BACKEND},${CASE_NAME},${SOLVER_NAME},${N_SCALE},${repeat_index},${NUM_REPEATS},${BUILD_VARIANT},${THREADS_REPORTED:-0},${RANKS_REPORTED:-0},${nx},${ny},${cells},${steps},${app_elapsed},${steps_per_s:-unknown},${mcell:-unknown},${wall_seconds},${user_seconds:-unknown},${sys_seconds:-unknown},${cpu_percent:-unknown},${rss:-unknown},${major_faults:-unknown},${minor_faults:-unknown},${voluntary_cs:-unknown},${involuntary_cs:-unknown},${start_utc},${end_utc},${status},$(hostname),${GIT_BRANCH},${GIT_COMMIT}" >> "${SUMMARY_FILE}"
+    # Append immediately after this run.  Each array task owns a distinct
+    # RUN_ID/result directory and solver CSV, so no other task writes this
+    # file and no lock or end-of-job accumulation is needed.
+    printf '%s\n' \
+        "${BACKEND},${CASE_NAME},${SOLVER_NAME},${N_SCALE},${repeat_index},${NUM_REPEATS},${BUILD_VARIANT},${THREADS_REPORTED:-0},${RANKS_REPORTED:-0},${nx},${ny},${cells},${steps},${app_elapsed},${steps_per_s:-unknown},${mcell:-unknown},${wall_seconds},${user_seconds:-unknown},${sys_seconds:-unknown},${cpu_percent:-unknown},${rss:-unknown},${major_faults:-unknown},${minor_faults:-unknown},${voluntary_cs:-unknown},${involuntary_cs:-unknown},${start_utc},${end_utc},${status},$(hostname),${GIT_BRANCH},${GIT_COMMIT}" \
+        >> "${SUMMARY_FILE}"
+    echo "[CSV] Appended completed run to ${SUMMARY_FILE}"
 
     # A failed/unstable solver is data too.  Record it and continue so that one
     # configuration does not discard the rest of the requested repetitions.

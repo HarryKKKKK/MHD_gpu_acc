@@ -15,8 +15,9 @@ set -euo pipefail
 
 # Final pure-MPI time-to-solution matrix on one 76-core CSD3 Ice Lake node.
 # Each of the four array tasks owns one solver/node, builds once, and runs both
-# cases and all four scales sequentially.  n=1/2 are repeated three times and
-# n=4/8 once.  --timing-only suppresses field gathers and field CSV output.
+# cases and n={1,2,4} sequentially.  n=1/2 are repeated three times and n=4
+# once.  n=8 is intentionally GPU-only.  --timing-only suppresses field
+# gathers and field CSV output.
 #
 # If mybalance shows a different CPU project, override the account at submit:
 #   mkdir -p logs
@@ -37,6 +38,9 @@ BUILD_VARIANT="repository_default_pure_mpi"
 FAILED_RUNS=0
 THREADS_REPORTED=1
 
+# Pure-MPI n=8 is intentionally omitted because its time-to-solution dominates
+# the allocation.  GPU retains n=8 in slurm_compare_gpu.sh.
+SCALES_STR="1 2 4"
 comparison_init_config
 comparison_load_module rhel8/default-icl
 comparison_prepare_paths

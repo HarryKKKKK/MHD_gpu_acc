@@ -31,12 +31,11 @@ fi
 
 mkdir -p logs timing/euler_comparison
 
-# comparison_common.sh requires exactly two cases, four solvers, and four
-# scales.  These values select the two pure-hydrodynamic (Euler) cases while
-# retaining the established solver-array mapping and repeat policy.
+# These values select the two pure-hydrodynamic (Euler) cases while retaining
+# the established solver-array mapping and repeat policy.  The CPU script
+# fixes its scales to n={1,2,4}; the GPU script retains n={1,2,4,8}.
 export CASES_STR="shock_bubble blast_wave"
 export SOLVERS_STR="${SOLVERS_STR:-hll hllc hlld force}"
-export SCALES_STR="${SCALES_STR:-1 2 4 8}"
 
 CPU_SUBMISSION="$(sbatch --parsable --job-name=euler_cmp_cpu \
     scripts/csd3_slurm/slurm_compare_cpu.sh)"
