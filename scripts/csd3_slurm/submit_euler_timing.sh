@@ -1,12 +1,22 @@
-#!/bin/bash
+#!/bin/bash -l
+#SBATCH -J euler_submit
+#SBATCH -A MPHIL-NIKIFORAKIS-HK597-SL2-CPU
+#SBATCH -p icelake
+#SBATCH -N 1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH -t 00:05:00
+#SBATCH -o euler_submit_%j.out
+#SBATCH -e euler_submit_%j.err
 
-# Submit the Euler timing workflow using the same CPU/GPU timing jobs and
-# result format as timing/final_comparison.  The summary job starts only after
-# both four-task solver arrays have completed successfully.
+# CSD3 orchestration job for the Euler timing workflow.  This short job submits
+# the established Ice Lake CPU and Ampere GPU timing arrays, then submits the
+# summary job with an afterok dependency on both arrays.  Timing data retain
+# the same format and hardware separation as timing/final_comparison.
 
 set -euo pipefail
 
-WORKDIR="${WORKDIR:-$(pwd)}"
+WORKDIR="${WORKDIR:-${SLURM_SUBMIT_DIR:-$(pwd)}}"
 cd "${WORKDIR}"
 
 if [ ! -f scripts/csd3_slurm/slurm_compare_cpu.sh ] ||
