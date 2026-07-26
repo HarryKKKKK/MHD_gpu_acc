@@ -46,6 +46,29 @@ different physical times and one combined evolution overview. The visible surfac
 default; it is available only when explicitly requested with `--rotation-gif`
 or `--evolution-gif`.
 
+For publication layout, first iterate on an empty six-panel preview. This does
+not read snapshots or draw voxels:
+
+```bash
+python3 visualization/plot_blast3d_volume.py \
+  --layout-preview --preview-case imtg --field Bmag \
+  --paper --overview-only --paper-png-only --paper-dpi 150
+```
+
+The preview is written under `figs/layout_preview`. Once the layout is
+approved, render the same layout with real data:
+
+```bash
+python3 visualization/plot_blast3d_volume.py \
+  --input outputs/imtg3d_gpu_n128_hlld_JOBID \
+  --field Bmag --fraction 0.15 --stride 1 --png-frames 6 \
+  --paper --overview-only --paper-dpi 300
+```
+
+Paper mode uses a 7.2-inch two-column canvas, white background, `(a)`--`(f)`
+panel labels, normalized IMTG time `t/T`, mathematical field labels, one global
+color scale, and writes both a 300-dpi PNG and a compact rasterized PDF.
+
 ## Slurm
 
 Submit the generic one-node OpenMP job from the repository root. Supply the

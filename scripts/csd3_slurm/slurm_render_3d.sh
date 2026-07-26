@@ -62,11 +62,21 @@
 #   LEVEL=VALUE                     absolute level for every requested field
 #   MAX_TIME=VALUE                  ignore snapshots after this physical time
 #   PYTHON_BIN=/path/to/venv/bin/python
+#   PAPER=1                         publication layout + 300 dpi PNG/PDF
+#   PAPER_DPI=300                   publication raster resolution
+#   OVERVIEW_ONLY=1                 skip final/individual PNGs (PAPER default)
+#   PAPER_PNG_ONLY=1                do not write the rasterized PDF
 #
 # Example with custom rendering parameters:
 #
 #   sbatch -A YOUR_CSD3_CPU_ACCOUNT \
 #     --export=ALL,INPUT_DIR=outputs/blast3d_gpu_n128_hlld_JOBID,CASE=blast,PLOT_FIELDS=rho,PNG_FRAMES=6,RHO_FRACTION=0.06,PLOT_STRIDE=1 \
+#     scripts/csd3_slurm/slurm_render_3d.sh
+#
+# Final IMTG |B| figure in publication layout:
+#
+#   sbatch -A YOUR_CSD3_CPU_ACCOUNT \
+#     --export=ALL,INPUT_DIR=outputs/imtg3d_gpu_n128_hlld_JOBID,CASE=imtg,PLOT_FIELDS=Bmag,PAPER=1 \
 #     scripts/csd3_slurm/slurm_render_3d.sh
 #
 # A comma-separated PLOT_FIELDS value also works when exported by the shell
@@ -158,6 +168,10 @@ BMAG_FRACTION="${BMAG_FRACTION:-0.15}"
 FRACTION="${FRACTION:-0.18}"
 LEVEL="${LEVEL:-}"
 MAX_TIME="${MAX_TIME:-}"
+PAPER="${PAPER:-0}"
+PAPER_DPI="${PAPER_DPI:-300}"
+OVERVIEW_ONLY="${OVERVIEW_ONLY:-${PAPER}}"
+PAPER_PNG_ONLY="${PAPER_PNG_ONLY:-0}"
 
 if ! command -v "${PYTHON_BIN}" >/dev/null 2>&1; then
     echo "[ERROR] Python executable not found: ${PYTHON_BIN}"
@@ -184,6 +198,8 @@ echo "Detected case : ${CASE}"
 echo "Fields        : ${PLOT_FIELDS}"
 echo "PNG frames    : ${PNG_FRAMES}"
 echo "Plot stride   : ${PLOT_STRIDE}"
+echo "Paper layout  : ${PAPER}"
+echo "Overview only : ${OVERVIEW_ONLY}"
 echo "Python        : $(command -v "${PYTHON_BIN}")"
 
 IFS=',' read -r -a RENDER_FIELDS <<< "${PLOT_FIELDS}"
@@ -218,6 +234,15 @@ for RENDER_FIELD in "${RENDER_FIELDS[@]}"; do
     fi
     if [[ -n "${MAX_TIME}" ]]; then
         PLOT_ARGS+=(--max-time "${MAX_TIME}")
+    fi
+    if [[ "${PAPER}" == "1" ]]; then
+        PLOT_ARGS+=(--paper --paper-dpi "${PAPER_DPI}")
+        if [[ "${PAPER_PNG_ONLY}" == "1" ]]; then
+            PLOT_ARGS+=(--paper-png-only)
+        fi
+    fi
+    if [[ "${OVERVIEW_ONLY}" == "1" ]]; then
+        PLOT_ARGS+=(--overview-only)
     fi
 
     echo
