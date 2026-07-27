@@ -9,10 +9,9 @@
 #SBATCH -o euler_submit_%j.out
 #SBATCH -e euler_submit_%j.err
 
-# CSD3 orchestration job for the Euler timing workflow.  This short job submits
-# the established Ice Lake CPU and Ampere GPU timing arrays, then submits the
-# summary job with an afterok dependency on both arrays.  Timing data retain
-# the same format and hardware separation as timing/final_comparison.
+# CSD3 orchestration job for the Euler runtime workflow.  This short job
+# submits OpenMP, pure-MPI, and GPU timing arrays, then submits one summary job
+# with an afterok dependency on all three arrays.
 
 set -euo pipefail
 
@@ -20,7 +19,9 @@ WORKDIR="${WORKDIR:-${SLURM_SUBMIT_DIR:-$(pwd)}}"
 cd "${WORKDIR}"
 
 if [ ! -f scripts/csd3_slurm/slurm_compare_cpu.sh ] ||
-   [ ! -f scripts/csd3_slurm/slurm_compare_gpu.sh ]; then
+   [ ! -f scripts/csd3_slurm/slurm_compare_mpi.sh ] ||
+   [ ! -f scripts/csd3_slurm/slurm_compare_gpu.sh ] ||
+   [ ! -f scripts/csd3_slurm/slurm_summarize_euler.sh ]; then
     echo "[ERROR] Run this launcher from the Euler repository root, or set WORKDIR."
     exit 1
 fi
@@ -36,24 +37,33 @@ mkdir -p logs timing/euler_comparison
 # fixes its scales to n={1,2,4}; the GPU script retains n={1,2,4,8}.
 export CASES_STR="shock_bubble blast_wave"
 export SOLVERS_STR="${SOLVERS_STR:-hll hllc force}"
+export SMALL_N_REPEATS="${SMALL_N_REPEATS:-5}"
+export LARGE_N_REPEATS="${LARGE_N_REPEATS:-3}"
 
-CPU_SUBMISSION="$(sbatch --parsable --job-name=euler_cmp_cpu \
+OMP_SUBMISSION="$(sbatch --parsable --job-name=euler_cmp_omp \
     scripts/csd3_slurm/slurm_compare_cpu.sh)"
-CPU_JOB_ID="${CPU_SUBMISSION%%;*}"
+OMP_JOB_ID="${OMP_SUBMISSION%%;*}"
+
+MPI_SUBMISSION="$(sbatch --parsable --job-name=euler_cmp_mpi \
+    scripts/csd3_slurm/slurm_compare_mpi.sh)"
+MPI_JOB_ID="${MPI_SUBMISSION%%;*}"
 
 GPU_SUBMISSION="$(sbatch --parsable --job-name=euler_cmp_gpu \
     scripts/csd3_slurm/slurm_compare_gpu.sh)"
 GPU_JOB_ID="${GPU_SUBMISSION%%;*}"
 
 SUMMARY_SUBMISSION="$(sbatch --parsable \
-    --dependency="afterok:${CPU_JOB_ID}:${GPU_JOB_ID}" \
+    --dependency="afterok:${OMP_JOB_ID}:${MPI_JOB_ID}:${GPU_JOB_ID}" \
     scripts/csd3_slurm/slurm_summarize_euler.sh \
-    "${CPU_JOB_ID}" "${GPU_JOB_ID}")"
+    "${OMP_JOB_ID}" "${MPI_JOB_ID}" "${GPU_JOB_ID}")"
 SUMMARY_JOB_ID="${SUMMARY_SUBMISSION%%;*}"
 
 echo "Submitted Euler timing workflow:"
-echo "  CPU array : ${CPU_JOB_ID}"
+echo "  OMP array : ${OMP_JOB_ID}"
+echo "  MPI array : ${MPI_JOB_ID}"
 echo "  GPU array : ${GPU_JOB_ID}"
 echo "  Summary   : ${SUMMARY_JOB_ID}"
+echo "  Repeats   : n<=2: ${SMALL_N_REPEATS}; n>=4: ${LARGE_N_REPEATS}"
 echo "After completion:"
-echo "  timing/euler_comparison/${CPU_JOB_ID}_${GPU_JOB_ID}/gpu_speedup_summary.csv"
+echo "  timing/euler_comparison/${OMP_JOB_ID}_${MPI_JOB_ID}_${GPU_JOB_ID}/runtime_summary.csv"
+echo "  timing/euler_comparison/${OMP_JOB_ID}_${MPI_JOB_ID}_${GPU_JOB_ID}/speedup_summary.csv"

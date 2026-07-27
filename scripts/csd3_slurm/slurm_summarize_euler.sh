@@ -11,17 +11,18 @@
 
 set -euo pipefail
 
-if [ "$#" -ne 2 ]; then
-    echo "Usage: sbatch $0 CPU_ARRAY_JOB_ID GPU_ARRAY_JOB_ID"
+if [ "$#" -ne 3 ]; then
+    echo "Usage: sbatch $0 OMP_ARRAY_JOB_ID MPI_ARRAY_JOB_ID GPU_ARRAY_JOB_ID"
     exit 2
 fi
 
-CPU_JOB_ID="$1"
-GPU_JOB_ID="$2"
+OMP_JOB_ID="$1"
+MPI_JOB_ID="$2"
+GPU_JOB_ID="$3"
 WORKDIR="${WORKDIR:-${SLURM_SUBMIT_DIR:-$(pwd)}}"
 cd "${WORKDIR}"
 
-RESULT_DIR="${WORKDIR}/timing/euler_comparison/${CPU_JOB_ID}_${GPU_JOB_ID}"
+RESULT_DIR="${WORKDIR}/timing/euler_comparison/${OMP_JOB_ID}_${MPI_JOB_ID}_${GPU_JOB_ID}"
 mkdir -p "${RESULT_DIR}"
 
 if ! command -v python3 >/dev/null 2>&1; then
@@ -29,23 +30,27 @@ if ! command -v python3 >/dev/null 2>&1; then
     exit 1
 fi
 
-python3 scripts/summarize_gpu_speedup.py \
+python3 scripts/summarize_euler_runtime.py \
     --root timing/final_comparison \
-    --cpu-job "${CPU_JOB_ID}" \
+    --omp-job "${OMP_JOB_ID}" \
+    --mpi-job "${MPI_JOB_ID}" \
     --gpu-job "${GPU_JOB_ID}" \
-    --output "${RESULT_DIR}/gpu_speedup_summary.csv"
+    --output-dir "${RESULT_DIR}"
 
 {
-    echo "cpu_array_job_id=${CPU_JOB_ID}"
+    echo "omp_array_job_id=${OMP_JOB_ID}"
+    echo "mpi_array_job_id=${MPI_JOB_ID}"
     echo "gpu_array_job_id=${GPU_JOB_ID}"
     echo "summary_job_id=${SLURM_JOB_ID:-manual}"
     echo "created_utc=$(date --utc --iso-8601=seconds)"
-    echo "speedup_definition=median_cpu_app_elapsed_s/median_gpu_app_elapsed_s"
+    echo "speedup_definition=median_reference_app_elapsed_s/median_target_app_elapsed_s"
     echo "cases=shock_bubble blast_wave"
     echo "solvers=hll hllc force"
-    echo "paired_speedup_scales=1 2 4"
-    echo "gpu_timing_scales=1 2 4 8"
+    echo "omp_scales=1 2 4"
+    echo "mpi_scales=1 2 4"
+    echo "gpu_scales=1 2 4 8"
 } > "${RESULT_DIR}/metadata.txt"
 
-cat "${RESULT_DIR}/gpu_speedup_summary.csv"
-echo "Summary: ${RESULT_DIR}/gpu_speedup_summary.csv"
+cat "${RESULT_DIR}/runtime_summary.csv"
+echo "Runtime summary: ${RESULT_DIR}/runtime_summary.csv"
+echo "Speedup summary: ${RESULT_DIR}/speedup_summary.csv"

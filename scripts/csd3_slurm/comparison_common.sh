@@ -80,7 +80,10 @@ comparison_prepare_paths() {
 
     cd "${WORKDIR}"
 
-    RUN_ID="${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
+    # Group all three solver tasks under the array's master job ID.  On CSD3,
+    # SLURM_JOB_ID can differ for each array element, which makes a later
+    # summary keyed by the ID returned from `sbatch --parsable` incomplete.
+    RUN_ID="${SLURM_ARRAY_JOB_ID:-${SLURM_JOB_ID}}_${SLURM_ARRAY_TASK_ID}"
     RESULT_DIR="${WORKDIR}/timing/final_comparison/${RUN_ID}/${BACKEND}"
     BUILD_ROOT="${WORKDIR}/build/final_comparison/${RUN_ID}/${BACKEND}"
     BIN_ROOT="${WORKDIR}/bin/final_comparison/${RUN_ID}/${BACKEND}"
@@ -163,7 +166,9 @@ comparison_run_once() {
     local -a command=("$@")
 
     local stem="${RESULT_DIR}/runs/${CASE_NAME}_${SOLVER_NAME}_n${N_SCALE}_repeat_${repeat_index}"
-    local console_file="${stem}.log"
+    # Keep per-run console output in the result tree.  The repository ignores
+    # *.log globally, while *.txt remains available for later auditing.
+    local console_file="${stem}.txt"
     local time_file="${stem}.time"
     local start_utc end_utc start_ns end_ns wall_seconds status
 

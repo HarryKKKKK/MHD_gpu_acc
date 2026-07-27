@@ -14,7 +14,7 @@
 set -euo pipefail
 
 # Final pure-MPI time-to-solution matrix on one 76-core CSD3 Ice Lake node.
-# Each of the four array tasks owns one solver/node, builds once, and runs both
+# Each of the three array tasks owns one solver/node, builds once, and runs both
 # cases and n={1,2,4} sequentially.  n=1/2 are repeated three times and n=4
 # once.  n=8 is intentionally GPU-only.  --timing-only suppresses field
 # gathers and field CSV output.

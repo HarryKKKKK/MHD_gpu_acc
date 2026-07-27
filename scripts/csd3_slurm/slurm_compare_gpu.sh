@@ -14,13 +14,12 @@
 set -euo pipefail
 
 # Final GPU time-to-solution matrix on CSD3:
-#   4 array tasks, one solver per task/GPU.
+#   3 array tasks, one solver per task/GPU.
 # Each task builds its solver once, then runs both cases and n={1,2,4,8}
 # sequentially.  n=1/2 run three times; n=4/8 run once.  No field files
 # are written.
-# HLLD uses the measured canonical-Y + X/Y launch-bound-3 build.  The other
-# solvers use the repository defaults, so their kernels are not changed by the
-# HLLD-specific experiment.
+# All Euler solvers use the repository's measured launch defaults:
+# X=16x8/LB3 and Y=16x8/LB5.
 #
 # Submit from the repository root (create logs first because Slurm opens its
 # output file before this script starts):
