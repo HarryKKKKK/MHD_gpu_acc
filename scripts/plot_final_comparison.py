@@ -4,7 +4,8 @@
 The script consumes the clean consolidated CSVs produced by
 ``scripts/consolidate_final_comparison.py``.  By default it plots only rows
 marked ``is_canonical=1``: all 31-prefix MHD jobs, and the newest coherent
-backend/solver jobs from the 32-prefix Euler reruns.
+backend/solver jobs from the 32-prefix Euler reruns, including MPI where
+available.
 """
 
 import argparse
@@ -34,9 +35,9 @@ SOLVERS = ("hll", "hllc", "hlld", "force")
 BACKEND_ORDER = ("cpu_openmp", "mpi", "gpu")
 
 CASE_LABELS = {
-    "orszag_tang": "Orszag–Tang vortex",
+    "orszag_tang": "Orszag-Tang vortex",
     "rotor": "Rotor problem",
-    "shock_bubble": "Shock–bubble interaction",
+    "shock_bubble": "Shock-bubble interaction",
     "blast_wave": "Circular blast wave",
 }
 SOLVER_LABELS = {
@@ -216,6 +217,7 @@ def validate_coverage(summary: List[Dict]) -> None:
                 else:
                     requirements = {
                         "cpu_openmp": (1, 2, 4),
+                        "mpi": (1, 2, 4),
                         "gpu": (1, 2, 4, 8),
                     }
                 for backend, scales in requirements.items():
@@ -453,6 +455,51 @@ def plot_gpu_speedup(summary: List[Dict], output_dir: Path) -> None:
     plt.close(fig)
 
 
+def write_summary_csv(
+    summary: List[Dict], experiment: str, metric: str, output_dir: Path
+) -> None:
+    """Write the plotted canonical aggregates for audit and reuse."""
+    output = output_dir / f"{experiment}_timing_summary.csv"
+    fieldnames = [
+        "experiment",
+        "case",
+        "solver",
+        "backend",
+        "n",
+        "nx",
+        "ny",
+        "total_cells",
+        "steps",
+        "samples",
+        f"median_{metric}",
+        f"minimum_{metric}",
+        f"maximum_{metric}",
+    ]
+    with output.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n")
+        writer.writeheader()
+        for row in summary:
+            if row["experiment"] != experiment:
+                continue
+            writer.writerow(
+                {
+                    "experiment": row["experiment"],
+                    "case": row["case"],
+                    "solver": row["solver"],
+                    "backend": row["backend"],
+                    "n": row["n"],
+                    "nx": row["nx"],
+                    "ny": row["ny"],
+                    "total_cells": row["total_cells"],
+                    "steps": ";".join(str(value) for value in row["steps"]),
+                    "samples": row["samples"],
+                    f"median_{metric}": f"{row['median']:.9f}",
+                    f"minimum_{metric}": f"{row['minimum']:.9f}",
+                    f"maximum_{metric}": f"{row['maximum']:.9f}",
+                }
+            )
+
+
 def main() -> None:
     args = parse_args()
     configure_matplotlib()
@@ -462,6 +509,8 @@ def main() -> None:
     )
     summary = summarize(rows, args.metric)
     args.output_dir.mkdir(parents=True, exist_ok=True)
+    write_summary_csv(summary, "mhd", args.metric, args.output_dir)
+    write_summary_csv(summary, "euler", args.metric, args.output_dir)
     plot_runtime_matrix(summary, "mhd", args.metric, args.output_dir)
     plot_runtime_matrix(summary, "euler", args.metric, args.output_dir)
     plot_gpu_speedup(summary, args.output_dir)
