@@ -1,0 +1,57 @@
+nvcc -std=c++17 -O3 -Ihead -Xcompiler="-Wall -Wextra" --fmad=false -arch=sm_80 -lineinfo -Xptxas=-v -DEULER_ADVANCE_X_BLOCK_X=16 -DEULER_ADVANCE_X_BLOCK_Y=8 -DEULER_ADVANCE_Y_BLOCK_X=32 -DEULER_ADVANCE_Y_BLOCK_Y=4 -DEULER_ADVANCE_X_MIN_BLOCKS_PER_SM=3 -DEULER_ADVANCE_Y_MIN_BLOCKS_PER_SM=5 -c scripts/gpu/main_gpu.cu -o tuning/32219899_blast_wave_hllc_n8/build/y_x16x8_lb3_y32x4_lb5/gpu/main_gpu.o
+ptxas info    : 8 bytes gmem
+nvcc -std=c++17 -O3 -Ihead -Xcompiler="-Wall -Wextra" --fmad=false -arch=sm_80 -lineinfo -Xptxas=-v -DEULER_ADVANCE_X_BLOCK_X=16 -DEULER_ADVANCE_X_BLOCK_Y=8 -DEULER_ADVANCE_Y_BLOCK_X=32 -DEULER_ADVANCE_Y_BLOCK_Y=4 -DEULER_ADVANCE_X_MIN_BLOCKS_PER_SM=3 -DEULER_ADVANCE_Y_MIN_BLOCKS_PER_SM=5 -x c++ -c src/test_cases.cpp -o tuning/32219899_blast_wave_hllc_n8/build/y_x16x8_lb3_y32x4_lb5/gpu/test_cases.o
+nvcc -std=c++17 -O3 -Ihead -Xcompiler="-Wall -Wextra" --fmad=false -arch=sm_80 -lineinfo -Xptxas=-v -DEULER_ADVANCE_X_BLOCK_X=16 -DEULER_ADVANCE_X_BLOCK_Y=8 -DEULER_ADVANCE_Y_BLOCK_X=32 -DEULER_ADVANCE_Y_BLOCK_Y=4 -DEULER_ADVANCE_X_MIN_BLOCKS_PER_SM=3 -DEULER_ADVANCE_Y_MIN_BLOCKS_PER_SM=5 -x c++ -c src/init.cpp -o tuning/32219899_blast_wave_hllc_n8/build/y_x16x8_lb3_y32x4_lb5/gpu/init.o
+nvcc -std=c++17 -O3 -Ihead -Xcompiler="-Wall -Wextra" --fmad=false -arch=sm_80 -lineinfo -Xptxas=-v -DEULER_ADVANCE_X_BLOCK_X=16 -DEULER_ADVANCE_X_BLOCK_Y=8 -DEULER_ADVANCE_Y_BLOCK_X=32 -DEULER_ADVANCE_Y_BLOCK_Y=4 -DEULER_ADVANCE_X_MIN_BLOCKS_PER_SM=3 -DEULER_ADVANCE_Y_MIN_BLOCKS_PER_SM=5 -c src/gpu/solver_gpu.cu -o tuning/32219899_blast_wave_hllc_n8/build/y_x16x8_lb3_y32x4_lb5/gpu/solver_gpu.o
+ptxas info    : 19 bytes gmem
+ptxas info    : Compiling entry function '_ZN69_GLOBAL__N__45_tmpxft_000091e4_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_y_kernelIL13RiemannSolver2EEEv18ConstGrid2DGPUView13Grid2DGPUViewd' for 'sm_80'
+ptxas info    : Function properties for _ZN69_GLOBAL__N__45_tmpxft_000091e4_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_y_kernelIL13RiemannSolver2EEEv18ConstGrid2DGPUView13Grid2DGPUViewd
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 79 registers, 568 bytes cmem[0], 16 bytes cmem[2]
+ptxas info    : Compiling entry function '_ZN69_GLOBAL__N__45_tmpxft_000091e4_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_x_kernelIL13RiemannSolver2EEEv18ConstGrid2DGPUView13Grid2DGPUViewd' for 'sm_80'
+ptxas info    : Function properties for _ZN69_GLOBAL__N__45_tmpxft_000091e4_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_x_kernelIL13RiemannSolver2EEEv18ConstGrid2DGPUView13Grid2DGPUViewd
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 79 registers, 568 bytes cmem[0], 16 bytes cmem[2]
+ptxas info    : Compiling entry function '_ZN69_GLOBAL__N__45_tmpxft_000091e4_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_y_kernelIL13RiemannSolver1EEEv18ConstGrid2DGPUView13Grid2DGPUViewd' for 'sm_80'
+ptxas info    : Function properties for _ZN69_GLOBAL__N__45_tmpxft_000091e4_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_y_kernelIL13RiemannSolver1EEEv18ConstGrid2DGPUView13Grid2DGPUViewd
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 93 registers, 568 bytes cmem[0], 16 bytes cmem[2]
+ptxas info    : Compiling entry function '_ZN69_GLOBAL__N__45_tmpxft_000091e4_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_x_kernelIL13RiemannSolver1EEEv18ConstGrid2DGPUView13Grid2DGPUViewd' for 'sm_80'
+ptxas info    : Function properties for _ZN69_GLOBAL__N__45_tmpxft_000091e4_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_x_kernelIL13RiemannSolver1EEEv18ConstGrid2DGPUView13Grid2DGPUViewd
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 95 registers, 568 bytes cmem[0], 16 bytes cmem[2]
+ptxas info    : Compiling entry function '_ZN69_GLOBAL__N__45_tmpxft_000091e4_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_y_kernelIL13RiemannSolver0EEEv18ConstGrid2DGPUView13Grid2DGPUViewd' for 'sm_80'
+ptxas info    : Function properties for _ZN69_GLOBAL__N__45_tmpxft_000091e4_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_y_kernelIL13RiemannSolver0EEEv18ConstGrid2DGPUView13Grid2DGPUViewd
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 76 registers, 568 bytes cmem[0], 16 bytes cmem[2]
+ptxas info    : Compiling entry function '_ZN69_GLOBAL__N__45_tmpxft_000091e4_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_x_kernelIL13RiemannSolver0EEEv18ConstGrid2DGPUView13Grid2DGPUViewd' for 'sm_80'
+ptxas info    : Function properties for _ZN69_GLOBAL__N__45_tmpxft_000091e4_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_x_kernelIL13RiemannSolver0EEEv18ConstGrid2DGPUView13Grid2DGPUViewd
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 76 registers, 568 bytes cmem[0], 16 bytes cmem[2]
+ptxas info    : Compiling entry function '_ZN69_GLOBAL__N__45_tmpxft_000091e4_00000000_7_solver_gpu_cpp1_ii_529c231a30compute_block_max_speed_kernelILi256EEEv18ConstGrid2DGPUViewPd' for 'sm_80'
+ptxas info    : Function properties for _ZN69_GLOBAL__N__45_tmpxft_000091e4_00000000_7_solver_gpu_cpp1_ii_529c231a30compute_block_max_speed_kernelILi256EEEv18ConstGrid2DGPUViewPd
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 28 registers, 64 bytes smem, 464 bytes cmem[0]
+ptxas info    : Compiling entry function '_ZN3cub18DeviceReduceKernelINS_18DeviceReducePolicyIddiNS_3MaxEE9Policy600EPdS5_iS2_EEvT0_T1_T2_NS_13GridEvenShareIS8_EET3_' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub18DeviceReduceKernelINS_18DeviceReducePolicyIddiNS_3MaxEE9Policy600EPdS5_iS2_EEvT0_T1_T2_NS_13GridEvenShareIS8_EET3_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 32 registers, 80 bytes smem, 413 bytes cmem[0]
+ptxas info    : Compiling entry function '_ZN3cub28DeviceReduceSingleTileKernelINS_18DeviceReducePolicyIddiNS_3MaxEE9Policy600EPdS5_iS2_dEEvT0_T1_T2_T3_T4_' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub28DeviceReduceSingleTileKernelINS_18DeviceReducePolicyIddiNS_3MaxEE9Policy600EPdS5_iS2_dEEvT0_T1_T2_T3_T4_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 64 registers, 80 bytes smem, 384 bytes cmem[0]
+ptxas info    : Compiling entry function '_ZN3cub11EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub11EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, 352 bytes cmem[0]
+nvcc -std=c++17 -O3 -Ihead -Xcompiler="-Wall -Wextra" --fmad=false -arch=sm_80 -lineinfo -Xptxas=-v -DEULER_ADVANCE_X_BLOCK_X=16 -DEULER_ADVANCE_X_BLOCK_Y=8 -DEULER_ADVANCE_Y_BLOCK_X=32 -DEULER_ADVANCE_Y_BLOCK_Y=4 -DEULER_ADVANCE_X_MIN_BLOCKS_PER_SM=3 -DEULER_ADVANCE_Y_MIN_BLOCKS_PER_SM=5 -c src/gpu/boundary_gpu.cu -o tuning/32219899_blast_wave_hllc_n8/build/y_x16x8_lb3_y32x4_lb5/gpu/boundary_gpu.o
+ptxas info    : 0 bytes gmem
+ptxas info    : Compiling entry function '_Z18apply_bt_bc_kernel13Grid2DGPUView12BoundaryTypeS0_' for 'sm_80'
+ptxas info    : Function properties for _Z18apply_bt_bc_kernel13Grid2DGPUView12BoundaryTypeS0_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 48 registers, 464 bytes cmem[0]
+ptxas info    : Compiling entry function '_Z18apply_lr_bc_kernel13Grid2DGPUView12BoundaryTypeS0_' for 'sm_80'
+ptxas info    : Function properties for _Z18apply_lr_bc_kernel13Grid2DGPUView12BoundaryTypeS0_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 71 registers, 464 bytes cmem[0], 16 bytes cmem[2]
+nvcc -std=c++17 -O3 -Ihead -Xcompiler="-Wall -Wextra" --fmad=false -arch=sm_80 -lineinfo -Xptxas=-v -DEULER_ADVANCE_X_BLOCK_X=16 -DEULER_ADVANCE_X_BLOCK_Y=8 -DEULER_ADVANCE_Y_BLOCK_X=32 -DEULER_ADVANCE_Y_BLOCK_Y=4 -DEULER_ADVANCE_X_MIN_BLOCKS_PER_SM=3 -DEULER_ADVANCE_Y_MIN_BLOCKS_PER_SM=5 tuning/32219899_blast_wave_hllc_n8/build/y_x16x8_lb3_y32x4_lb5/gpu/main_gpu.o tuning/32219899_blast_wave_hllc_n8/build/y_x16x8_lb3_y32x4_lb5/gpu/test_cases.o tuning/32219899_blast_wave_hllc_n8/build/y_x16x8_lb3_y32x4_lb5/gpu/init.o tuning/32219899_blast_wave_hllc_n8/build/y_x16x8_lb3_y32x4_lb5/gpu/solver_gpu.o tuning/32219899_blast_wave_hllc_n8/build/y_x16x8_lb3_y32x4_lb5/gpu/boundary_gpu.o -o tuning/32219899_blast_wave_hllc_n8/bin/y_x16x8_lb3_y32x4_lb5/main_gpu -lstdc++fs

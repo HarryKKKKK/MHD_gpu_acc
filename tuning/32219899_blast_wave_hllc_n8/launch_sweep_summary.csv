@@ -1,0 +1,7 @@
+phase,tag,x_bx,x_by,x_lb,y_bx,y_by,y_lb,repeats,measured_steps,median_wall_ms,median_ms_per_step,median_x_ms_per_step,median_y_ms_per_step,state_hash,correctness,binary
+y,y_x16x8_lb3_y16x8_lb0,16,8,3,16,8,0,5,200,1220.883859000,6.104419295,2.604105582,3.059445704,9503f661fd124ae3,PASS,/rds/user/hk597/hpc-work/MHD_gpu_acc/tuning/32219899_blast_wave_hllc_n8/bin/y_x16x8_lb3_y16x8_lb0/main_gpu
+y,y_x16x8_lb3_y16x8_lb5,16,8,3,16,8,5,5,200,1164.035405000,5.820177025,2.604063839,2.776038331,9503f661fd124ae3,PASS,/rds/user/hk597/hpc-work/MHD_gpu_acc/tuning/32219899_blast_wave_hllc_n8/bin/y_x16x8_lb3_y16x8_lb5/main_gpu
+y,y_x16x8_lb3_y32x4_lb0,16,8,3,32,4,0,5,200,1277.585867000,6.387929335,2.603400800,3.342694336,9503f661fd124ae3,PASS,/rds/user/hk597/hpc-work/MHD_gpu_acc/tuning/32219899_blast_wave_hllc_n8/bin/y_x16x8_lb3_y32x4_lb0/main_gpu
+y,y_x16x8_lb3_y32x4_lb5,16,8,3,32,4,5,5,200,1292.015984000,6.460079920,2.604765921,3.413350403,9503f661fd124ae3,PASS,/rds/user/hk597/hpc-work/MHD_gpu_acc/tuning/32219899_blast_wave_hllc_n8/bin/y_x16x8_lb3_y32x4_lb5/main_gpu
+y,y_x16x8_lb3_y8x16_lb0,16,8,3,8,16,0,5,200,1232.939268000,6.164696340,2.603254887,3.120015275,9503f661fd124ae3,PASS,/rds/user/hk597/hpc-work/MHD_gpu_acc/tuning/32219899_blast_wave_hllc_n8/bin/y_x16x8_lb3_y8x16_lb0/main_gpu
+y,y_x16x8_lb3_y8x16_lb5,16,8,3,8,16,5,5,200,1179.710131000,5.898550655,2.603301120,2.855009316,9503f661fd124ae3,PASS,/rds/user/hk597/hpc-work/MHD_gpu_acc/tuning/32219899_blast_wave_hllc_n8/bin/y_x16x8_lb3_y8x16_lb5/main_gpu

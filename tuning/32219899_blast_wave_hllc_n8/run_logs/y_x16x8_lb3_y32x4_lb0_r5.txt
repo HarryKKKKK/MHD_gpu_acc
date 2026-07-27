@@ -1,0 +1,15 @@
+=== Compressible Euler GPU Solver ===
+  Case   : blast_wave
+  n      : 8
+  Gamma  : 1.4
+  Solver : HLLC
+[GPU] nx: 4000
+[GPU] ny: 4000
+[GPU] total_cells: 16000000
+[GPU] advance_x launch: 16x8, min_blocks_per_sm=3
+[GPU] advance_y launch: 32x4, min_blocks_per_sm=0
+[GPU] tuning mode: warmup_steps=50, benchmark_steps=200
+[GPU] Total steps= 250
+  Elapsed : 1.58967 s  (157.265 steps/s)
+[TUNING] measured_steps=200 wall_ms=1278.024706000 ms_per_step=6.390123530 advance_x_ms_per_step=2.603505123 advance_y_ms_per_step=3.342904263
+TUNING_CSV,200,1278.024706000,6.390123530,2.603505123,3.342904263,9503f661fd124ae3
