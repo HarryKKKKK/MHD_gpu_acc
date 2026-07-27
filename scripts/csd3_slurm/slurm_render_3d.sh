@@ -1,11 +1,12 @@
 #!/bin/bash -l
 #SBATCH -J mhd3d_plot
+#SBATCH -A MPHIL-NIKIFORAKIS-HK597-SL2-CPU
 #SBATCH -p icelake
 #SBATCH -N 1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
-#SBATCH -t 04:00:00
+#SBATCH -t 06:00:00
 #SBATCH -o logs/%x_%j.out
 #SBATCH -e logs/%x_%j.err
 
@@ -21,20 +22,17 @@
 #
 # 1. Athena/moderate blast (rho, pressure and |B| by default):
 #
-#   sbatch -A YOUR_CSD3_CPU_ACCOUNT \
-#     --export=ALL,INPUT_DIR=outputs/blast3d_gpu_n128_hlld_JOBID,CASE=blast \
+#   sbatch --export=ALL,INPUT_DIR=outputs/blast3d_gpu_n128_hlld_JOBID,CASE=blast \
 #     scripts/csd3_slurm/slurm_render_3d.sh
 #
 # 2. Extreme/Derigs blast:
 #
-#   sbatch -A YOUR_CSD3_CPU_ACCOUNT \
-#     --export=ALL,INPUT_DIR=outputs/blast3d_extreme_gpu_n128_hlld_JOBID,CASE=blast_extreme \
+#   sbatch -A --export=ALL,INPUT_DIR=outputs/blast3d_extreme_gpu_n128_hlld_JOBID,CASE=blast_extreme \
 #     scripts/csd3_slurm/slurm_render_3d.sh
 #
 # 3. Weakly compressible IMTG (rho, current and |B| by default):
 #
-#   sbatch -A YOUR_CSD3_CPU_ACCOUNT \
-#     --export=ALL,INPUT_DIR=outputs/imtg3d_gpu_n128_hlld_JOBID,CASE=imtg \
+#   sbatch -A --export=ALL,INPUT_DIR=outputs/imtg3d_gpu_n128_hlld_JOBID,CASE=imtg \
 #     scripts/csd3_slurm/slurm_render_3d.sh
 #
 # CASE may be omitted: it is inferred from the first *.mhd3d filename.
