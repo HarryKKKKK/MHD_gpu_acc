@@ -1,0 +1,25 @@
+date=2026-07-27T14:40:09+01:00
+host=gpu-q-16
+job_id=32217759
+workdir=/rds/user/hk597/hpc-work/MHD_gpu_acc
+git_branch=pure_euler
+git_commit=5230879c39778fa7fe1513bf6efbd9e5b88ab840
+case=blast_wave
+solver=hllc
+n=4
+baseline_repeats=5
+baseline_warmup=50
+baseline_steps=200
+nsys_warmup=20
+nsys_steps=50
+ncu_warmup=20
+ncu_steps=20
+ncu_set=full
+ncu_launch_skip=10
+ncu_launch_count=1
+cuda_arch=-arch=sm_80
+nvcc_extra_flags=-lineinfo -Xptxas=-v
+gpu=NVIDIA A100-SXM4-80GB, GPU-2ffca1ff-359d-d036-505e-9f103928f078, 8.0, 81920 MiB, 595.71.05, 1155 MHz, 1593 MHz
+nvcc=nvcc: NVIDIA (R) Cuda compiler driver Copyright (c) 2005-2021 NVIDIA Corporation Built on Wed_Jun__2_19:15:15_PDT_2021 Cuda compilation tools, release 11.4, V11.4.48 Build cuda_11.4.r11.4/compiler.30033411_0 
+nsys=NVIDIA Nsight Systems version 2021.2.4.12-a25c8fd 
+ncu=NVIDIA (R) Nsight Compute Command Line Profiler Copyright (c) 2018-2021 NVIDIA Corporation Version 2021.2.0.0 (build 30066266) (public-release) 
