@@ -1,0 +1,19 @@
+=== Compressible Euler GPU Solver ===
+  Case   : blast_wave
+  n      : 8
+  Gamma  : 1.4
+  Solver : HLLC
+[GPU] nx: 4000
+[GPU] ny: 4000
+[GPU] total_cells: 16000000
+[GPU] advance_x launch: 16x8, min_blocks_per_sm=3
+[GPU] advance_y launch: 16x8, min_blocks_per_sm=5
+[GPU] tuning mode: warmup_steps=20, benchmark_steps=20
+==PROF== Connected to process 306529 (/rds/user/hk597/hpc-work/MHD_gpu_acc/bin/euler_profile_32219063/main_gpu)
+==PROF== Profiling "_ZN69_GLOBAL__N__45_tmpxft_0004ac16_00000000_7_solver_gpu_cpp1_ii_529c231a16advance_x_kernelIL13RiemannSolver1EEEv18ConstGrid2DGPUView13Grid2DGPUViewd": 0%....50%....100% - 33 passes
+[GPU] Total steps= 40
+  Elapsed : 4.7249 s  (8.46579 steps/s)
+[TUNING] measured_steps=20 wall_ms=121.917762000 ms_per_step=6.095888100 advance_x_ms_per_step=2.620374393 advance_y_ms_per_step=2.778470337
+TUNING_CSV,20,121.917762000,6.095888100,2.620374393,2.778470337,e192c73a4470aced
+==PROF== Disconnected from process 306529
+==PROF== Report: /rds/user/hk597/hpc-work/MHD_gpu_acc/profiling/euler_32219063_blast_wave_hllc_n8/ncu_advance_x_blast_wave_hllc_n8.ncu-rep
