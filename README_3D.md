@@ -70,9 +70,14 @@ panel labels, normalized IMTG time `t/T`, mathematical field labels, one global
 color scale, and writes both a 300-dpi PNG and a compact rasterized PDF.
 
 For the moderate blast, the recommended paper figure is a single `2x3`
-summary: density at three times in the top row and magnetic-magnitude
-perturbations at the same times in the bottom row. The `Bmag` mask subtracts
-the non-zero far-field `|B0|`, so it no longer fills the complete cube:
+summary: density at three times in the top row and signed
+magnetic-magnitude perturbations at the same times in the bottom row.
+The `dBmag` field is defined as
+`|B| - median_boundary(|B|)` for each snapshot. Its color scale is symmetric
+about zero and independent of the density color scale, so magnetic
+amplification and depletion remain visually distinct. The visibility mask
+uses the perturbation from the non-zero far-field `|B0|`, so it no longer
+fills the complete cube:
 
 ```bash
 python3 visualization/plot_blast3d_paper.py \

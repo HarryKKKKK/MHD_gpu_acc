@@ -2,7 +2,7 @@
 """Compact 2x3 publication figure for the 3D magnetized blast.
 
 Top row: density surfaces at early, middle and final times.
-Bottom row: magnetic-magnitude perturbation surfaces at the same times.
+Bottom row: signed magnetic-magnitude perturbations at the same times.
 """
 
 import argparse
@@ -17,6 +17,7 @@ import numpy as np
 from plot_blast3d_volume import (
     FIELD_LABELS,
     draw_frame,
+    field_colormap,
     prepare_frames,
     read_snapshot,
 )
@@ -73,15 +74,13 @@ def main():
 
     rho_frames, rho_threshold, rho_norm = prepare_frames(
         snapshots, "rho", args.rho_fraction, None, args.stride)
-    bmag_frames, bmag_threshold, bmag_norm = prepare_frames(
-        snapshots, "Bmag", args.bmag_fraction, None, args.stride)
-    print("[3/4] thresholds: rho={:.6g}, Bmag perturbation={:.6g}".format(
-        rho_threshold, bmag_threshold), flush=True)
+    dbmag_frames, dbmag_threshold, dbmag_norm = prepare_frames(
+        snapshots, "dBmag", args.bmag_fraction, None, args.stride)
+    print("[3/4] thresholds: rho={:.6g}, |delta Bmag|={:.6g}".format(
+        rho_threshold, dbmag_threshold), flush=True)
 
-    try:
-        cmap = plt.get_cmap("turbo")
-    except ValueError:
-        cmap = plt.get_cmap("viridis")
+    rho_cmap = field_colormap("rho")
+    dbmag_cmap = field_colormap("dBmag")
     plt.rcParams.update({
         "font.family": "serif",
         "font.serif": ["STIXGeneral", "DejaVu Serif"],
@@ -100,11 +99,11 @@ def main():
     figure = plt.figure(
         figsize=(7.2, 4.85 if columns == 3 else 4.5), facecolor="white")
     rows = (
-        ("rho", rho_frames, rho_threshold, rho_norm),
-        ("Bmag", bmag_frames, bmag_threshold, bmag_norm),
+        ("rho", rho_frames, rho_threshold, rho_norm, rho_cmap),
+        ("dBmag", dbmag_frames, dbmag_threshold, dbmag_norm, dbmag_cmap),
     )
     panel = 0
-    for row, (field, frames, threshold, norm) in enumerate(rows):
+    for row, (field, frames, threshold, norm, cmap) in enumerate(rows):
         for column, frame in enumerate(frames):
             panel += 1
             axis = figure.add_subplot(2, columns, panel, projection="3d")
@@ -120,9 +119,12 @@ def main():
         left=0.025, right=0.895, bottom=0.015, top=0.985,
         wspace=0.02, hspace=0.08)
 
-    for field, norm, y0 in (
-            ("rho", rho_norm, 0.585),
-            ("Bmag", bmag_norm, 0.105)):
+    # Each row has its own normalization and its own colormap. The density
+    # scale is sequential; the magnetic perturbation scale is signed and
+    # symmetric around zero.
+    for field, norm, cmap, y0 in (
+            ("rho", rho_norm, rho_cmap, 0.585),
+            ("dBmag", dbmag_norm, dbmag_cmap, 0.105)):
         color_axis = figure.add_axes((0.925, y0, 0.015, 0.31))
         mappable = ScalarMappable(norm=norm, cmap=cmap)
         mappable.set_array(np.asarray([]))
@@ -130,7 +132,7 @@ def main():
         colorbar.set_label(FIELD_LABELS[field])
         colorbar.ax.tick_params(labelsize=7)
 
-    output_base = folder / "{}_rho_Bmag_3d_paper".format(dataset_stem)
+    output_base = folder / "{}_rho_dBmag_3d_paper".format(dataset_stem)
     png = str(output_base) + ".png"
     print("[4/4] Writing {}".format(png), flush=True)
     figure.savefig(png, dpi=args.dpi)

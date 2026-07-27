@@ -21,7 +21,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 
 BASE_FIELDS = ("rho", "pressure", "u", "v", "w", "Bx", "By", "Bz")
-FIELDS = BASE_FIELDS + ("speed", "Bmag", "current", "vorticity")
+FIELDS = BASE_FIELDS + ("speed", "Bmag", "dBmag", "current", "vorticity")
 
 # Keep the compatibility import visibly used for linters; registration already
 # happened when mpl_toolkits.mplot3d was imported above.
@@ -43,6 +43,7 @@ FIELD_LABELS = {
     "Bz": r"$B_z$",
     "speed": r"$|\mathbf{u}|$",
     "Bmag": r"$|\mathbf{B}|$",
+    "dBmag": r"$\Delta|\mathbf{B}|$",
     "current": r"$|\mathbf{J}|$",
     "vorticity": r"$|\boldsymbol{\omega}|$",
 }
@@ -68,10 +69,11 @@ def derived_volume(data, field_name, meta):
     if field_name == "speed":
         return np.sqrt(
             data[..., 2]**2 + data[..., 3]**2 + data[..., 4]**2), True
-    if field_name == "Bmag":
+    if field_name in ("Bmag", "dBmag"):
         # A magnetized blast has a non-zero uniform |B| in the far field.
         # Treating this magnitude as a zero-background field fills the entire
-        # plotting cube. Its boundary median must be removed like rho or p.
+        # plotting cube. dBmag is converted to a signed perturbation later,
+        # after estimating the boundary value independently in every frame.
         return np.sqrt(
             data[..., 5]**2 + data[..., 6]**2 + data[..., 7]**2), False
 
@@ -124,8 +126,15 @@ def prepare_frames(snapshots, field_name, fraction, absolute_level, stride,
             zero_background = True
         volume = volume[::stride, ::stride, ::stride]
         background = 0.0 if zero_background else boundary_background(volume)
-        deviation = (volume if zero_background
-                     else np.abs(volume - background))
+        if field_name == "dBmag":
+            # Preserve the sign: positive values are magnetic amplification
+            # and negative values are magnetic depletion relative to |B0|.
+            volume = volume - background
+            background = 0.0
+            deviation = np.abs(volume)
+        else:
+            deviation = (volume if zero_background
+                         else np.abs(volume - background))
         global_deviation = max(global_deviation, float(deviation.max()))
         frames.append((volume, background, meta))
     if global_deviation <= 0:
@@ -146,9 +155,22 @@ def prepare_frames(snapshots, field_name, fraction, absolute_level, stride,
         raise ValueError("the selected level leaves no visible cells")
     visible = np.concatenate(selected_values)
     vmin, vmax = float(visible.min()), float(visible.max())
+    if field_name == "dBmag":
+        limit = max(abs(vmin), abs(vmax))
+        vmin, vmax = -limit, limit
     if vmin == vmax:
         vmax = vmin + 1.0
     return prepared, threshold, Normalize(vmin=vmin, vmax=vmax)
+
+
+def field_colormap(field_name):
+    """Use a signed map for perturbations and sequential maps otherwise."""
+    if field_name == "dBmag":
+        return plt.get_cmap("RdBu_r")
+    try:
+        return plt.get_cmap("turbo")
+    except ValueError:
+        return plt.get_cmap("viridis")
 
 
 def style_axis(ax, bounds, paper=False):
@@ -420,12 +442,7 @@ def main():
             bmag_background="zero" if is_imtg else "boundary")
         print(f"      threshold={threshold:.6g}", flush=True)
     # `matplotlib.colormaps` is unavailable on older CSD3 installations.
-    # Turbo itself appeared in Matplotlib 3.3, so fall back to the widely
-    # available viridis map when needed.
-    try:
-        cmap = plt.get_cmap("turbo")
-    except ValueError:
-        cmap = plt.get_cmap("viridis")
+    cmap = field_colormap(args.field)
 
     mappable = ScalarMappable(norm=norm, cmap=cmap)
     # Matplotlib 2.x requires an attached array even when norm/cmap are given.

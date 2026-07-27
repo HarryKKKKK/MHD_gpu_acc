@@ -71,7 +71,7 @@ elif [[ "${CASE}" == "blast" || "${CASE}" == "blast_athena" ]]; then
     DEFAULT_RESOLUTION=128
     DEFAULT_T_END=0.10
     DEFAULT_SNAPSHOTS=5
-    DEFAULT_PLOT_FIELDS=rho,Bmag
+    DEFAULT_PLOT_FIELDS=rho,dBmag
     DEFAULT_RHO_FRACTION=0.10
     DEFAULT_PLOT_STRIDE=1
     DEFAULT_PNG_FRAMES=3
@@ -83,7 +83,7 @@ elif [[ "${CASE}" == "blast_extreme" ]]; then
     DEFAULT_RESOLUTION=128
     DEFAULT_T_END=0.01
     DEFAULT_SNAPSHOTS=5
-    DEFAULT_PLOT_FIELDS=rho,Bmag
+    DEFAULT_PLOT_FIELDS=rho,dBmag
     DEFAULT_RHO_FRACTION=0.12
     DEFAULT_PLOT_STRIDE=1
     DEFAULT_PNG_FRAMES=3
@@ -244,7 +244,7 @@ if [[ "${VISUALIZE}" == "1" ]]; then
                     # |J|=4.5 keeps the analytic t=0 state visible.
                     PLOT_ARGS+=(--level "${CURRENT_LEVEL}")
                     ;;
-                Bmag)
+                Bmag|dBmag)
                     PLOT_ARGS+=(--fraction "${BMAG_FRACTION}")
                     ;;
                 *)

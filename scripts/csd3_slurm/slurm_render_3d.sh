@@ -49,7 +49,7 @@
 # Common overrides:
 #
 #   PLOT_FIELDS=rho                 render only density
-#   PLOT_FIELDS=rho+pressure+Bmag   multiple fields in sbatch --export
+#   PLOT_FIELDS=rho+pressure+dBmag  multiple fields in sbatch --export
 #   PNG_FRAMES=6                    number of selected physical times
 #   PLOT_STRIDE=2                   plot every second cell in x/y/z
 #   RHO_FRACTION=0.08               show more of the density disturbance
@@ -64,7 +64,7 @@
 #   PAPER_DPI=300                   publication raster resolution
 #   OVERVIEW_ONLY=1                 skip final/individual PNGs (PAPER default)
 #   PAPER_PNG_ONLY=1                do not write the rasterized PDF
-#   BLAST_SUMMARY=1                 2x3 rho/Bmag paper figure (PAPER default)
+#   BLAST_SUMMARY=1                 2x3 rho/dBmag paper figure (PAPER default)
 #
 # Example with custom rendering parameters:
 #
@@ -78,7 +78,7 @@
 #     --export=ALL,INPUT_DIR=outputs/imtg3d_gpu_n128_hlld_JOBID,CASE=imtg,PLOT_FIELDS=Bmag,PAPER=1 \
 #     scripts/csd3_slurm/slurm_render_3d.sh
 #
-# Final blast figure (rho top row, Bmag perturbation bottom row):
+# Final blast figure (rho top row, signed delta-|B| bottom row):
 #
 #   sbatch -A YOUR_CSD3_CPU_ACCOUNT \
 #     --export=ALL,INPUT_DIR=outputs/blast3d_gpu_n128_hlld_JOBID,CASE=blast,PAPER=1 \
@@ -143,16 +143,16 @@ fi
 
 case "${CASE}" in
     blast|blast_athena)
-        # Three times are enough to communicate expansion. Bmag is rendered
-        # as a perturbation from the non-zero far-field |B0|.
-        PLOT_FIELDS="${PLOT_FIELDS:-rho,Bmag}"
+        # Three times are enough to communicate expansion. dBmag renders the
+        # signed perturbation from the non-zero far-field |B0|.
+        PLOT_FIELDS="${PLOT_FIELDS:-rho,dBmag}"
         DEFAULT_PLOT_STRIDE=1
         DEFAULT_PNG_FRAMES=3
         DEFAULT_MIN_TIME=0.02
         DEFAULT_PRESSURE_FRACTION=0.03
         ;;
     blast_extreme)
-        PLOT_FIELDS="${PLOT_FIELDS:-rho,Bmag}"
+        PLOT_FIELDS="${PLOT_FIELDS:-rho,dBmag}"
         DEFAULT_PLOT_STRIDE=1
         DEFAULT_PNG_FRAMES=3
         DEFAULT_MIN_TIME=""
@@ -285,7 +285,7 @@ for RENDER_FIELD in "${RENDER_FIELDS[@]}"; do
             rho) PLOT_ARGS+=(--fraction "${RHO_FRACTION}") ;;
             pressure) PLOT_ARGS+=(--fraction "${PRESSURE_FRACTION}") ;;
             current) PLOT_ARGS+=(--fraction "${CURRENT_FRACTION}") ;;
-            Bmag) PLOT_ARGS+=(--fraction "${BMAG_FRACTION}") ;;
+            Bmag|dBmag) PLOT_ARGS+=(--fraction "${BMAG_FRACTION}") ;;
             *) PLOT_ARGS+=(--fraction "${FRACTION}") ;;
         esac
     fi
