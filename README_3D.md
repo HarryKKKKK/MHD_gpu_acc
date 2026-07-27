@@ -48,6 +48,22 @@ flags, device, CFL, and measurement window. Euler can take a different number
 of timesteps because its signal speed no longer contains magnetic waves, so
 compare both elapsed time and cell-updates per second.
 
+## GPU profiling on CSD3
+
+The profiling job builds an instrumented 2D CUDA binary, runs five unprofiled
+timing repetitions, captures an Nsight Systems timeline, and profiles one
+steady-state `advance_x` and `advance_y` launch with Nsight Compute:
+
+```bash
+mkdir -p logs
+sbatch --export=ALL,N=4,CASE=blast_wave,SOLVER=hllc \
+  scripts/csd3_slurm/profile_gpu_systems.sh
+```
+
+Results are written below `profiling/euler_JOBID_CASE_SOLVER_nN`. Reduce
+`NCU_SET` to `basic` and the step counts for a quick smoke test; the script
+header documents all supported overrides.
+
 ## 3D snapshot format
 
 The CPU 3D driver writes `.euler3d` files with magic `EUL3D01`. The header
