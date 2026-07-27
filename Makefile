@@ -8,10 +8,9 @@ MPICXX := mpicxx
 # -ffp-contract=off / --fmad=false: forbid fusing a*b+c into a single
 # rounding (FMA) on either side. nvcc contracts FMAs by default; g++ may
 # too under some standard modes. Left on, host and device round the exact
-# same riemann.hpp formula (hllc_flux/hlld_flux) differently, and that
+# same riemann.hpp formula differently, and that
 # 1-ULP difference is enough for CPU and GPU runs to diverge once the
-# solver reaches a chaotic/turbulent regime (see debug_cpu branch: HLLD
-# vs orszag_tang). Forcing strict per-operation rounding on both sides
+# solver reaches a chaotic regime. Forcing strict per-operation rounding
 # removes this whole class of CPU/GPU non-reproducibility.
 CXXFLAGS_BASE     := -std=c++17 -O3 -Wall -Wextra -pedantic -Ihead -ffp-contract=off
 NVCCFLAGS_BASE    := -std=c++17 -O3 -Ihead -Xcompiler="-Wall -Wextra" --fmad=false
@@ -89,7 +88,6 @@ CPU_3D_OBJS := \
 	$(CPU_BUILD_DIR)/solver3d_cpu.o
 
 CPU_3D_TEST_TARGET := $(BIN_DIR)/test_solver3d
-IMTG_3D_TEST_TARGET := $(BIN_DIR)/test_imtg3d
 
 GPU_OBJS := \
 	$(GPU_BUILD_DIR)/main_gpu.o \
@@ -190,7 +188,7 @@ $(CPU_3D_TARGET): $(CPU_3D_OBJS)
 	@mkdir -p $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) $(CPU_3D_OBJS) -o $@ -lstdc++fs
 
-$(CPU_BUILD_DIR)/main_cpu_3d.o: $(CPU_3D_MAIN) head/blast3d_case.hpp head/blast3d_extreme_case.hpp head/imtg3d_case.hpp
+$(CPU_BUILD_DIR)/main_cpu_3d.o: $(CPU_3D_MAIN) head/blast3d_case.hpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
@@ -205,14 +203,6 @@ test_3d: $(CPU_3D_TEST_TARGET)
 $(CPU_3D_TEST_TARGET): validation/test_solver3d.cpp $(CPU_BUILD_DIR)/solver3d_cpu.o
 	@mkdir -p $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) $^ -o $@ -lstdc++fs
-
-.PHONY: test_imtg_3d
-test_imtg_3d: $(IMTG_3D_TEST_TARGET)
-	$(IMTG_3D_TEST_TARGET)
-
-$(IMTG_3D_TEST_TARGET): validation/test_imtg3d.cpp head/imtg3d_case.hpp
-	@mkdir -p $(BIN_DIR)
-	$(CXX) $(CXXFLAGS) $< -o $@ -lstdc++fs
 
 # =========================
 # Pure MPI
@@ -250,7 +240,7 @@ $(MPI_3D_TARGET): $(MPI_3D_OBJS)
 	@mkdir -p $(BIN_DIR)
 	$(MPICXX) $(MPICXXFLAGS) $(MPI_3D_OBJS) -o $@ -lstdc++fs
 
-$(MPI_3D_BUILD_DIR)/main_mpi_3d.o: $(MPI_3D_MAIN) head/blast3d_case.hpp head/blast3d_extreme_case.hpp head/imtg3d_case.hpp
+$(MPI_3D_BUILD_DIR)/main_mpi_3d.o: $(MPI_3D_MAIN) head/blast3d_case.hpp
 	@mkdir -p $(dir $@)
 	$(MPICXX) $(MPICXXFLAGS) -c $< -o $@
 
@@ -324,7 +314,7 @@ $(GPU_3D_TARGET): $(GPU_3D_OBJS)
 	@mkdir -p $(BIN_DIR)
 	$(NVCC) $(NVCCFLAGS) $(GPU_3D_OBJS) -o $@ -lstdc++fs
 
-$(GPU_BUILD_DIR)/main_gpu_3d.o: $(GPU_3D_MAIN) head/blast3d_case.hpp head/blast3d_extreme_case.hpp head/imtg3d_case.hpp
+$(GPU_BUILD_DIR)/main_gpu_3d.o: $(GPU_3D_MAIN) head/blast3d_case.hpp
 	@mkdir -p $(dir $@)
 	$(NVCC) $(NVCCFLAGS) -c $< -o $@
 

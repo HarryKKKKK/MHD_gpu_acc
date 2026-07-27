@@ -5,15 +5,7 @@
 #include "cpu/boundary3d_cpu.hpp"
 #include "physics.hpp"
 
-// Moderately magnetized spherical blast based on the Athena blast-wave test:
-// https://www.astro.princeton.edu/~jstone/Athena/tests/blast/blast.html
-//
-// Athena specifies the two-dimensional test with rho=1, gamma=5/3,
-// p_inner=10, p_outer=0.1, and normalized magnetic field
-// (Bx,By)=(1/sqrt(2),1/sqrt(2)).  Here the same physical parameters are
-// extended spherically to 3D.  A one-cell-scale transition layer is retained
-// to make the cell-centred GLM implementation less sensitive to how the
-// spherical discontinuity cuts the Cartesian mesh.
+// Spherical compressible-Euler blast benchmark.
 namespace blast3d {
 
 inline constexpr double gamma = 5.0 / 3.0;
@@ -27,14 +19,6 @@ inline constexpr double x_max = 0.5;
 inline constexpr double t_end = 0.10;
 inline constexpr double recommended_cfl = 0.20;
 
-inline double magnetic_field_x() {
-    return 1.0 / std::sqrt(2.0);
-}
-
-inline double magnetic_field_y() {
-    return 1.0 / std::sqrt(2.0);
-}
-
 inline double pressure(double r) {
     if (r <= r_inner) return p_inner;
     if (r >= r_outer) return p_outer;
@@ -45,9 +29,7 @@ inline double pressure(double r) {
 inline Conserved initial_state(double x, double y, double z) {
     const double r = std::sqrt(x*x+y*y+z*z);
     return phys::prim_to_cons(
-        Primitive(rho, 0.0, 0.0, 0.0,
-                  magnetic_field_x(), magnetic_field_y(), 0.0,
-                  pressure(r), 0.0));
+        Primitive(rho, 0.0, 0.0, 0.0, pressure(r)));
 }
 
 inline BoundaryConfig3D boundary_conditions() {

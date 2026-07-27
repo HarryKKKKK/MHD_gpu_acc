@@ -1,10 +1,9 @@
-// MHD solver — pure MPI driver
-// Implements GLM-MHD following Dedner et al. (2002), J. Comput. Phys. 175, 645-673.
+// Compressible Euler pure-MPI driver.
 // Same algorithm/optimisations as scripts/cpu/main_cpu.cpp (OpenMP CPU driver);
 // only the parallelisation strategy differs — see head/cpu/solver_mpi.hpp.
 //
 // Usage:
-//   mpirun -np P ./main_mpi [case_name] [N] [--n N] [--solver hll|hlld|force]
+//   mpirun -np P ./main_mpi [case_name] [N] [--n N] [--solver hll|hllc|force]
 //                           [--out output_dir] [--no-out|--timing-only] [--output]
 //
 // N / --n N : weak-scaling factor; scales the base grid by N in each dimension
@@ -91,11 +90,7 @@ void write_all_fields(
     write_field_csv(grid, path("u"),   [](const Conserved& U){ return U.rhou / U.rho; });
     write_field_csv(grid, path("v"),   [](const Conserved& U){ return U.rhov / U.rho; });
     write_field_csv(grid, path("w"),   [](const Conserved& U){ return U.rhow / U.rho; });
-    write_field_csv(grid, path("Bx"),  [](const Conserved& U){ return U.Bx; });
-    write_field_csv(grid, path("By"),  [](const Conserved& U){ return U.By; });
-    write_field_csv(grid, path("Bz"),  [](const Conserved& U){ return U.Bz; });
     write_field_csv(grid, path("E"),   [](const Conserved& U){ return U.E; });
-    write_field_csv(grid, path("psi"), [](const Conserved& U){ return U.psi; });
     write_field_csv(grid, path("p"),   [](const Conserved& U){
         const Primitive V = phys::cons_to_prim(U);
         return V.p;
@@ -111,7 +106,7 @@ void write_all_fields(
 struct RunConfig {
     std::string   case_name       = "kelvin_helmholtz";
     int           n_scale         = 1;
-    RiemannSolver solver          = RiemannSolver::HLLD;
+    RiemannSolver solver          = RiemannSolver::HLLC;
     std::string   out_dir         = "output";
     bool          write_out       = true;
     double        print_interval  = 0.1;
@@ -132,7 +127,6 @@ RunConfig parse_args(int argc, char** argv) {
             std::string s = argv[++i];
             if      (s == "hll")   rc.solver = RiemannSolver::HLL;
             else if (s == "hllc")  rc.solver = RiemannSolver::HLLC;
-            else if (s == "hlld")  rc.solver = RiemannSolver::HLLD;
             else if (s == "force") rc.solver = RiemannSolver::FORCE;
             else throw std::runtime_error("Unknown solver: " + s);
         } else if (arg == "--out" && i + 1 < argc) {
@@ -177,13 +171,12 @@ int main(int argc, char** argv) {
         }
 
         if (is_root) {
-            std::cout << "=== MHD GLM Solver, pure MPI (Dedner et al. 2002) ===\n";
+            std::cout << "=== Compressible Euler Solver, pure MPI ===\n";
             std::cout << "  Case      : " << rc.case_name << "\n";
             std::cout << "  Scale (n) : " << rc.n_scale << "\n";
             std::cout << "  Solver    : "
                       << (rc.solver == RiemannSolver::HLL  ? "HLL"  :
-                          rc.solver == RiemannSolver::HLLC ? "HLLC" :
-                          rc.solver == RiemannSolver::HLLD ? "HLLD" : "FORCE") << "\n";
+                          rc.solver == RiemannSolver::HLLC ? "HLLC" : "FORCE") << "\n";
         }
 
         // ---- Case config (deterministic; computed independently on every rank) ----
@@ -273,23 +266,12 @@ int main(int argc, char** argv) {
             t    += dt;
             step += 1;
 
-            // Console progress (rank 0 only; local maxima reduced across ranks)
+            // Console progress (rank 0 only).
             if (t >= t_print_next || t >= cfg.t_end) {
-                double local_max_B = 0.0;
-                for (int j = Uold.j_begin(); j < Uold.j_end(); ++j)
-                    for (int i = Uold.i_begin(); i < Uold.i_end(); ++i) {
-                        const auto& U = Uold(i, j);
-                        local_max_B = std::max(local_max_B,
-                            std::sqrt(U.Bx*U.Bx + U.By*U.By + U.Bz*U.Bz));
-                    }
-                double global_max_B = 0.0;
-                MPI_Reduce(&local_max_B, &global_max_B, 1, MPI_DOUBLE, MPI_MAX, 0, dom.cart_comm);
-
                 if (is_root) {
                     std::cout << "  " << std::setw(4) << step
                               << "  " << std::setw(10) << std::fixed << std::setprecision(5) << t
-                              << "  " << std::setw(10) << std::scientific << std::setprecision(3) << dt
-                              << "  " << std::setw(10) << global_max_B << "\n";
+                              << "  " << std::setw(10) << std::scientific << std::setprecision(3) << dt << "\n";
                 }
                 t_print_next = t + rc.print_interval;
             }

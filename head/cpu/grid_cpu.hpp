@@ -8,7 +8,7 @@
 #include "types.hpp"
 
 // ============================================================
-// 2D Cartesian grid of MHD conserved states.
+// 2D Cartesian grid of Euler conserved states.
 // Ghost cells of width ng surround the active domain.
 // ============================================================
 class Grid2D {
@@ -44,7 +44,7 @@ public:
 
         const int total_x = nx_ + 2 * ng_;
         const int total_y = ny_ + 2 * ng_;
-        // Conserved default constructor zero-initialises all 9 fields
+        // Conserved default constructor zero-initialises all five fields.
         U_.assign(static_cast<std::size_t>(total_x * total_y), Conserved{});
     }
 

@@ -9,13 +9,13 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import PillowWriter
 import numpy as np
 
-FIELDS = ("rho", "pressure", "u", "v", "w", "Bx", "By", "Bz")
+FIELDS = ("rho", "pressure", "u", "v", "w")
 
 
 def read_snapshot(path: Path):
     with path.open("rb") as f:
-        if f.read(8) != b"MHD3D01\x00":
-            raise ValueError(f"{path} is not an MHD3D01 file")
+        if f.read(8) != b"EUL3D01\x00":
+            raise ValueError(f"{path} is not an EUL3D01 file")
         nx, ny, nz = struct.unpack("<III", f.read(12))
         x0, x1, y0, y1, z0, z1, time, gamma = struct.unpack("<8d", f.read(64))
         values = np.fromfile(f, dtype="<f4")
@@ -54,22 +54,22 @@ def draw(axs, data, bounds, time, field_index, vmin, vmax):
     axs[1].set_xlabel("x")
     axs[2].set_xlabel("y")
     axs[1].figure.suptitle(
-        f"3D magnetized blast — {FIELDS[field_index]}, t = {time:.4f}")
+        f"3D Euler blast — {FIELDS[field_index]}, t = {time:.4f}")
     return images
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", default="output/blast3d")
+    parser.add_argument("--input", default="output/euler_blast3d")
     parser.add_argument("--field", choices=FIELDS, default="rho")
     parser.add_argument("--fps", type=int, default=3)
     parser.add_argument("--no-gif", action="store_true")
     args = parser.parse_args()
 
     folder = Path(args.input)
-    paths = sorted(folder.glob("blast3d_*.mhd3d"))
+    paths = sorted(folder.glob("euler_blast3d_*.euler3d"))
     if not paths:
-        raise SystemExit(f"No blast3d_*.mhd3d snapshots in {folder}")
+        raise SystemExit(f"No euler_blast3d_*.euler3d snapshots in {folder}")
     snapshots = [read_snapshot(path) for path in paths]
     fi = FIELDS.index(args.field)
     all_midplanes = [

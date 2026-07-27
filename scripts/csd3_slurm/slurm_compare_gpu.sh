@@ -1,12 +1,12 @@
 #!/bin/bash -l
-#SBATCH -J mhd_cmp_gpu
+#SBATCH -J euler_cmp_gpu
 #SBATCH -A MPHIL-NIKIFORAKIS-HK597-SL2-GPU
 #SBATCH -p ampere
 #SBATCH -N 1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
-#SBATCH --array=0-3%4
+#SBATCH --array=0-2%3
 #SBATCH -t 24:00:00
 #SBATCH -o logs/%x_%A_%a.out
 #SBATCH -e logs/%x_%A_%a.err
@@ -31,7 +31,7 @@ SUBMIT_ROOT="${WORKDIR:-${SLURM_SUBMIT_DIR:-$(pwd)}}"
 COMMON_SCRIPT="${SUBMIT_ROOT}/scripts/csd3_slurm/comparison_common.sh"
 if [ ! -f "${COMMON_SCRIPT}" ]; then
     echo "[ERROR] Cannot find comparison helper: ${COMMON_SCRIPT}"
-    echo "[ERROR] Submit this job from the MHD repository root, or set WORKDIR."
+    echo "[ERROR] Submit this job from the Euler repository root, or set WORKDIR."
     exit 1
 fi
 # shellcheck source=comparison_common.sh
@@ -65,13 +65,8 @@ else
 fi
 CUDA_ARCH_FLAG="${CUDA_ARCH_FLAG:--arch=sm_${CUDA_SM}}"
 
-if [ "${SOLVER_NAME}" = "hlld" ]; then
-    BUILD_VARIANT="hlld_canonical_y_xlb3_ylb3"
-    NVCC_COMPARISON_FLAGS="-DMHD_HLLD_CANONICALIZE_Y=1 -DMHD_ADVANCE_X_MIN_BLOCKS_PER_SM=3 -DMHD_ADVANCE_Y_MIN_BLOCKS_PER_SM=3"
-else
-    BUILD_VARIANT="repository_default"
-    NVCC_COMPARISON_FLAGS=""
-fi
+BUILD_VARIANT="euler"
+NVCC_COMPARISON_FLAGS=""
 
 COMPILER_INFO="$(nvcc --version 2>&1)"
 comparison_write_metadata "${COMPILER_INFO}"

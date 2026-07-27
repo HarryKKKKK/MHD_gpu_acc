@@ -6,28 +6,28 @@
 
 #include <cstddef>
 
-#ifndef MHD_ADVANCE_X_BLOCK_X
-#define MHD_ADVANCE_X_BLOCK_X 16
+#ifndef EULER_ADVANCE_X_BLOCK_X
+#define EULER_ADVANCE_X_BLOCK_X 16
 #endif
 
-#ifndef MHD_ADVANCE_X_BLOCK_Y
-#define MHD_ADVANCE_X_BLOCK_Y 8
+#ifndef EULER_ADVANCE_X_BLOCK_Y
+#define EULER_ADVANCE_X_BLOCK_Y 8
 #endif
 
-#ifndef MHD_ADVANCE_Y_BLOCK_X
-#define MHD_ADVANCE_Y_BLOCK_X 16
+#ifndef EULER_ADVANCE_Y_BLOCK_X
+#define EULER_ADVANCE_Y_BLOCK_X 16
 #endif
 
-#ifndef MHD_ADVANCE_Y_BLOCK_Y
-#define MHD_ADVANCE_Y_BLOCK_Y 8
+#ifndef EULER_ADVANCE_Y_BLOCK_Y
+#define EULER_ADVANCE_Y_BLOCK_Y 8
 #endif
 
-#ifndef MHD_ADVANCE_X_MIN_BLOCKS_PER_SM
-#define MHD_ADVANCE_X_MIN_BLOCKS_PER_SM 3
+#ifndef EULER_ADVANCE_X_MIN_BLOCKS_PER_SM
+#define EULER_ADVANCE_X_MIN_BLOCKS_PER_SM 3
 #endif
 
-#ifndef MHD_ADVANCE_Y_MIN_BLOCKS_PER_SM
-#define MHD_ADVANCE_Y_MIN_BLOCKS_PER_SM 0
+#ifndef EULER_ADVANCE_Y_MIN_BLOCKS_PER_SM
+#define EULER_ADVANCE_Y_MIN_BLOCKS_PER_SM 0
 #endif
 
 struct GpuLaunchConfig {
@@ -57,7 +57,6 @@ struct GpuWorkspace {
 };
 
 void set_gpu_physics_gamma(double gamma);
-void set_gpu_physics_ch(double ch);
 
 void init_gpu_workspace(GpuWorkspace& ws, const Grid2DGPU& grid);
 void free_gpu_workspace(GpuWorkspace& ws);

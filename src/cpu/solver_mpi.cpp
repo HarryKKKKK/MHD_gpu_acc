@@ -51,11 +51,7 @@ inline Conserved minmod_conserved(
         minmod_scalar(C.rhou - L.rhou, R.rhou - C.rhou),
         minmod_scalar(C.rhov - L.rhov, R.rhov - C.rhov),
         minmod_scalar(C.rhow - L.rhow, R.rhow - C.rhow),
-        minmod_scalar(C.Bx   - L.Bx,   R.Bx   - C.Bx),
-        minmod_scalar(C.By   - L.By,   R.By   - C.By),
-        minmod_scalar(C.Bz   - L.Bz,   R.Bz   - C.Bz),
-        minmod_scalar(C.E    - L.E,    R.E    - C.E),
-        minmod_scalar(C.psi  - L.psi,  R.psi  - C.psi)
+        minmod_scalar(C.E    - L.E,    R.E    - C.E)
     );
 }
 
@@ -63,8 +59,7 @@ inline Conserved minmod_conserved(
 
 inline bool positive_conserved(const Conserved& U) {
     const double msq = U.rhou*U.rhou + U.rhov*U.rhov + U.rhow*U.rhow;
-    const double mag = 0.5 * (U.Bx*U.Bx + U.By*U.By + U.Bz*U.Bz);
-    const double lhs = U.rho * (U.E - mag) - 0.5 * msq;
+    const double lhs = U.rho * U.E - 0.5 * msq;
     return U.rho > 0.0 && lhs > 0.0;
 }
 
@@ -84,11 +79,10 @@ inline void reconstruct_cell_muscl_hancock(
     const Conserved U_left = Uc - half_slope;
     const Conserved U_right = Uc + half_slope;
 
-    const double ch = phys::get_ch_glm();
-    const Conserved F_left  = (dir == Direction::X) ? phys::flux_x(U_left, ch)
-                                                     : phys::flux_y(U_left, ch);
-    const Conserved F_right = (dir == Direction::X) ? phys::flux_x(U_right, ch)
-                                                     : phys::flux_y(U_right, ch);
+    const Conserved F_left  = (dir == Direction::X) ? phys::flux_x(U_left)
+                                                     : phys::flux_y(U_left);
+    const Conserved F_right = (dir == Direction::X) ? phys::flux_x(U_right)
+                                                     : phys::flux_y(U_right);
     const Conserved base = Uc + 0.5 * dt_over_d * (F_left - F_right);
 
     U_left_star = base - half_slope;
@@ -192,7 +186,7 @@ void fill_x_face_cache(
             const std::size_t idx_ip1 = static_cast<std::size_t>(j) * total_nx + (i + 1);
 
             fx_cache[xface_idx(local_j, local_i_face, nx_faces)] =
-                riemann_flux(recon_R[idx_i], recon_L[idx_ip1], Direction::X, solver, phys::ch_glm);
+                riemann_flux(recon_R[idx_i], recon_L[idx_ip1], Direction::X, solver);
         }
     }
 }
@@ -226,28 +220,7 @@ void fill_y_face_cache(
             const std::size_t idx_jp1 = static_cast<std::size_t>(j + 1) * total_nx + i;
 
             fy_cache[yface_idx(local_j_face, local_i, nx_cells)] =
-                riemann_flux(recon_R[idx_j], recon_L[idx_jp1], Direction::Y, solver, phys::ch_glm);
-        }
-    }
-}
-
-void apply_psi_damping(Grid2D& grid, double dt) {
-    // Dedner et al. (2002): c_r := c_p^2/c_h ~= 0.18 gave optimal results
-    // "regardless of the grid resolution" (also confirmed by Bard & Dorelli
-    // 2014, JCP 259, who use the same fixed value in all simulations).
-    // l_d is therefore used directly as this fixed length, not scaled by dx/dy.
-    const double l_d = phys::cr_glm;
-    if (l_d <= 0.0) return;  // cr_glm <= 0: no damping
-
-    const double factor = std::exp(-dt * phys::ch_glm / l_d);
-    if (factor >= 1.0) return;  // ch=0: no damping needed
-
-#ifdef _OPENMP
-#pragma omp parallel for collapse(2) schedule(static)
-#endif
-    for (int j = grid.j_begin(); j < grid.j_end(); ++j) {
-        for (int i = grid.i_begin(); i < grid.i_end(); ++i) {
-            grid(i, j).psi *= factor;
+                riemann_flux(recon_R[idx_j], recon_L[idx_jp1], Direction::Y, solver);
         }
     }
 }
@@ -378,8 +351,8 @@ MpiDomain mpi_domain_create(
             "width on at least one axis; use fewer ranks or a larger grid.");
     }
 
-    // A Conserved is exactly 9 contiguous doubles (no padding).
-    MPI_Type_contiguous(9, MPI_DOUBLE, &dom.conserved_type);
+    // A Conserved is exactly five contiguous doubles (no padding).
+    MPI_Type_contiguous(5, MPI_DOUBLE, &dom.conserved_type);
     MPI_Type_commit(&dom.conserved_type);
 
     const int total_nx = dom.nx_local + 2 * ng;
@@ -565,8 +538,8 @@ double compute_dt_mpi(const Grid2D& grid, double cfl, MPI_Comm comm) {
             if (!std::isfinite(V.rho) || !std::isfinite(V.p) ||
                 V.rho <= 0.0 || V.p <= 0.0) continue;
 
-            const double sx = phys::max_signal_speed_x(V, 0.0);
-            const double sy = phys::max_signal_speed_y(V, 0.0);
+            const double sx = phys::max_signal_speed_x(V);
+            const double sy = phys::max_signal_speed_y(V);
             if (std::isfinite(sx) && std::isfinite(sy))
                 max_speed = std::max(max_speed, std::max(sx, sy));
         }
@@ -579,8 +552,6 @@ double compute_dt_mpi(const Grid2D& grid, double cfl, MPI_Comm comm) {
         throw std::runtime_error("compute_dt_mpi: non-positive maximum wave speed.");
     }
 
-    // Set GLM cleaning speed = max MHD signal speed, identically on every rank.
-    phys::ch_glm = global_max;
 
     return cfl * std::min(grid.dx(), grid.dy()) / global_max;
 }
@@ -596,7 +567,6 @@ double compute_dt_mpi(const Grid2D& grid, double cfl, MPI_Comm comm) {
 //   3. y-halo exchange on Utmp
 //   4. Fill y-face cache from Utmp
 //   5. y-update: Utmp -> Unew (interior only)
-//   6. Mixed-GLM psi damping on Unew
 //   7. x-halo exchange on Unew for the next timestep
 // ============================================================
 
@@ -703,10 +673,6 @@ void advance_mpi(
         }
     }
 
-    // Step 6: Mixed-GLM psi damping (Dedner eq. 45)
-    apply_psi_damping(Unew, dt);
-
-    // Step 7: the next timestep starts with an x sweep.  Refresh only the
-    // left/right halo columns, after damping, so halo psi is current.
+    // The next timestep starts with an x sweep. Refresh only left/right halos.
     exchange_halo_x(Unew, dom, bc);
 }

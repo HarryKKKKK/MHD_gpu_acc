@@ -22,39 +22,33 @@ inline Conserved limited_slope(const Conserved& l, const Conserved& c,
         minmod(c.rhou-l.rhou,r.rhou-c.rhou),
         minmod(c.rhov-l.rhov,r.rhov-c.rhov),
         minmod(c.rhow-l.rhow,r.rhow-c.rhow),
-        minmod(c.Bx-l.Bx,r.Bx-c.Bx),
-        minmod(c.By-l.By,r.By-c.By),
-        minmod(c.Bz-l.Bz,r.Bz-c.Bz),
-        minmod(c.E-l.E,r.E-c.E),
-        minmod(c.psi-l.psi,r.psi-c.psi));
+        minmod(c.E-l.E,r.E-c.E));
 }
 
 inline bool positive(const Conserved& u) {
     const double m2 = u.rhou*u.rhou + u.rhov*u.rhov + u.rhow*u.rhow;
-    const double magnetic = 0.5*(u.Bx*u.Bx + u.By*u.By + u.Bz*u.Bz);
-    return u.rho > 0.0 && u.rho*(u.E-magnetic) - 0.5*m2 > 0.0;
+    return u.rho > 0.0 && u.rho*u.E - 0.5*m2 > 0.0;
 }
 
 inline Conserved physical_flux_3d(const Conserved& u, Axis3D axis) {
-    if (axis == Axis3D::X) return phys::flux_x(u, phys::ch_glm);
-    if (axis == Axis3D::Y) return phys::flux_y(u, phys::ch_glm);
-    return phys::flux_z(u, phys::ch_glm);
+    if (axis == Axis3D::X) return phys::flux_x(u);
+    if (axis == Axis3D::Y) return phys::flux_y(u);
+    return phys::flux_z(u);
 }
 
 inline Conserved swap_xz(const Conserved& u) {
-    return Conserved(u.rho, u.rhow, u.rhov, u.rhou,
-                     u.Bz, u.By, u.Bx, u.E, u.psi);
+    return Conserved(u.rho, u.rhow, u.rhov, u.rhou, u.E);
 }
 
 inline Conserved riemann_flux_3d(const Conserved& l, const Conserved& r,
                                  Axis3D axis, RiemannSolver solver) {
     if (axis == Axis3D::X)
-        return riemann_flux(l, r, Direction::X, solver, phys::ch_glm);
+        return riemann_flux(l, r, Direction::X, solver);
     if (axis == Axis3D::Y)
-        return riemann_flux(l, r, Direction::Y, solver, phys::ch_glm);
+        return riemann_flux(l, r, Direction::Y, solver);
     // Reuse the thoroughly tested x-normal solvers after rotating z onto x.
     return swap_xz(riemann_flux(swap_xz(l), swap_xz(r), Direction::X,
-                                solver, phys::ch_glm));
+                                solver));
 }
 
 inline void reconstruct(const Conserved& um, const Conserved& uc,
@@ -219,13 +213,12 @@ double compute_dt_cpu(const Grid3D& q, double cfl) {
             for(int i=q.i_begin();i<q.i_end();++i) {
                 const Primitive v=phys::cons_to_prim(q(i,j,k));
                 if (!std::isfinite(v.rho)||!std::isfinite(v.p)||v.rho<=0||v.p<=0) continue;
-                const double s=std::max({phys::max_signal_speed_x(v,0.0),
-                                         phys::max_signal_speed_y(v,0.0),
-                                         phys::max_signal_speed_z(v,0.0)});
+                const double s=std::max({phys::max_signal_speed_x(v),
+                                         phys::max_signal_speed_y(v),
+                                         phys::max_signal_speed_z(v)});
                 if(std::isfinite(s)) max_speed=std::max(max_speed,s);
             }
     if(max_speed<=0) throw std::runtime_error("compute_dt_cpu(3D): invalid wave speed");
-    phys::ch_glm=max_speed;
     return cfl*std::min({q.dx(),q.dy(),q.dz()})/max_speed;
 }
 
@@ -241,14 +234,6 @@ void advance_cpu_distributed_z(
     else apply_boundary_z(uy,bc);
     sweep_z(uy,out,dt/old.dz(),ws,solver);
 
-    const double damping=phys::cr_glm>0
-        ? std::exp(-dt*phys::ch_glm/phys::cr_glm) : 1.0;
-#ifdef _OPENMP
-#pragma omp parallel for collapse(3) schedule(static)
-#endif
-    for(int k=out.k_begin();k<out.k_end();++k)
-        for(int j=out.j_begin();j<out.j_end();++j)
-            for(int i=out.i_begin();i<out.i_end();++i) out(i,j,k).psi*=damping;
     apply_boundary_x(out,bc);
     apply_boundary_y(out,bc);
     if(exchange_z) exchange_z(out,context);

@@ -51,7 +51,6 @@ struct CpuWorkspace {
 
 // ============================================================
 // CFL timestep.
-// Also sets phys::ch_glm = max signal speed for this step.
 // ============================================================
 double compute_dt_cpu(const Grid2D& grid, double cfl);
 

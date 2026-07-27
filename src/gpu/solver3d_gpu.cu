@@ -28,36 +28,29 @@ __device__ Conserved limited_slope_3d(const Conserved& l,const Conserved& c,
         minmod_scalar_3d(c.rhou-l.rhou,r.rhou-c.rhou),
         minmod_scalar_3d(c.rhov-l.rhov,r.rhov-c.rhov),
         minmod_scalar_3d(c.rhow-l.rhow,r.rhow-c.rhow),
-        minmod_scalar_3d(c.Bx-l.Bx,r.Bx-c.Bx),
-        minmod_scalar_3d(c.By-l.By,r.By-c.By),
-        minmod_scalar_3d(c.Bz-l.Bz,r.Bz-c.Bz),
-        minmod_scalar_3d(c.E-l.E,r.E-c.E),
-        minmod_scalar_3d(c.psi-l.psi,r.psi-c.psi));
+        minmod_scalar_3d(c.E-l.E,r.E-c.E));
 }
 
 __device__ bool positive_3d(const Conserved& u) {
     const double m2=u.rhou*u.rhou+u.rhov*u.rhov+u.rhow*u.rhow;
-    const double mag=0.5*(u.Bx*u.Bx+u.By*u.By+u.Bz*u.Bz);
-    return u.rho>0.0 && u.rho*(u.E-mag)-0.5*m2>0.0;
+    return u.rho>0.0 && u.rho*u.E-0.5*m2>0.0;
 }
 
 template<int Axis>
 __device__ Conserved flux_axis(const Conserved& u) {
-    const double ch=phys::get_ch_glm();
     if constexpr(Axis==AXIS_X) {
-        return phys::flux_x(u,ch);
+        return phys::flux_x(u);
     } else if constexpr(Axis==AXIS_Y) {
-        return phys::flux_y(u,ch);
+        return phys::flux_y(u);
     } else {
-        return phys::flux_z(u,ch);
+        return phys::flux_z(u);
     }
     // CUDA 11.4 can fail to prove that the if-constexpr chain is exhaustive.
     return Conserved{};
 }
 
 __device__ Conserved swap_xz_3d(const Conserved& u) {
-    return Conserved(u.rho,u.rhow,u.rhov,u.rhou,
-                     u.Bz,u.By,u.Bx,u.E,u.psi);
+    return Conserved(u.rho,u.rhow,u.rhov,u.rhou,u.E);
 }
 
 template<RiemannSolver Solver,int Axis>
@@ -103,7 +96,7 @@ __device__ void reconstruct_at(ConstGrid3DGPUView q,int i,int j,int k,
 
 template<RiemannSolver Solver,int Axis>
 __global__ void advance_axis_kernel(ConstGrid3DGPUView in,Grid3DGPUView out,
-                                    double dt_over_d,double damping) {
+                                    double dt_over_d) {
     const int li=blockIdx.x*blockDim.x+threadIdx.x;
     const int lj=blockIdx.y*blockDim.y+threadIdx.y;
     const int lk=blockIdx.z*blockDim.z+threadIdx.z;
@@ -123,7 +116,6 @@ __global__ void advance_axis_kernel(ConstGrid3DGPUView in,Grid3DGPUView out,
     const Conserved fm=riemann_axis<Solver,Axis>(mr,cl);
     const Conserved fp=riemann_axis<Solver,Axis>(cr,pl);
     Conserved updated=in.cells[in.flat_index(i,j,k)]-dt_over_d*(fp-fm);
-    updated.psi*=damping;
     out.cells[out.flat_index(i,j,k)]=updated;
 }
 
@@ -142,9 +134,9 @@ __global__ void block_max_speed_kernel(ConstGrid3DGPUView q,double* maxima) {
                                                q.k_begin()+lk)];
         const Primitive v=phys::cons_to_prim(u);
         if(isfinite(v.rho)&&isfinite(v.p)&&v.rho>0.0&&v.p>0.0) {
-            const double sx=phys::max_signal_speed_x(v,0.0);
-            const double sy=phys::max_signal_speed_y(v,0.0);
-            const double sz=phys::max_signal_speed_z(v,0.0);
+            const double sx=phys::max_signal_speed_x(v);
+            const double sy=phys::max_signal_speed_y(v);
+            const double sz=phys::max_signal_speed_z(v);
             if(isfinite(sx)&&isfinite(sy)&&isfinite(sz))
                 speed=fmax(sx,fmax(sy,sz));
         }
@@ -166,26 +158,23 @@ __global__ void block_max_speed_kernel(ConstGrid3DGPUView q,double* maxima) {
 template<RiemannSolver Solver>
 void advance_specialized(const Grid3DGPU& old,Grid3DGPU& ux,Grid3DGPU& uy,
                          Grid3DGPU& out,double dt,const BoundaryConfig3D& bc) {
-    // HLLD is register-heavy; 128 threads keeps the launch viable on Ampere
-    // while retaining contiguous x-lane accesses.
+    // 128 threads retain contiguous x-lane accesses.
     const dim3 threads(8,4,4);
     const dim3 blocks((old.nx()+threads.x-1)/threads.x,
                       (old.ny()+threads.y-1)/threads.y,
                       (old.nz()+threads.z-1)/threads.z);
     advance_axis_kernel<Solver,AXIS_X><<<blocks,threads>>>(
-        make_view(old),make_view(ux),dt/old.dx(),1.0);
+        make_view(old),make_view(ux),dt/old.dx());
     cuda3d_check(cudaGetLastError(),"advance x kernel");
     apply_boundary_y_gpu(ux,bc);
     advance_axis_kernel<Solver,AXIS_Y><<<blocks,threads>>>(
         make_view(static_cast<const Grid3DGPU&>(ux)),make_view(uy),
-        dt/old.dy(),1.0);
+        dt/old.dy());
     cuda3d_check(cudaGetLastError(),"advance y kernel");
     apply_boundary_z_gpu(uy,bc);
-    const double damping=(phys::ch_glm>0.0&&phys::cr_glm>0.0)
-        ? std::exp(-dt*phys::ch_glm/phys::cr_glm):1.0;
     advance_axis_kernel<Solver,AXIS_Z><<<blocks,threads>>>(
         make_view(static_cast<const Grid3DGPU&>(uy)),make_view(out),
-        dt/old.dz(),damping);
+        dt/old.dz());
     cuda3d_check(cudaGetLastError(),"advance z kernel");
     apply_boundary_gpu(out,bc);
 }
@@ -196,11 +185,6 @@ void set_gpu3d_physics_gamma(double g) {
     cuda3d_check(cudaMemcpyToSymbol(phys::d_gamma,&g,sizeof(g)),"set gamma");
     phys::gamma=g;
 }
-void set_gpu3d_physics_ch(double ch) {
-    cuda3d_check(cudaMemcpyToSymbol(phys::d_ch_glm,&ch,sizeof(ch)),"set GLM ch");
-    phys::ch_glm=ch;
-}
-
 void init_gpu_workspace(GpuWorkspace3D& ws,const Grid3DGPU& q) {
     free_gpu_workspace(ws);
     ws.nx=q.nx();ws.ny=q.ny();ws.nz=q.nz();
@@ -238,7 +222,6 @@ double compute_dt_gpu(const Grid3DGPU& q,GpuWorkspace3D& ws,double cfl) {
                            cudaMemcpyDeviceToHost),"download maximum speed");
     if(!std::isfinite(maximum)||maximum<=0)
         throw std::runtime_error("3D GPU CFL maximum speed is invalid");
-    set_gpu3d_physics_ch(maximum);
     return cfl*std::min({q.dx(),q.dy(),q.dz()})/maximum;
 }
 
@@ -252,8 +235,6 @@ void advance_gpu(const Grid3DGPU& old,Grid3DGPU& ux,Grid3DGPU& uy,
             advance_specialized<RiemannSolver::HLL>(old,ux,uy,out,dt,bc);break;
         case RiemannSolver::HLLC:
             advance_specialized<RiemannSolver::HLLC>(old,ux,uy,out,dt,bc);break;
-        case RiemannSolver::HLLD:
-            advance_specialized<RiemannSolver::HLLD>(old,ux,uy,out,dt,bc);break;
         case RiemannSolver::FORCE:
             advance_specialized<RiemannSolver::FORCE>(old,ux,uy,out,dt,bc);break;
     }

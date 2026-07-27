@@ -4,19 +4,19 @@
 # sourced by the GPU, OpenMP CPU, and pure-MPI submission scripts.
 
 comparison_init_config() {
-    read -r -a CASES <<< "${CASES_STR:-orszag_tang rotor}"
-    read -r -a SOLVERS <<< "${SOLVERS_STR:-hll hllc hlld force}"
+    read -r -a CASES <<< "${CASES_STR:-shock_bubble blast_wave}"
+    read -r -a SOLVERS <<< "${SOLVERS_STR:-hll hllc force}"
     read -r -a SCALES <<< "${SCALES_STR:-1 2 4 8}"
 
-    if [ "${#CASES[@]}" -ne 2 ] || [ "${#SOLVERS[@]}" -ne 4 ] || [ "${#SCALES[@]}" -lt 1 ]; then
-        echo "[ERROR] The array mapping requires exactly 2 cases, 4 solvers, and at least 1 scale."
+    if [ "${#CASES[@]}" -ne 2 ] || [ "${#SOLVERS[@]}" -ne 3 ] || [ "${#SCALES[@]}" -lt 1 ]; then
+        echo "[ERROR] The array mapping requires exactly 2 cases, 3 solvers, and at least 1 scale."
         echo "[ERROR] cases=${CASES[*]} solvers=${SOLVERS[*]} scales=${SCALES[*]}"
         exit 2
     fi
 
     local task_id="${SLURM_ARRAY_TASK_ID:-0}"
-    if ! [[ "${task_id}" =~ ^[0-9]+$ ]] || [ "${task_id}" -ge 4 ]; then
-        echo "[ERROR] SLURM_ARRAY_TASK_ID must be in [0, 3]; got '${task_id}'."
+    if ! [[ "${task_id}" =~ ^[0-9]+$ ]] || [ "${task_id}" -ge 3 ]; then
+        echo "[ERROR] SLURM_ARRAY_TASK_ID must be in [0, 2]; got '${task_id}'."
         exit 2
     fi
 

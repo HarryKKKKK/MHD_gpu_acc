@@ -23,7 +23,7 @@
 #include "types.hpp"
 
 // ============================================================
-// CSV output — all 9 MHD fields + derived pressure
+// CSV output for the five Euler conserved fields and derived primitives.
 // ============================================================
 
 template<typename FieldFn>
@@ -77,18 +77,9 @@ static void write_all_fields(
         [](const Conserved& U){ return U.rhov / U.rho; });
     write_field_csv(host_data, total_nx, nx, ny, ng, path("w"),
         [](const Conserved& U){ return U.rhow / U.rho; });
-    // Magnetic fields
-    write_field_csv(host_data, total_nx, nx, ny, ng, path("Bx"),
-        [](const Conserved& U){ return U.Bx; });
-    write_field_csv(host_data, total_nx, nx, ny, ng, path("By"),
-        [](const Conserved& U){ return U.By; });
-    write_field_csv(host_data, total_nx, nx, ny, ng, path("Bz"),
-        [](const Conserved& U){ return U.Bz; });
-    // Total energy and GLM scalar
+    // Total energy
     write_field_csv(host_data, total_nx, nx, ny, ng, path("E"),
         [](const Conserved& U){ return U.E; });
-    write_field_csv(host_data, total_nx, nx, ny, ng, path("psi"),
-        [](const Conserved& U){ return U.psi; });
     // Pressure (derived via cons_to_prim — host-side, uses phys::gamma inline var)
     write_field_csv(host_data, total_nx, nx, ny, ng, path("p"),
         [](const Conserved& U){ return phys::cons_to_prim(U).p; });
@@ -119,11 +110,7 @@ static std::uint64_t interior_state_hash(const Grid2DGPU& gpu_grid) {
             mix_double(U.rhou);
             mix_double(U.rhov);
             mix_double(U.rhow);
-            mix_double(U.Bx);
-            mix_double(U.By);
-            mix_double(U.Bz);
             mix_double(U.E);
-            mix_double(U.psi);
         }
     }
     return hash;
@@ -136,7 +123,7 @@ static std::uint64_t interior_state_hash(const Grid2DGPU& gpu_grid) {
 struct RunConfig {
     std::string   case_name     = "kelvin_helmholtz";
     int           n_scale       = 1;
-    RiemannSolver solver        = RiemannSolver::HLLD;
+    RiemannSolver solver        = RiemannSolver::HLLC;
     std::string   out_dir       = "output";
     bool          write_out     = false;
     int           warmup_steps  = 0;
@@ -153,7 +140,6 @@ static RunConfig parse_args(int argc, char** argv) {
             std::string s = argv[++i];
             if      (s == "hll")   rc.solver = RiemannSolver::HLL;
             else if (s == "hllc")  rc.solver = RiemannSolver::HLLC;
-            else if (s == "hlld")  rc.solver = RiemannSolver::HLLD;
             else if (s == "force") rc.solver = RiemannSolver::FORCE;
             else throw std::runtime_error("Unknown solver: " + s);
         } else if (arg == "--out" && i + 1 < argc) {
@@ -211,14 +197,13 @@ int main(int argc, char** argv) {
     const GpuLaunchConfig launch_cfg = get_gpu_launch_config();
     const bool benchmark_mode = rc.benchmark_steps > 0;
 
-    std::cout << "=== MHD GLM GPU Solver ===\n";
+    std::cout << "=== Compressible Euler GPU Solver ===\n";
     std::cout << "  Case   : " << rc.case_name << "\n";
     std::cout << "  n      : " << rc.n_scale << "\n";
     std::cout << "  Gamma  : " << cfg.gamma << "\n";
     std::cout << "  Solver : "
               << (rc.solver == RiemannSolver::HLL  ? "HLL"  :
-                  rc.solver == RiemannSolver::HLLC ? "HLLC" :
-                  rc.solver == RiemannSolver::HLLD ? "HLLD" : "FORCE") << "\n";
+                  rc.solver == RiemannSolver::HLLC ? "HLLC" : "FORCE") << "\n";
     std::cout << "[GPU] nx: "          << cfg.nx            << "\n";
     std::cout << "[GPU] ny: "          << cfg.ny            << "\n";
     std::cout << "[GPU] total_cells: " << (cfg.nx * cfg.ny) << "\n";
@@ -256,7 +241,6 @@ int main(int argc, char** argv) {
 
     // Propagate physics constants to device memory.
     set_gpu_physics_gamma(cfg.gamma);
-    set_gpu_physics_ch(0.0);  // ch_glm starts at 0; updated by compute_dt_gpu
 
     if (rc.write_out)
         write_all_fields(Uold, rc.out_dir, rc.case_name + "_gpu_t0");

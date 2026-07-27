@@ -4,7 +4,7 @@
 #include "test_cases.hpp"   // BoundaryConfig, BoundaryType
 
 // Directional boundary refreshes used by the dimensionally split solver.
-// Handles Periodic and Transmissive types. All 9 GLM-MHD fields are updated.
+// Handles Periodic and Transmissive types for all five Euler fields.
 void apply_boundary_x_gpu(Grid2DGPU& grid, const BoundaryConfig& bc);
 void apply_boundary_y_gpu(Grid2DGPU& grid, const BoundaryConfig& bc);
 

@@ -15,7 +15,6 @@ struct GpuWorkspace3D {
 };
 
 void set_gpu3d_physics_gamma(double gamma);
-void set_gpu3d_physics_ch(double ch);
 void init_gpu_workspace(GpuWorkspace3D&,const Grid3DGPU&);
 void free_gpu_workspace(GpuWorkspace3D&);
 double compute_dt_gpu(const Grid3DGPU&,GpuWorkspace3D&,double cfl);
@@ -23,4 +22,3 @@ double compute_dt_gpu(const Grid3DGPU&,GpuWorkspace3D&,double cfl);
 void advance_gpu(const Grid3DGPU& old,Grid3DGPU& ux,Grid3DGPU& uy,
                  Grid3DGPU& out,GpuWorkspace3D&,double dt,
                  RiemannSolver,const BoundaryConfig3D&);
-

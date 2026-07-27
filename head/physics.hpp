@@ -1,183 +1,66 @@
 #pragma once
 
 #include <cmath>
-
 #include "types.hpp"
 
 namespace phys {
 
 #ifdef __CUDACC__
-__device__ static double d_gamma = 5.0 / 3.0;
-inline double gamma = 5.0 / 3.0;
+__device__ static double d_gamma = 1.4;
+inline double gamma = 1.4;
 #else
-inline double gamma = 5.0 / 3.0;
+inline double gamma = 1.4;
 #endif
 
-#ifdef __CUDACC__
-__device__ static double d_ch_glm = 0.0;
-inline double ch_glm = 0.0;
-inline double cr_glm = 0.18;
-#else
-inline double ch_glm = 0.0;
-inline double cr_glm = 0.18;
-#endif
-
-#ifdef __CUDACC__
 HD inline double get_gamma() {
-#ifdef __CUDA_ARCH__
+#if defined(__CUDA_ARCH__)
     return d_gamma;
 #else
     return gamma;
 #endif
 }
-HD inline double get_ch_glm() {
-#ifdef __CUDA_ARCH__
-    return d_ch_glm;
-#else
-    return ch_glm;
-#endif
-}
-#else
-HD inline double get_gamma()  { return gamma; }
-HD inline double get_ch_glm() { return ch_glm; }
-#endif
 
-HD inline Primitive cons_to_prim(const Conserved& U) {
-    const double inv_rho = 1.0 / U.rho;
-    const double ux = U.rhou * inv_rho;
-    const double uy = U.rhov * inv_rho;
-    const double uz = U.rhow * inv_rho;
-    const double Bmag2 = U.Bx*U.Bx + U.By*U.By + U.Bz*U.Bz;
-    const double ke    = 0.5 * U.rho * (ux*ux + uy*uy + uz*uz);
-    const double p     = (get_gamma() - 1.0) * (U.E - ke - 0.5*Bmag2);
-    return Primitive(U.rho, ux, uy, uz, U.Bx, U.By, U.Bz, p, U.psi);
+HD inline Primitive cons_to_prim(const Conserved& q) {
+    const double inv_rho=1.0/q.rho;
+    const double u=q.rhou*inv_rho, v=q.rhov*inv_rho, w=q.rhow*inv_rho;
+    const double kinetic=0.5*q.rho*(u*u+v*v+w*w);
+    return {q.rho,u,v,w,(get_gamma()-1.0)*(q.E-kinetic)};
 }
 
-HD inline Conserved prim_to_cons(const Primitive& V) {
-    const double Bmag2 = V.Bx*V.Bx + V.By*V.By + V.Bz*V.Bz;
-    const double ke    = 0.5 * V.rho * (V.u*V.u + V.v*V.v + V.w*V.w);
-    const double E     = V.p / (get_gamma() - 1.0) + ke + 0.5*Bmag2;
-    return Conserved(V.rho, V.rho*V.u, V.rho*V.v, V.rho*V.w,
-                     V.Bx, V.By, V.Bz, E, V.psi);
+HD inline Conserved prim_to_cons(const Primitive& v) {
+    const double kinetic=0.5*v.rho*(v.u*v.u+v.v*v.v+v.w*v.w);
+    return {v.rho,v.rho*v.u,v.rho*v.v,v.rho*v.w,
+            v.p/(get_gamma()-1.0)+kinetic};
 }
 
-HD inline Conserved flux_x(const Conserved& U, double ch) {
-    const double inv_rho = 1.0 / U.rho;
-    const double ux = U.rhou * inv_rho;
-    const double uy = U.rhov * inv_rho;
-    const double uz = U.rhow * inv_rho;
-    const double Bmag2 = U.Bx*U.Bx + U.By*U.By + U.Bz*U.Bz;
-    const double ke    = 0.5 * U.rho * (ux*ux + uy*uy + uz*uz);
-    const double p     = (get_gamma() - 1.0) * (U.E - ke - 0.5*Bmag2);
-    const double p_tot = p + 0.5*Bmag2;
-    const double BdotU = U.Bx*ux + U.By*uy + U.Bz*uz;
-
-    return Conserved(
-        U.rhou,
-        U.rhou*ux + p_tot - U.Bx*U.Bx,
-        U.rhou*uy         - U.Bx*U.By,
-        U.rhou*uz         - U.Bx*U.Bz,
-        U.psi,
-        U.By*ux - U.Bx*uy,
-        U.Bz*ux - U.Bx*uz,
-        (U.E + p_tot)*ux  - U.Bx*BdotU,
-        ch*ch * U.Bx
-    );
+HD inline Conserved flux_x(const Conserved& q) {
+    const Primitive v=cons_to_prim(q);
+    return {q.rhou,q.rhou*v.u+v.p,q.rhou*v.v,q.rhou*v.w,
+            (q.E+v.p)*v.u};
+}
+HD inline Conserved flux_y(const Conserved& q) {
+    const Primitive v=cons_to_prim(q);
+    return {q.rhov,q.rhov*v.u,q.rhov*v.v+v.p,q.rhov*v.w,
+            (q.E+v.p)*v.v};
+}
+HD inline Conserved flux_z(const Conserved& q) {
+    const Primitive v=cons_to_prim(q);
+    return {q.rhow,q.rhow*v.u,q.rhow*v.v,q.rhow*v.w+v.p,
+            (q.E+v.p)*v.w};
 }
 
-HD inline Conserved flux_y(const Conserved& U, double ch) {
-    const double inv_rho = 1.0 / U.rho;
-    const double ux = U.rhou * inv_rho;
-    const double uy = U.rhov * inv_rho;
-    const double uz = U.rhow * inv_rho;
-    const double Bmag2 = U.Bx*U.Bx + U.By*U.By + U.Bz*U.Bz;
-    const double ke    = 0.5 * U.rho * (ux*ux + uy*uy + uz*uz);
-    const double p     = (get_gamma() - 1.0) * (U.E - ke - 0.5*Bmag2);
-    const double p_tot = p + 0.5*Bmag2;
-    const double BdotU = U.Bx*ux + U.By*uy + U.Bz*uz;
-
-    return Conserved(
-        U.rhov,
-        U.rhov*ux         - U.By*U.Bx,
-        U.rhov*uy + p_tot - U.By*U.By,
-        U.rhov*uz         - U.By*U.Bz,
-        U.Bx*uy - U.By*ux,
-        U.psi,
-        U.Bz*uy - U.By*uz,
-        (U.E + p_tot)*uy  - U.By*BdotU,
-        ch*ch * U.By
-    );
+HD inline double sound_speed(const Primitive& v) {
+    return sqrt(get_gamma()*v.p/v.rho);
 }
-
-HD inline Conserved flux_z(const Conserved& U, double ch) {
-    const double inv_rho = 1.0 / U.rho;
-    const double ux = U.rhou * inv_rho;
-    const double uy = U.rhov * inv_rho;
-    const double uz = U.rhow * inv_rho;
-    const double Bmag2 = U.Bx*U.Bx + U.By*U.By + U.Bz*U.Bz;
-    const double ke    = 0.5 * U.rho * (ux*ux + uy*uy + uz*uz);
-    const double p     = (get_gamma() - 1.0) * (U.E - ke - 0.5*Bmag2);
-    const double p_tot = p + 0.5*Bmag2;
-    const double BdotU = U.Bx*ux + U.By*uy + U.Bz*uz;
-
-    return Conserved(
-        U.rhow,
-        U.rhow*ux         - U.Bz*U.Bx,
-        U.rhow*uy         - U.Bz*U.By,
-        U.rhow*uz + p_tot - U.Bz*U.Bz,
-        U.Bx*uz - U.Bz*ux,
-        U.By*uz - U.Bz*uy,
-        U.psi,
-        (U.E + p_tot)*uz  - U.Bz*BdotU,
-        ch*ch * U.Bz
-    );
+HD inline double max_signal_speed_x(const Primitive& v) {
+    return fabs(v.u)+sound_speed(v);
 }
-
-HD inline double fast_speed_x(const Primitive& V) {
-    const double a2  = get_gamma() * V.p / V.rho;
-    const double b2  = (V.Bx*V.Bx + V.By*V.By + V.Bz*V.Bz) / V.rho;
-    const double bx2 = V.Bx * V.Bx / V.rho;
-    const double disc = (a2 + b2)*(a2 + b2) - 4.0*a2*bx2;
-    return sqrt(0.5 * (a2 + b2 + sqrt(disc > 0.0 ? disc : 0.0)));
+HD inline double max_signal_speed_y(const Primitive& v) {
+    return fabs(v.v)+sound_speed(v);
 }
-
-HD inline double fast_speed_y(const Primitive& V) {
-    const double a2  = get_gamma() * V.p / V.rho;
-    const double b2  = (V.Bx*V.Bx + V.By*V.By + V.Bz*V.Bz) / V.rho;
-    const double by2 = V.By * V.By / V.rho;
-    const double disc = (a2 + b2)*(a2 + b2) - 4.0*a2*by2;
-    return sqrt(0.5 * (a2 + b2 + sqrt(disc > 0.0 ? disc : 0.0)));
+HD inline double max_signal_speed_z(const Primitive& v) {
+    return fabs(v.w)+sound_speed(v);
 }
-
-HD inline double fast_speed_z(const Primitive& V) {
-    const double a2  = get_gamma() * V.p / V.rho;
-    const double b2  = (V.Bx*V.Bx + V.By*V.By + V.Bz*V.Bz) / V.rho;
-    const double bz2 = V.Bz * V.Bz / V.rho;
-    const double disc = (a2 + b2)*(a2 + b2) - 4.0*a2*bz2;
-    return sqrt(0.5 * (a2 + b2 + sqrt(disc > 0.0 ? disc : 0.0)));
-}
-
-HD inline double sound_speed(const Primitive& V) {
-    return sqrt(get_gamma() * V.p / V.rho);
-}
-
-HD inline double max_signal_speed_x(const Primitive& V, double ch) {
-    const double cf = fast_speed_x(V);
-    return fmax(fabs(V.u) + cf, ch);
-}
-
-HD inline double max_signal_speed_y(const Primitive& V, double ch) {
-    const double cf = fast_speed_y(V);
-    return fmax(fabs(V.v) + cf, ch);
-}
-
-HD inline double max_signal_speed_z(const Primitive& V, double ch) {
-    const double cf = fast_speed_z(V);
-    return fmax(fabs(V.w) + cf, ch);
-}
-
-HD inline double pressure(const Conserved& U) {
-    return cons_to_prim(U).p;
-}
+HD inline double pressure(const Conserved& q) { return cons_to_prim(q).p; }
 
 } // namespace phys

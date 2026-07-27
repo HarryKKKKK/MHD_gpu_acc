@@ -19,8 +19,7 @@ namespace {
 double component_error(const Conserved& a,const Conserved& b) {
     return std::max({std::fabs(a.rho-b.rho),std::fabs(a.rhou-b.rhou),
         std::fabs(a.rhov-b.rhov),std::fabs(a.rhow-b.rhow),
-        std::fabs(a.Bx-b.Bx),std::fabs(a.By-b.By),std::fabs(a.Bz-b.Bz),
-        std::fabs(a.E-b.E),std::fabs(a.psi-b.psi)});
+        std::fabs(a.E-b.E)});
 }
 
 Primitive initial(double x,double y,double z) {
@@ -28,8 +27,7 @@ Primitive initial(double x,double y,double z) {
     return Primitive(
         1.0+0.08*std::sin(2*pi*x)*std::cos(2*pi*y)*std::sin(2*pi*z),
         0.05*std::sin(2*pi*y),0.04*std::cos(2*pi*z),0.03*std::sin(2*pi*x),
-        0.7+0.02*std::cos(2*pi*z),0.2+0.02*std::sin(2*pi*x),0.1,
-        1.0+0.05*std::cos(2*pi*x)*std::cos(2*pi*y),0.0);
+        1.0+0.05*std::cos(2*pi*x)*std::cos(2*pi*y));
 }
 
 } // namespace
@@ -60,7 +58,6 @@ int main() {
         Grid3DGPU gpu_out(n,n,n,ng,0,1,0,1,0,1);
         gpu_old.upload_from_aos(cpu_old.data());
         set_gpu3d_physics_gamma(phys::gamma);
-        set_gpu3d_physics_ch(0.0);
         init_gpu_workspace(gpu_ws,gpu_old);
         const double gpu_dt=compute_dt_gpu(gpu_old,gpu_ws,0.2);
         const double dt_error=std::fabs(cpu_dt-gpu_dt);
@@ -70,12 +67,10 @@ int main() {
         }
 
         const double dt=std::min(cpu_dt,gpu_dt);
-        // compute_dt_gpu has installed the same current-step GLM speed on host
-        // and device, so both advances now use identical physics constants.
         advance_cpu(cpu_old,cpu_x,cpu_y,cpu_out,dt,cpu_ws,
-                    RiemannSolver::HLLD,periodic);
+                    RiemannSolver::HLLC,periodic);
         advance_gpu(gpu_old,gpu_x,gpu_y,gpu_out,gpu_ws,dt,
-                    RiemannSolver::HLLD,periodic);
+                    RiemannSolver::HLLC,periodic);
         cuda3d_check(cudaDeviceSynchronize(),"GPU parity synchronization");
         std::vector<Conserved> downloaded;
         gpu_out.download_to_aos(downloaded);
@@ -106,4 +101,3 @@ int main() {
         return 1;
     }
 }
-

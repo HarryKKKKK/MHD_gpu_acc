@@ -1,12 +1,12 @@
 #!/bin/bash -l
-#SBATCH -J mhd_cmp_mpi
+#SBATCH -J euler_cmp_mpi
 #SBATCH -A MPHIL-NIKIFORAKIS-HK597-SL2-CPU
 #SBATCH -p icelake
 #SBATCH -N 1
 #SBATCH --ntasks=76
 #SBATCH --cpus-per-task=1
 #SBATCH --exclusive
-#SBATCH --array=0-3%4
+#SBATCH --array=0-2%3
 #SBATCH -t 36:00:00
 #SBATCH -o logs/%x_%A_%a.out
 #SBATCH -e logs/%x_%A_%a.err
@@ -27,7 +27,7 @@ SUBMIT_ROOT="${WORKDIR:-${SLURM_SUBMIT_DIR:-$(pwd)}}"
 COMMON_SCRIPT="${SUBMIT_ROOT}/scripts/csd3_slurm/comparison_common.sh"
 if [ ! -f "${COMMON_SCRIPT}" ]; then
     echo "[ERROR] Cannot find comparison helper: ${COMMON_SCRIPT}"
-    echo "[ERROR] Submit this job from the MHD repository root, or set WORKDIR."
+    echo "[ERROR] Submit this job from the Euler repository root, or set WORKDIR."
     exit 1
 fi
 # shellcheck source=comparison_common.sh

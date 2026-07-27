@@ -20,10 +20,10 @@ constexpr int    kDtBlockSize = 256;
 
 // Direction-specific compile-time launch controls.  The tuning sweep keeps
 // 128 threads per block while changing the 2-D shape and launch bounds.
-constexpr int kAdvanceXBlockX = MHD_ADVANCE_X_BLOCK_X;
-constexpr int kAdvanceXBlockY = MHD_ADVANCE_X_BLOCK_Y;
-constexpr int kAdvanceYBlockX = MHD_ADVANCE_Y_BLOCK_X;
-constexpr int kAdvanceYBlockY = MHD_ADVANCE_Y_BLOCK_Y;
+constexpr int kAdvanceXBlockX = EULER_ADVANCE_X_BLOCK_X;
+constexpr int kAdvanceXBlockY = EULER_ADVANCE_X_BLOCK_Y;
+constexpr int kAdvanceYBlockX = EULER_ADVANCE_Y_BLOCK_X;
+constexpr int kAdvanceYBlockY = EULER_ADVANCE_Y_BLOCK_Y;
 constexpr int kAdvanceXThreadsPerBlock = kAdvanceXBlockX * kAdvanceXBlockY;
 constexpr int kAdvanceYThreadsPerBlock = kAdvanceYBlockX * kAdvanceYBlockY;
 static_assert(kAdvanceXThreadsPerBlock == 128,
@@ -31,18 +31,18 @@ static_assert(kAdvanceXThreadsPerBlock == 128,
 static_assert(kAdvanceYThreadsPerBlock == 128,
               "y launch-tuning configurations must use 128 threads/block");
 
-#if MHD_ADVANCE_X_MIN_BLOCKS_PER_SM > 0
-#define MHD_ADVANCE_X_LAUNCH_BOUNDS \
-    __launch_bounds__(kAdvanceXThreadsPerBlock, MHD_ADVANCE_X_MIN_BLOCKS_PER_SM)
+#if EULER_ADVANCE_X_MIN_BLOCKS_PER_SM > 0
+#define EULER_ADVANCE_X_LAUNCH_BOUNDS \
+    __launch_bounds__(kAdvanceXThreadsPerBlock, EULER_ADVANCE_X_MIN_BLOCKS_PER_SM)
 #else
-#define MHD_ADVANCE_X_LAUNCH_BOUNDS
+#define EULER_ADVANCE_X_LAUNCH_BOUNDS
 #endif
 
-#if MHD_ADVANCE_Y_MIN_BLOCKS_PER_SM > 0
-#define MHD_ADVANCE_Y_LAUNCH_BOUNDS \
-    __launch_bounds__(kAdvanceYThreadsPerBlock, MHD_ADVANCE_Y_MIN_BLOCKS_PER_SM)
+#if EULER_ADVANCE_Y_MIN_BLOCKS_PER_SM > 0
+#define EULER_ADVANCE_Y_LAUNCH_BOUNDS \
+    __launch_bounds__(kAdvanceYThreadsPerBlock, EULER_ADVANCE_Y_MIN_BLOCKS_PER_SM)
 #else
-#define MHD_ADVANCE_Y_LAUNCH_BOUNDS
+#define EULER_ADVANCE_Y_LAUNCH_BOUNDS
 #endif
 
 constexpr int PAD_X = 1;
@@ -78,11 +78,7 @@ __device__ inline Conserved minmod_conserved(
         minmod_scalar(C.rhou - L.rhou, R.rhou - C.rhou),
         minmod_scalar(C.rhov - L.rhov, R.rhov - C.rhov),
         minmod_scalar(C.rhow - L.rhow, R.rhow - C.rhow),
-        minmod_scalar(C.Bx   - L.Bx,   R.Bx   - C.Bx),
-        minmod_scalar(C.By   - L.By,   R.By   - C.By),
-        minmod_scalar(C.Bz   - L.Bz,   R.Bz   - C.Bz),
-        minmod_scalar(C.E    - L.E,    R.E    - C.E),
-        minmod_scalar(C.psi  - L.psi,  R.psi  - C.psi)
+        minmod_scalar(C.E    - L.E,    R.E    - C.E)
     );
 }
 
@@ -91,17 +87,14 @@ __device__ inline Conserved minmod_conserved(
 // to Uc, giving a first-order reconstruction for that cell.
 __device__ inline bool positive_conserved(const Conserved& U) {
     const double msq = U.rhou*U.rhou + U.rhov*U.rhov + U.rhow*U.rhow;
-    const double mag = 0.5 * (U.Bx*U.Bx + U.By*U.By + U.Bz*U.Bz);
-    const double lhs = U.rho * (U.E - mag) - 0.5 * msq;
+    const double lhs = U.rho * U.E - 0.5 * msq;
     return U.rho > 0.0 && lhs > 0.0;
 }
 
 __device__ inline Conserved gload(const ConstGrid2DGPUView& U, int i, int j) {
     const int idx = U.flat_index(i, j);
     return Conserved(
-        U.rho[idx], U.rhou[idx], U.rhov[idx], U.rhow[idx],
-        U.Bx[idx],  U.By[idx],   U.Bz[idx],
-        U.E[idx],   U.psi[idx]
+        U.rho[idx], U.rhou[idx], U.rhov[idx], U.rhow[idx], U.E[idx]
     );
 }
 
@@ -111,45 +104,31 @@ __device__ inline void gstore(Grid2DGPUView& U, int i, int j, const Conserved& C
     U.rhou[idx] = C.rhou;
     U.rhov[idx] = C.rhov;
     U.rhow[idx] = C.rhow;
-    U.Bx[idx]   = C.Bx;
-    U.By[idx]   = C.By;
-    U.Bz[idx]   = C.Bz;
     U.E[idx]    = C.E;
-    U.psi[idx]  = C.psi;
 }
 
-struct Tile9 {
-    double *rho, *rhou, *rhov, *rhow, *Bx, *By, *Bz, *E, *psi;
+struct Tile5 {
+    double *rho, *rhou, *rhov, *rhow, *E;
 
     __device__ Conserved load(int idx) const {
-        return Conserved(rho[idx], rhou[idx], rhov[idx], rhow[idx],
-                         Bx[idx],  By[idx],   Bz[idx],
-                         E[idx],   psi[idx]);
+        return Conserved(rho[idx], rhou[idx], rhov[idx], rhow[idx], E[idx]);
     }
     __device__ void store(int idx, const Conserved& C) {
         rho[idx]  = C.rho;
         rhou[idx] = C.rhou;
         rhov[idx] = C.rhov;
         rhow[idx] = C.rhow;
-        Bx[idx]   = C.Bx;
-        By[idx]   = C.By;
-        Bz[idx]   = C.Bz;
         E[idx]    = C.E;
-        psi[idx]  = C.psi;
     }
 };
 
-__device__ inline Tile9 carve(double*& p, int n_doubles) {
-    Tile9 t;
+__device__ inline Tile5 carve(double*& p, int n_doubles) {
+    Tile5 t;
     t.rho  = p; p += n_doubles;
     t.rhou = p; p += n_doubles;
     t.rhov = p; p += n_doubles;
     t.rhow = p; p += n_doubles;
-    t.Bx   = p; p += n_doubles;
-    t.By   = p; p += n_doubles;
-    t.Bz   = p; p += n_doubles;
     t.E    = p; p += n_doubles;
-    t.psi  = p; p += n_doubles;
     return t;
 }
 
@@ -163,13 +142,10 @@ __device__ inline void reconstruct_cell_muscl_hancock(
     const Conserved UL = Uc - half_slope;
     const Conserved UR = Uc + half_slope;
 
-    // Advance the GLM psi<->Bn subsystem in the Hancock predictor using the
-    // same current-step ch as the peer implementation and the Riemann solve.
-    const double ch = phys::get_ch_glm();
-    const Conserved FL = (dir == Direction::X) ? phys::flux_x(UL, ch)
-                                               : phys::flux_y(UL, ch);
-    const Conserved FR = (dir == Direction::X) ? phys::flux_x(UR, ch)
-                                               : phys::flux_y(UR, ch);
+    const Conserved FL = (dir == Direction::X) ? phys::flux_x(UL)
+                                               : phys::flux_y(UL);
+    const Conserved FR = (dir == Direction::X) ? phys::flux_x(UR)
+                                               : phys::flux_y(UR);
     const Conserved base = Uc + 0.5 * dt_over_d * (FL - FR);
 
     UL_star = base - half_slope;
@@ -209,8 +185,8 @@ __global__ void compute_block_max_speed_kernel(
         const bool dt_valid = isfinite(V.rho) && isfinite(V.p) &&
                                V.rho > 0.0 && V.p > 0.0;
         if (dt_valid) {
-            const double sx = phys::max_signal_speed_x(V, 0.0);
-            const double sy = phys::max_signal_speed_y(V, 0.0);
+            const double sx = phys::max_signal_speed_x(V);
+            const double sy = phys::max_signal_speed_y(V);
             if (isfinite(sx) && isfinite(sy))
                 local_speed = fmax(sx, sy);
         }
@@ -240,7 +216,7 @@ __global__ void compute_block_max_speed_kernel(
 }
 
 template <RiemannSolver Solver>
-__global__ void MHD_ADVANCE_X_LAUNCH_BOUNDS advance_x_kernel(
+__global__ void EULER_ADVANCE_X_LAUNCH_BOUNDS advance_x_kernel(
     ConstGrid2DGPUView Uin,
     Grid2DGPUView      Uout,
     double             dt
@@ -264,10 +240,10 @@ __global__ void MHD_ADVANCE_X_LAUNCH_BOUNDS advance_x_kernel(
     extern __shared__ double smem[];
     double* ptr = smem;
 
-    Tile9 S  = carve(ptr, sn);
-    Tile9 L  = carve(ptr, rn);
-    Tile9 R  = carve(ptr, rn);
-    Tile9 F  = carve(ptr, fn);
+    Tile5 S  = carve(ptr, sn);
+    Tile5 L  = carve(ptr, rn);
+    Tile5 R  = carve(ptr, rn);
+    Tile5 F  = carve(ptr, fn);
 
     for (int lin = tid; lin < sn; lin += block_threads) {
         const int sj = lin / sw;
@@ -347,11 +323,10 @@ __global__ void MHD_ADVANCE_X_LAUNCH_BOUNDS advance_x_kernel(
 }
 
 template <RiemannSolver Solver>
-__global__ void MHD_ADVANCE_Y_LAUNCH_BOUNDS advance_y_kernel(
+__global__ void EULER_ADVANCE_Y_LAUNCH_BOUNDS advance_y_kernel(
     ConstGrid2DGPUView Uin,
     Grid2DGPUView      Uout,
-    double             dt,
-    double             psi_damping_factor
+    double             dt
 ) {
     const int local_i = blockIdx.x * blockDim.x + threadIdx.x;
     const int local_j = blockIdx.y * blockDim.y + threadIdx.y;
@@ -372,10 +347,10 @@ __global__ void MHD_ADVANCE_Y_LAUNCH_BOUNDS advance_y_kernel(
     extern __shared__ double smem[];
     double* ptr = smem;
 
-    Tile9 S = carve(ptr, sn);
-    Tile9 L = carve(ptr, rn);
-    Tile9 R = carve(ptr, rn);
-    Tile9 F = carve(ptr, fn_);
+    Tile5 S = carve(ptr, sn);
+    Tile5 L = carve(ptr, rn);
+    Tile5 R = carve(ptr, rn);
+    Tile5 F = carve(ptr, fn_);
 
     for (int lin = tid; lin < sn; lin += block_threads) {
         const int sj = lin / sw;
@@ -449,16 +424,10 @@ __global__ void MHD_ADVANCE_Y_LAUNCH_BOUNDS advance_y_kernel(
     const int sc  = (threadIdx.y + 2) * sw + si;
     const Conserved Uc     = S.load(sc);
     const Conserved Unew_c = Uc - dt_dy * (F.load(fp) - F.load(fm));
-    Conserved Unew_damped = Unew_c;
-
-    // Apply GLM damping after the completed split update, matching the peer
-    // implementation's post-update damping stage.
-    Unew_damped.psi *= psi_damping_factor;
-
     gstore(Uout,
            Uin.i_begin() + local_i,
            Uin.j_begin() + local_j,
-           Unew_damped);
+           Unew_c);
 }
 
 } // anonymous namespace
@@ -466,11 +435,6 @@ __global__ void MHD_ADVANCE_Y_LAUNCH_BOUNDS advance_y_kernel(
 void set_gpu_physics_gamma(double g) {
     CUDA_CHECK(cudaMemcpyToSymbol(phys::d_gamma, &g, sizeof(double)));
     phys::gamma = g;
-}
-
-void set_gpu_physics_ch(double ch) {
-    CUDA_CHECK(cudaMemcpyToSymbol(phys::d_ch_glm, &ch, sizeof(double)));
-    phys::ch_glm = ch;
 }
 
 void init_gpu_workspace(GpuWorkspace& ws, const Grid2DGPU& grid) {
@@ -523,8 +487,6 @@ double compute_dt_gpu(const Grid2DGPU& grid, GpuWorkspace& ws, double cfl) {
         throw std::runtime_error("compute_dt_gpu: non-positive maximum wave speed.");
     }
 
-    set_gpu_physics_ch(max_speed);
-
     return cfl * std::min(grid.dx(), grid.dy()) / max_speed;
 }
 
@@ -558,7 +520,7 @@ static void advance_gpu_specialized(
     const int x_rw = x_bx + 2 + PAD_X;
     const int x_fw = x_bx + 1;
     const std::size_t x_smem =
-        9 * static_cast<std::size_t>(
+        5 * static_cast<std::size_t>(
             x_sw * x_by + 2 * x_rw * x_by + x_fw * x_by
         ) * sizeof(double);
 
@@ -567,7 +529,7 @@ static void advance_gpu_specialized(
     const int y_rh = y_by + 2;
     const int y_fh = y_by + 1;
     const std::size_t y_smem =
-        9 * static_cast<std::size_t>(
+        5 * static_cast<std::size_t>(
             y_sw * y_sh + 2 * y_sw * y_rh + y_sw * y_fh
         ) * sizeof(double);
 
@@ -607,21 +569,10 @@ static void advance_gpu_specialized(
     // The y sweep only reads bottom/top ghosts of Utmp.
     apply_boundary_y_gpu(Utmp, bc);
 
-    // ch was already computed as `max_speed` by compute_dt_gpu() this same
-    // step and pushed to both phys::d_ch_glm (device) and phys::ch_glm
-    // (host) via set_gpu_physics_ch().  Dedner damping uses the same fixed
-    // c_r = c_p^2/c_h value as the CPU/MPI paths; it is deliberately not
-    // scaled by dx or dy.  Computing this while the boundary launch is queued
-    // avoids adding host work before advance_x.
-    const double ch  = phys::get_ch_glm();
-    const double l_d = phys::cr_glm;
-    const double psi_damping_factor =
-        (ch > 0.0 && l_d > 0.0) ? std::exp(-dt * ch / l_d) : 1.0;
-
     if (timings) CUDA_CHECK(cudaEventRecord(y_start));
     advance_y_kernel<Solver><<<y_blocks, y_threads, y_smem>>>(
         make_view(static_cast<const Grid2DGPU&>(Utmp)),
-        make_view(Unew), dt, psi_damping_factor);
+        make_view(Unew), dt);
     CUDA_CHECK(cudaGetLastError());
     if (timings) CUDA_CHECK(cudaEventRecord(y_stop));
 
@@ -645,10 +596,10 @@ GpuLaunchConfig get_gpu_launch_config() {
     return GpuLaunchConfig{
         kAdvanceXBlockX,
         kAdvanceXBlockY,
-        MHD_ADVANCE_X_MIN_BLOCKS_PER_SM,
+        EULER_ADVANCE_X_MIN_BLOCKS_PER_SM,
         kAdvanceYBlockX,
         kAdvanceYBlockY,
-        MHD_ADVANCE_Y_MIN_BLOCKS_PER_SM
+        EULER_ADVANCE_Y_MIN_BLOCKS_PER_SM
     };
 }
 
@@ -672,10 +623,6 @@ void advance_gpu(
             break;
         case RiemannSolver::HLLC:
             advance_gpu_specialized<RiemannSolver::HLLC>(
-                Uold, Utmp, Unew, ws, dt, bc, timings);
-            break;
-        case RiemannSolver::HLLD:
-            advance_gpu_specialized<RiemannSolver::HLLD>(
                 Uold, Utmp, Unew, ws, dt, bc, timings);
             break;
         case RiemannSolver::FORCE:

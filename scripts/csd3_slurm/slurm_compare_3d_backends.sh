@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#SBATCH -J mhd3d_cmp
+#SBATCH -J euler3d_cmp
 #SBATCH -A MPHIL-NIKIFORAKIS-HK597-SL2-GPU
 #SBATCH -p ampere
 #SBATCH -N 1
@@ -98,11 +98,10 @@ done
 RESOLUTION="${RESOLUTION:-64}"
 OMP_THREADS="${OMP_THREADS:-8}"
 MPI_RANKS="${MPI_RANKS:-8}"
-SOLVER="${SOLVER:-hlld}"
+SOLVER="${SOLVER:-hllc}"
 CFL="${CFL:-0.20}"
 SNAPSHOTS="${SNAPSHOTS:-5}"
 BLAST_T_END="${BLAST_T_END:-0.10}"
-IMTG_T_END="${IMTG_T_END:-5.809475019311126}"
 MAKE_JOBS="${MAKE_JOBS:-8}"
 RESULT_DIR="${RESULT_DIR:-timing/compare3d_${JOB_ID}}"
 BUILD_ROOT="${BUILD_ROOT:-build/csd3_compare3d_${JOB_ID}}"
@@ -167,7 +166,6 @@ echo "MPI ranks    : ${MPI_RANKS}"
 echo "Solver / CFL : ${SOLVER} / ${CFL}"
 echo "Snapshots    : ${SNAPSHOTS} intervals (timing only)"
 echo "Blast t_end  : ${BLAST_T_END}"
-echo "IMTG t_end   : ${IMTG_T_END}"
 echo "Results      : ${RESULT_DIR}"
 
 echo "===== BUILD ALL TRUE-3D BACKENDS ====="
@@ -273,7 +271,6 @@ run_case() {
 }
 
 run_case blast "${BLAST_T_END}"
-run_case imtg "${IMTG_T_END}"
 
 echo
 echo "===== FINAL GPU SPEEDUP SUMMARY ====="

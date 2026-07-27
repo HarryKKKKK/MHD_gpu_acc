@@ -58,7 +58,7 @@ struct MpiDomain {
     bool periodic_x = false, periodic_y = false;
 
     // Committed derived datatypes for halo exchange (built once, reused every step).
-    MPI_Datatype conserved_type = MPI_DATATYPE_NULL;  // 9 contiguous doubles == one Conserved
+    MPI_Datatype conserved_type = MPI_DATATYPE_NULL;  // five contiguous doubles
     MPI_Datatype col_halo_type  = MPI_DATATYPE_NULL;   // ng-wide column strip, total_ny rows
 
     bool is_root() const { return rank == 0; }
@@ -146,8 +146,7 @@ struct MpiWorkspace {
 // Each rank computes its own local maximum signal speed over its
 // interior cells (identical loop/formula to compute_dt_cpu() in
 // solver_cpu.cpp), then MPI_Allreduce(MAX) gives every rank the same
-// global maximum, which is used to set phys::ch_glm identically
-// everywhere before flux computation.
+// global maximum used for the shared timestep.
 // ============================================================
 double compute_dt_mpi(const Grid2D& grid, double cfl, MPI_Comm comm);
 

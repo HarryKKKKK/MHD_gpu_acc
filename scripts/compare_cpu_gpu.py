@@ -40,7 +40,7 @@ from pathlib import Path
 # nodes here don't have numpy installed and lack network access for pip.
 
 CASES_DEFAULT = ["shock_bubble", "brio_wu", "orszag_tang"]
-SOLVERS_DEFAULT = ["hll", "hllc", "hlld", "force"]
+SOLVERS_DEFAULT = ["hll", "hllc", "force"]
 
 
 def load_csv(path: Path):

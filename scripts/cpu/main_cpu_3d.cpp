@@ -1,10 +1,3 @@
-// 3D GLM-MHD cases: magnetized blast and a compressible IMTG counterpart.
-//
-// Usage:
-//   ./bin/main_cpu_3d [--case blast|blast_extreme|imtg] [--resolution 48]
-//                     [--snapshots 5] [--solver hll|hllc|hlld|force]
-//                     [--out output/blast3d] [--no-out]
-
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -17,221 +10,115 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-
 #ifdef _OPENMP
 #include <omp.h>
 #endif
 
 #include "blast3d_case.hpp"
-#include "blast3d_extreme_case.hpp"
 #include "cpu/grid3d_cpu.hpp"
 #include "cpu/solver3d_cpu.hpp"
-#include "imtg3d_case.hpp"
 
 namespace {
-
-enum class Case3D { Blast, BlastExtreme, IMTG };
-
 struct Options {
-    int n=-1;
-    int snapshots=-1;
-    double t_end=-1.0;
-    double cfl=-1.0;
-    std::string out;
-    RiemannSolver solver=RiemannSolver::HLLD;
-    Case3D test_case=Case3D::Blast;
+    int n=48,snapshots=5;
+    double t_end=blast3d::t_end,cfl=blast3d::recommended_cfl;
+    std::string out="output/euler_blast3d";
+    RiemannSolver solver=RiemannSolver::HLLC;
     bool write=true;
 };
-
 Options parse_args(int argc,char** argv) {
     Options o;
     for(int a=1;a<argc;++a) {
         const std::string s=argv[a];
-        auto value=[&]() -> std::string {
-            if(a+1>=argc) throw std::runtime_error("missing value after "+s);
-            return argv[++a];
-        };
+        auto value=[&]{if(++a>=argc)throw std::runtime_error("missing value after "+s);
+                       return std::string(argv[a]);};
         if(s=="--case") {
-            const auto v=value();
-            if(v=="blast" || v=="blast_athena") o.test_case=Case3D::Blast;
-            else if(v=="blast_extreme") o.test_case=Case3D::BlastExtreme;
-            else if(v=="imtg") o.test_case=Case3D::IMTG;
-            else throw std::runtime_error("unknown case: "+v);
-        }
-        else if(s=="--resolution") o.n=std::stoi(value());
-        else if(s=="--t-end") o.t_end=std::stod(value());
-        else if(s=="--snapshots") o.snapshots=std::stoi(value());
-        else if(s=="--cfl") o.cfl=std::stod(value());
-        else if(s=="--out") o.out=value();
-        else if(s=="--no-out") o.write=false;
+            if(value()!="blast")throw std::runtime_error("only Euler case 'blast' is available");
+        } else if(s=="--resolution")o.n=std::stoi(value());
+        else if(s=="--snapshots")o.snapshots=std::stoi(value());
+        else if(s=="--t-end")o.t_end=std::stod(value());
+        else if(s=="--cfl")o.cfl=std::stod(value());
+        else if(s=="--out")o.out=value();
+        else if(s=="--no-out")o.write=false;
         else if(s=="--solver") {
             const auto v=value();
-            if(v=="hll") o.solver=RiemannSolver::HLL;
-            else if(v=="hllc") o.solver=RiemannSolver::HLLC;
-            else if(v=="hlld") o.solver=RiemannSolver::HLLD;
-            else if(v=="force") o.solver=RiemannSolver::FORCE;
-            else throw std::runtime_error("unknown solver: "+v);
+            if(v=="hll")o.solver=RiemannSolver::HLL;
+            else if(v=="hllc")o.solver=RiemannSolver::HLLC;
+            else if(v=="force")o.solver=RiemannSolver::FORCE;
+            else throw std::runtime_error("solver must be hll, hllc, or force");
         } else throw std::runtime_error("unknown argument: "+s);
     }
-    const bool imtg=o.test_case==Case3D::IMTG;
-    const bool extreme=o.test_case==Case3D::BlastExtreme;
-    if(o.n<0) o.n=imtg?imtg3d::reference_resolution:48;
-    if(o.snapshots<0) o.snapshots=imtg?12:5;
-    if(o.t_end<0) o.t_end=imtg?imtg3d::t_end:
-        (extreme?blast3d_extreme::t_end:blast3d::t_end);
-    if(o.cfl<0) o.cfl=imtg?imtg3d::recommended_cfl:
-        (extreme?blast3d_extreme::recommended_cfl:blast3d::recommended_cfl);
-    if(o.out.empty()) o.out=imtg?"output/imtg3d":
-        (extreme?"output/blast3d_extreme":"output/blast3d");
-    if(o.n<8 || o.snapshots<1 || o.t_end<=0 || o.cfl<=0)
+    if(o.n<8||o.snapshots<1||o.t_end<=0||o.cfl<=0)
         throw std::runtime_error("require resolution>=8, snapshots>=1, t_end>0, cfl>0");
     return o;
 }
-
-template<class T> void write_value(std::ofstream& f,const T& v) {
-    f.write(reinterpret_cast<const char*>(&v),sizeof(T));
+template<class T>void write_value(std::ofstream& f,const T& v) {
+    f.write(reinterpret_cast<const char*>(&v),sizeof(v));
 }
-
-bool valid_primitive(const Primitive& v) {
-    return v.rho>0.0 && v.p>0.0 &&
-        std::isfinite(v.rho) && std::isfinite(v.p) &&
-        std::isfinite(v.u) && std::isfinite(v.v) && std::isfinite(v.w) &&
-        std::isfinite(v.Bx) && std::isfinite(v.By) && std::isfinite(v.Bz);
-}
-
-void write_snapshot(const Grid3D& q,const std::string& dir,
-                    const std::string& stem,int index,double time) {
+void write_snapshot(const Grid3D& q,const std::string& dir,int frame,double time) {
     std::filesystem::create_directories(dir);
     std::ostringstream name;
-    name<<dir<<"/"<<stem<<"_"<<std::setw(3)<<std::setfill('0')
-        <<index<<".mhd3d";
+    name<<dir<<"/euler_blast3d_"<<std::setw(3)<<std::setfill('0')
+        <<frame<<".euler3d";
     const std::string tmp=name.str()+".tmp";
     std::ofstream f(tmp,std::ios::binary);
-    if(!f) throw std::runtime_error("cannot open "+tmp);
-    const char magic[8]={'M','H','D','3','D','0','1','\0'};
-    f.write(magic,8);
+    if(!f)throw std::runtime_error("cannot open "+tmp);
+    const char magic[8]={'E','U','L','3','D','0','1','\0'};f.write(magic,8);
     const std::uint32_t nx=q.nx(),ny=q.ny(),nz=q.nz();
-    write_value(f,nx); write_value(f,ny); write_value(f,nz);
-    for(double v:{q.x_min(),q.x_max(),q.y_min(),q.y_max(),
-                  q.z_min(),q.z_max(),time,phys::gamma}) write_value(f,v);
+    write_value(f,nx);write_value(f,ny);write_value(f,nz);
+    for(double v:{q.x_min(),q.x_max(),q.y_min(),q.y_max(),q.z_min(),q.z_max(),
+                  time,phys::gamma})write_value(f,v);
     for(int k=q.k_begin();k<q.k_end();++k)
         for(int j=q.j_begin();j<q.j_end();++j)
             for(int i=q.i_begin();i<q.i_end();++i) {
-                const Conserved& u=q(i,j,k);
-                const Primitive v=phys::cons_to_prim(u);
-                if(!valid_primitive(v))
-                    throw std::runtime_error(
-                        "non-physical state while writing snapshot "
-                        +std::to_string(index));
-                for(float field:{static_cast<float>(v.rho),static_cast<float>(v.p),
-                                 static_cast<float>(v.u),static_cast<float>(v.v),
-                                 static_cast<float>(v.w),static_cast<float>(v.Bx),
-                                 static_cast<float>(v.By),static_cast<float>(v.Bz)})
-                    write_value(f,field);
+                const Primitive v=phys::cons_to_prim(q(i,j,k));
+                if(!(v.rho>0&&v.p>0&&std::isfinite(v.rho)&&std::isfinite(v.p)))
+                    throw std::runtime_error("non-physical snapshot state");
+                for(float x:{static_cast<float>(v.rho),static_cast<float>(v.p),
+                             static_cast<float>(v.u),static_cast<float>(v.v),
+                             static_cast<float>(v.w)})write_value(f,x);
             }
-    if(!f) throw std::runtime_error("write failed: "+tmp);
     f.close();
-    if(std::filesystem::exists(name.str())) std::filesystem::remove(name.str());
+    if(std::filesystem::exists(name.str()))std::filesystem::remove(name.str());
     std::filesystem::rename(tmp,name.str());
-    std::cout<<"  snapshot "<<index<<" at t="<<time<<" -> "<<name.str()<<"\n";
 }
-
+const char* solver_name(RiemannSolver s) {
+    return s==RiemannSolver::HLL?"HLL":s==RiemannSolver::HLLC?"HLLC":"FORCE";
+}
 } // namespace
 
 int main(int argc,char** argv) {
     try {
         const Options o=parse_args(argc,argv);
-        const bool imtg=o.test_case==Case3D::IMTG;
-        const bool extreme=o.test_case==Case3D::BlastExtreme;
-        const double lo=imtg?imtg3d::x_min:
-            (extreme?blast3d_extreme::x_min:blast3d::x_min);
-        const double hi=imtg?imtg3d::x_max:
-            (extreme?blast3d_extreme::x_max:blast3d::x_max);
-        const std::string stem=imtg?"imtg3d":
-            (extreme?"blast3d_extreme":"blast3d");
-        phys::gamma=imtg?imtg3d::gamma:
-            (extreme?blast3d_extreme::gamma:blast3d::gamma);
-        Grid3D old(o.n,o.n,o.n,2,
-                   lo,hi,lo,hi,lo,hi);
+        phys::gamma=blast3d::gamma;
+        Grid3D old(o.n,o.n,o.n,2,blast3d::x_min,blast3d::x_max,
+                   blast3d::x_min,blast3d::x_max,blast3d::x_min,blast3d::x_max);
         for(int k=0;k<old.total_nz();++k)
             for(int j=0;j<old.total_ny();++j)
                 for(int i=0;i<old.total_nx();++i)
-                    old(i,j,k)=imtg
-                        ? imtg3d::initial_state(
-                            old.x_center(i),old.y_center(j),old.z_center(k))
-                        : (extreme
-                            ? blast3d_extreme::initial_state(
-                                old.x_center(i),old.y_center(j),old.z_center(k))
-                            : blast3d::initial_state(
-                                old.x_center(i),old.y_center(j),old.z_center(k)));
-        const BoundaryConfig3D bc=imtg
-            ? imtg3d::boundary_conditions()
-            : (extreme
-                ? blast3d_extreme::boundary_conditions()
-                : blast3d::boundary_conditions());
-        apply_boundary(old,bc);
-        Grid3D ux=old,uy=old,next=old;
-        CpuWorkspace3D ws; ws.init(o.n,o.n,o.n);
-
+                    old(i,j,k)=blast3d::initial_state(
+                        old.x_center(i),old.y_center(j),old.z_center(k));
+        const auto bc=blast3d::boundary_conditions();apply_boundary(old,bc);
+        Grid3D ux=old,uy=old,next=old;CpuWorkspace3D ws;ws.init(o.n,o.n,o.n);
         std::vector<double> targets;
-        for(int s=0;s<=o.snapshots;++s)
-            targets.push_back(o.t_end*static_cast<double>(s)/o.snapshots);
-        if(o.write) write_snapshot(old,o.out,stem,0,0.0);
-
-        const char* case_title=imtg?"IMTG":
-            (extreme?"extreme magnetized blast":"Athena magnetized blast");
-        std::cout<<"=== 3D GLM-MHD case: "<<case_title<<" ===\n"
-                 <<"  grid   : "<<o.n<<" x "<<o.n<<" x "<<o.n<<"\n"
-                 <<"  domain : ["<<lo<<","<<hi<<"]^3\n";
-        if(imtg) {
-            std::cout
-                 <<"  reference: Glines et al., PRE 103, 043203 (2021)\n"
-                 <<"  setup  : Ms0.2_Ma1 compressible ideal MHD\n"
-                 <<"  u0/B0  : "<<imtg3d::velocity_amplitude<<" / "
-                 <<imtg3d::magnetic_amplitude<<"\n"
-                 <<"  P0/rho0: 1 / 1 with paper TG perturbations\n"
-                 <<"  T      : "<<imtg3d::dynamical_time
-                 <<", t_end/T="<<o.t_end/imtg3d::dynamical_time<<"\n"
-                 <<"  div(B) : GLM (paper uses CT)\n";
-        } else if(extreme) {
-            std::cout
-                 <<"  reference: Derigs et al., JCP 317 (2016), Sec. 5.6\n"
-                 <<"  B0     : ("<<blast3d_extreme::magnetic_field_x()
-                 <<",0,0),  p_inner/p_outer=10000\n"
-                 <<"  radii  : r_inner=0.09, r_outer=0.10\n";
-        } else {
-            std::cout
-                 <<"  reference: Athena spherical blast-wave parameters\n"
-                 <<"  B0     : ("<<blast3d::magnetic_field_x()<<","
-                 <<blast3d::magnetic_field_y()<<",0), |B0|=1\n"
-                 <<"  pressure: p_inner=10, p_outer=0.1, ratio=100\n"
-                 <<"  radii  : r_inner=0.09, r_outer=0.10 (smoothed)\n";
-        }
-        std::cout<<"  gamma  : "<<phys::gamma<<", periodic boundaries\n"
-                 <<"  t_end  : "<<o.t_end<<"\n";
+        for(int s=0;s<=o.snapshots;++s)targets.push_back(o.t_end*s/o.snapshots);
+        if(o.write)write_snapshot(old,o.out,0,0);
+        std::cout<<"=== 3D compressible Euler blast ===\n"
+                 <<"  grid: "<<o.n<<"^3, solver: "<<solver_name(o.solver)<<"\n";
+        double t=0;int step=0,frame=1;
         const auto start=std::chrono::steady_clock::now();
-        int step=0,snapshot=1;
-        double t=0;
         while(t<o.t_end-1e-14) {
-            const double raw=compute_dt_cpu(old,o.cfl);
-            const double target=targets[static_cast<std::size_t>(snapshot)];
-            const double dt=std::min(raw,target-t);
-            if(!std::isfinite(dt)||dt<=0) throw std::runtime_error("invalid timestep");
+            const double dt=std::min(compute_dt_cpu(old,o.cfl),targets[frame]-t);
+            if(!std::isfinite(dt)||dt<=0)throw std::runtime_error("invalid timestep");
             advance_cpu(old,ux,uy,next,dt,ws,o.solver,bc);
-            std::swap(old,next); t+=dt; ++step;
-            if(t>=target-1e-12) {
-                if(o.write) write_snapshot(old,o.out,stem,snapshot,t);
-                ++snapshot;
+            std::swap(old,next);t+=dt;++step;
+            if(t>=targets[frame]-1e-12) {
+                if(o.write)write_snapshot(old,o.out,frame,t);
+                ++frame;
             }
-            if(step%10==0 || t>=o.t_end-1e-14)
-                std::cout<<"  step "<<std::setw(5)<<step<<"  t="<<std::fixed
-                         <<std::setprecision(5)<<t<<"  dt="<<std::scientific<<dt<<"\n";
         }
         const double seconds=std::chrono::duration<double>(
             std::chrono::steady_clock::now()-start).count();
-        std::cout<<"Done: "<<step<<" steps, "<<seconds<<" s, "
-                 <<(static_cast<double>(step)*o.n*o.n*o.n/seconds/1e6)
-                 <<" Mcell-updates/s\n";
         std::cout<<"[CPU3D] nx="<<o.n<<" ny="<<o.n<<" nz="<<o.n
                  <<" threads="
 #ifdef _OPENMP
@@ -240,15 +127,10 @@ int main(int argc,char** argv) {
                  <<1
 #endif
                  <<" steps="<<step<<" elapsed_s="<<seconds
-                 <<" Mcell_updates_s="
-                 <<(static_cast<double>(step)*o.n*o.n*o.n/seconds/1e6)
-                 <<"\n";
-        if(o.write)
-            std::cout<<"Plot with: python visualization/plot_blast3d_volume.py --input "
-                     <<o.out<<"\n";
+                 <<" Mcell_updates_s="<<static_cast<double>(step)*o.n*o.n*o.n/
+                    seconds/1e6<<"\n";
         return 0;
     } catch(const std::exception& e) {
-        std::cerr<<"Error: "<<e.what()<<"\n";
-        return 1;
+        std::cerr<<"Error: "<<e.what()<<"\n";return 1;
     }
 }

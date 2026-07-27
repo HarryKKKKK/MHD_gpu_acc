@@ -2,71 +2,29 @@
 
 #include <string>
 #include <vector>
-
 #include "types.hpp"
 
-// ============================================================
-// Boundary condition types
-// ============================================================
-enum class BoundaryType {
-    Periodic,      // periodic wrap-around
-    Transmissive   // zero-gradient (Neumann) outflow
-};
-
+enum class BoundaryType { Periodic, Transmissive };
 struct BoundaryConfig {
-    BoundaryType left   = BoundaryType::Transmissive;
-    BoundaryType right  = BoundaryType::Transmissive;
-    BoundaryType bottom = BoundaryType::Transmissive;
-    BoundaryType top    = BoundaryType::Transmissive;
+    BoundaryType left=BoundaryType::Transmissive;
+    BoundaryType right=BoundaryType::Transmissive;
+    BoundaryType bottom=BoundaryType::Transmissive;
+    BoundaryType top=BoundaryType::Transmissive;
 };
-
-// ============================================================
-// Test case identifiers
-// ============================================================
-enum class CaseId {
-    KelvinHelmholtz,  // §5: Kelvin-Helmholtz instability, γ=1.4
-    ShockBubble,      // Mach 1.22 shock–bubble interaction, γ=1.4
-    BlastWave,        // 2D Euler circular blast wave, γ=1.4
-    BrioWu,           // Brio–Wu 1D MHD shock tube, γ=2.0
-    OrszagTang,       // Orszag–Tang 2D MHD vortex, γ=5/3
-    Rotor             // Tóth (2000) §6.6 first rotor problem, γ=1.4
-};
-
-// ============================================================
-// Case configuration (domain, grid, time, physics)
-// ============================================================
+enum class CaseId { KelvinHelmholtz, ShockBubble, BlastWave };
 struct CaseConfig {
-    int    nx;
-    int    ny;
-    int    ng;       // number of ghost layers (≥2 for MUSCL-Hancock)
-    double x_min;
-    double x_max;
-    double y_min;
-    double y_max;
-    double cfl;
-    double t_end;
-    double gamma;    // adiabatic exponent for this case
+    int nx,ny,ng;
+    double x_min,x_max,y_min,y_max,cfl,t_end,gamma;
     BoundaryConfig bc;
-    // Ordered physical times at which to write field snapshots.
-    // Tags are file-name labels (e.g. "t006" for dimensionless t=0.6).
-    // If empty, only the final state is written.
-    std::vector<double>      snapshot_times = {};
-    std::vector<std::string> snapshot_tags  = {};
+    std::vector<double> snapshot_times={};
+    std::vector<std::string> snapshot_tags={};
 };
 
-// ============================================================
-// API
-// ============================================================
-CaseId     parse_case_id(const std::string& case_name);
-std::string case_id_to_string(CaseId case_id);
-
-CaseConfig  get_case_config(CaseId case_id);
-CaseConfig  get_case_config(const std::string& case_name);
-
-// Scale grid resolution by factor n (nx *= n, ny *= n)
-CaseConfig  get_n_case_config(CaseId case_id, int n);
-CaseConfig  get_n_case_config(const std::string& case_name, int n);
-
-// Return initial conserved state at cell center (x, y)
-Conserved   initial_state_at(CaseId case_id, double x, double y);
-Conserved   initial_state_at(const std::string& case_name, double x, double y);
+CaseId parse_case_id(const std::string&);
+std::string case_id_to_string(CaseId);
+CaseConfig get_case_config(CaseId);
+CaseConfig get_case_config(const std::string&);
+CaseConfig get_n_case_config(CaseId,int);
+CaseConfig get_n_case_config(const std::string&,int);
+Conserved initial_state_at(CaseId,double,double);
+Conserved initial_state_at(const std::string&,double,double);

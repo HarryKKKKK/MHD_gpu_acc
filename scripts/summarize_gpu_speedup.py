@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 EXPECTED_CASES = ("shock_bubble", "blast_wave")
-EXPECTED_SOLVERS = ("hll", "hllc", "hlld", "force")
+EXPECTED_SOLVERS = ("hll", "hllc", "force")
 # A same-size GPU speedup requires a CPU timing at the same n.  OpenMP omits
 # n=8, so the paired speedup summary covers n={1,2,4}; the raw GPU CSV still
 # retains its n=8 timing row.

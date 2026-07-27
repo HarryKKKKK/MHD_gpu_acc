@@ -1,18 +1,14 @@
 #include "gpu/boundary_gpu.cuh"
 
 // ============================================================
-// Device helper: copy all 9 MHD fields from src_idx to dst_idx.
+// Device helper: copy all five Euler fields from src_idx to dst_idx.
 // ============================================================
-__device__ inline void copy9(Grid2DGPUView& g, int dst, int src) {
+__device__ inline void copy5(Grid2DGPUView& g, int dst, int src) {
     g.rho[dst]  = g.rho[src];
     g.rhou[dst] = g.rhou[src];
     g.rhov[dst] = g.rhov[src];
     g.rhow[dst] = g.rhow[src];
-    g.Bx[dst]   = g.Bx[src];
-    g.By[dst]   = g.By[src];
-    g.Bz[dst]   = g.Bz[src];
     g.E[dst]    = g.E[src];
-    g.psi[dst]  = g.psi[src];
 }
 
 // ============================================================
@@ -39,12 +35,12 @@ __global__ void apply_lr_bc_kernel(
         switch (left_type) {
             case BoundaryType::Periodic: {
                 const int src = g.flat_index(ie - 1 - k, j);
-                copy9(g, gL, src);
+                copy5(g, gL, src);
                 break;
             }
             case BoundaryType::Transmissive: {
                 const int src = g.flat_index(ib, j);
-                copy9(g, gL, src);
+                copy5(g, gL, src);
                 break;
             }
         }
@@ -55,12 +51,12 @@ __global__ void apply_lr_bc_kernel(
         switch (right_type) {
             case BoundaryType::Periodic: {
                 const int src = g.flat_index(ib + k, j);
-                copy9(g, gR, src);
+                copy5(g, gR, src);
                 break;
             }
             case BoundaryType::Transmissive: {
                 const int src = g.flat_index(ie - 1, j);
-                copy9(g, gR, src);
+                copy5(g, gR, src);
                 break;
             }
         }
@@ -92,12 +88,12 @@ __global__ void apply_bt_bc_kernel(
         switch (bottom_type) {
             case BoundaryType::Periodic: {
                 const int src = g.flat_index(i, je - 1 - k);
-                copy9(g, gB, src);
+                copy5(g, gB, src);
                 break;
             }
             case BoundaryType::Transmissive: {
                 const int src = g.flat_index(i, jb);
-                copy9(g, gB, src);
+                copy5(g, gB, src);
                 break;
             }
         }
@@ -108,12 +104,12 @@ __global__ void apply_bt_bc_kernel(
         switch (top_type) {
             case BoundaryType::Periodic: {
                 const int src = g.flat_index(i, jb + k);
-                copy9(g, gT, src);
+                copy5(g, gT, src);
                 break;
             }
             case BoundaryType::Transmissive: {
                 const int src = g.flat_index(i, je - 1);
-                copy9(g, gT, src);
+                copy5(g, gT, src);
                 break;
             }
         }
