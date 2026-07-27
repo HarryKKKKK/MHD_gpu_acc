@@ -20,6 +20,8 @@
 #
 #   mkdir -p logs
 #
+# sbatch --export=ALL,INPUT_DIR=outputs/blast3d_gpu_n128_hlld_32084920,CASE=blast,PAPER=1 \
+#   scripts/csd3_slurm/slurm_render_3d.sh
 # 1. Athena/moderate blast (rho, pressure and |B| by default):
 #
 #   sbatch --export=ALL,INPUT_DIR=outputs/blast3d_gpu_n128_hlld_JOBID,CASE=blast \
