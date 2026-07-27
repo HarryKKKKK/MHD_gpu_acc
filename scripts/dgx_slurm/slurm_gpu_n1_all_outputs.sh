@@ -93,12 +93,12 @@ else
         *H100*|*H800*) CUDA_SM=90 ;;
         *)
             echo "[ERROR] Cannot determine CUDA architecture for '${GPU_NAME}'."
-            echo "[ERROR] Set CUDA_ARCH_FLAG explicitly, for example --arch=sm_90."
+            echo "[ERROR] Set CUDA_ARCH_FLAG explicitly, for example -arch=sm_90."
             exit 1
             ;;
     esac
 fi
-CUDA_ARCH_FLAG="${CUDA_ARCH_FLAG:---arch=sm_${CUDA_SM}}"
+CUDA_ARCH_FLAG="${CUDA_ARCH_FLAG:--arch=sm_${CUDA_SM}}"
 NVCC_EXTRA_FLAGS="${NVCC_EXTRA_FLAGS:-}"
 
 GIT_BRANCH="$(git branch --show-current 2>/dev/null || echo unknown)"
