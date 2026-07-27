@@ -64,14 +64,18 @@ if [[ "${CASE}" == "imtg" ]]; then
     DEFAULT_PLOT_FIELDS=rho,current,Bmag
     DEFAULT_RHO_FRACTION=0.10
     DEFAULT_PLOT_STRIDE=2
+    DEFAULT_PNG_FRAMES=6
+    DEFAULT_MIN_TIME=""
     CASE_STEM=imtg3d
 elif [[ "${CASE}" == "blast" || "${CASE}" == "blast_athena" ]]; then
     DEFAULT_RESOLUTION=128
     DEFAULT_T_END=0.10
     DEFAULT_SNAPSHOTS=5
-    DEFAULT_PLOT_FIELDS=rho
-    DEFAULT_RHO_FRACTION=0.12
+    DEFAULT_PLOT_FIELDS=rho,Bmag
+    DEFAULT_RHO_FRACTION=0.10
     DEFAULT_PLOT_STRIDE=1
+    DEFAULT_PNG_FRAMES=3
+    DEFAULT_MIN_TIME=0.02
     CASE_STEM=blast3d
 elif [[ "${CASE}" == "blast_extreme" ]]; then
     # Derigs et al. JCP 317 (2016), Sec. 5.6. This remains an intentionally
@@ -79,9 +83,11 @@ elif [[ "${CASE}" == "blast_extreme" ]]; then
     DEFAULT_RESOLUTION=128
     DEFAULT_T_END=0.01
     DEFAULT_SNAPSHOTS=5
-    DEFAULT_PLOT_FIELDS=rho
+    DEFAULT_PLOT_FIELDS=rho,Bmag
     DEFAULT_RHO_FRACTION=0.12
     DEFAULT_PLOT_STRIDE=1
+    DEFAULT_PNG_FRAMES=3
+    DEFAULT_MIN_TIME=""
     CASE_STEM=blast3d_extreme
 else
     echo "[ERROR] CASE must be blast, blast_athena, blast_extreme, or imtg."
@@ -101,8 +107,9 @@ CURRENT_LEVEL="${CURRENT_LEVEL:-4.5}"
 BMAG_FRACTION="${BMAG_FRACTION:-0.15}"
 FRACTION="${FRACTION:-0.18}"
 LEVEL="${LEVEL:-}"
-PNG_FRAMES="${PNG_FRAMES:-6}"
+PNG_FRAMES="${PNG_FRAMES:-${DEFAULT_PNG_FRAMES}}"
 PLOT_STRIDE="${PLOT_STRIDE:-${DEFAULT_PLOT_STRIDE}}"
+MIN_TIME="${MIN_TIME:-${DEFAULT_MIN_TIME}}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 MAKE_JOBS="${MAKE_JOBS:-8}"
 OUT_DIR="${OUT_DIR:-outputs/${CASE_STEM}_gpu_n${RESOLUTION}_${SOLVER}_${JOB_ID}}"
@@ -247,6 +254,9 @@ if [[ "${VISUALIZE}" == "1" ]]; then
                     fi
                     ;;
             esac
+            if [[ -n "${MIN_TIME}" ]]; then
+                PLOT_ARGS+=(--min-time "${MIN_TIME}")
+            fi
             echo
             echo "----- RENDER ${RENDER_INDEX}/${RENDER_TOTAL}: ${RENDER_FIELD} -----"
             echo "Start: $(date --iso-8601=seconds)"

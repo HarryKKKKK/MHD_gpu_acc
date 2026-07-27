@@ -69,6 +69,20 @@ Paper mode uses a 7.2-inch two-column canvas, white background, `(a)`--`(f)`
 panel labels, normalized IMTG time `t/T`, mathematical field labels, one global
 color scale, and writes both a 300-dpi PNG and a compact rasterized PDF.
 
+For the moderate blast, the recommended paper figure is a single `2x3`
+summary: density at three times in the top row and magnetic-magnitude
+perturbations at the same times in the bottom row. The `Bmag` mask subtracts
+the non-zero far-field `|B0|`, so it no longer fills the complete cube:
+
+```bash
+python3 visualization/plot_blast3d_paper.py \
+  --input outputs/blast3d_gpu_n128_hlld_JOBID \
+  --min-time 0.02 --panels 3 --stride 1 --dpi 300
+```
+
+The dedicated rendering Slurm script selects this combined figure
+automatically for a blast when `PAPER=1`.
+
 ## Slurm
 
 Submit the generic one-node OpenMP job from the repository root. Supply the

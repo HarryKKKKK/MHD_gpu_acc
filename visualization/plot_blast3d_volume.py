@@ -62,15 +62,18 @@ def read_snapshot(path: Path):
 
 
 def derived_volume(data, field_name, meta):
-    """Return a primitive field or a periodic finite-difference magnitude."""
+    """Return a field and whether its physically meaningful background is 0."""
     if field_name in BASE_FIELDS:
         return data[..., BASE_FIELDS.index(field_name)], False
     if field_name == "speed":
         return np.sqrt(
             data[..., 2]**2 + data[..., 3]**2 + data[..., 4]**2), True
     if field_name == "Bmag":
+        # A magnetized blast has a non-zero uniform |B| in the far field.
+        # Treating this magnitude as a zero-background field fills the entire
+        # plotting cube. Its boundary median must be removed like rho or p.
         return np.sqrt(
-            data[..., 5]**2 + data[..., 6]**2 + data[..., 7]**2), True
+            data[..., 5]**2 + data[..., 6]**2 + data[..., 7]**2), False
 
     x0, x1, y0, y1, z0, z1 = meta[:6]
     nz, ny, nx = data.shape[:3]
@@ -111,14 +114,18 @@ def physical_edges(bounds, shape):
     return np.meshgrid(xe, ye, ze, indexing="ij")
 
 
-def prepare_frames(snapshots, field_name, fraction, absolute_level, stride):
+def prepare_frames(snapshots, field_name, fraction, absolute_level, stride,
+                   bmag_background="boundary"):
     frames = []
     global_deviation = 0.0
     for data, meta in snapshots:
-        volume, magnitude = derived_volume(data, field_name, meta)
+        volume, zero_background = derived_volume(data, field_name, meta)
+        if field_name == "Bmag" and bmag_background == "zero":
+            zero_background = True
         volume = volume[::stride, ::stride, ::stride]
-        background = 0.0 if magnitude else boundary_background(volume)
-        deviation = volume if magnitude else np.abs(volume - background)
+        background = 0.0 if zero_background else boundary_background(volume)
+        deviation = (volume if zero_background
+                     else np.abs(volume - background))
         global_deviation = max(global_deviation, float(deviation.max()))
         frames.append((volume, background, meta))
     if global_deviation <= 0:
@@ -130,7 +137,7 @@ def prepare_frames(snapshots, field_name, fraction, absolute_level, stride):
     prepared = []
     for volume, background, meta in frames:
         mask = ((volume >= threshold)
-                if field_name in ("speed", "Bmag", "current", "vorticity")
+                if field_name in ("speed", "current", "vorticity")
                 else (np.abs(volume-background) >= threshold))
         prepared.append((volume, mask, background, meta))
         if np.any(mask):
@@ -188,7 +195,7 @@ def style_axis(ax, bounds, paper=False):
 def draw_frame(ax, frame, field_name, threshold, norm, cmap, case_title,
                uniform_field_direction=None, elevation=24.0, azimuth=38.0,
                paper=False, panel_label=None, time_scale=None,
-               layout_preview=False):
+               layout_preview=False, show_time=True):
     volume, mask, background, meta = frame
     x0, x1, y0, y1, z0, z1, time, _gamma = meta
     bounds = (x0, x1, y0, y1, z0, z1)
@@ -245,13 +252,14 @@ def draw_frame(ax, frame, field_name, threshold, norm, cmap, case_title,
                 0.04, 0.96, panel_label, transform=ax.transAxes,
                 color="#111827", fontsize=8.5, fontweight="bold",
                 va="top", ha="left")
-        if time_scale is not None:
-            time_text = r"$t/T={:.1f}$".format(time/time_scale)
-        else:
-            time_text = r"$t={:.4g}$".format(time)
-        ax.text2D(
-            0.94, 0.96, time_text, transform=ax.transAxes,
-            color="#111827", fontsize=7.5, va="top", ha="right")
+        if show_time:
+            if time_scale is not None:
+                time_text = r"$t/T={:.1f}$".format(time/time_scale)
+            else:
+                time_text = r"$t={:.4g}$".format(time)
+            ax.text2D(
+                0.94, 0.96, time_text, transform=ax.transAxes,
+                color="#111827", fontsize=7.5, va="top", ha="right")
     else:
         ax.set_title(
             f"{case_title}: {field_name}", color="#cbd5e1", pad=10)
@@ -276,6 +284,9 @@ def main():
     parser.add_argument(
         "--max-time", type=float,
         help="ignore snapshots later than this time")
+    parser.add_argument(
+        "--min-time", type=float,
+        help="ignore snapshots earlier than this time")
     parser.add_argument(
         "--stride", type=int, default=1,
         help="plot every Nth cell in each direction after deriving the field")
@@ -372,8 +383,11 @@ def main():
             loaded.append((path, read_snapshot(path)))
         if args.max_time is not None:
             loaded = [item for item in loaded if item[1][1][6] <= args.max_time]
+        if args.min_time is not None:
+            loaded = [item for item in loaded if item[1][1][6] >= args.min_time]
         if not loaded:
-            raise SystemExit("No snapshots remain after applying --max-time")
+            raise SystemExit(
+                "No snapshots remain after applying --min-time/--max-time")
         for path, (data, _meta) in loaded:
             bad = int(np.count_nonzero(~np.isfinite(data)))
             if bad:
@@ -402,7 +416,8 @@ def main():
         print(f"[2/5] Computing {args.field} and visibility masks "
               f"(stride={args.stride})", flush=True)
         frames, threshold, norm = prepare_frames(
-            snapshots, args.field, args.fraction, args.level, args.stride)
+            snapshots, args.field, args.fraction, args.level, args.stride,
+            bmag_background="zero" if is_imtg else "boundary")
         print(f"      threshold={threshold:.6g}", flush=True)
     # `matplotlib.colormaps` is unavailable on older CSD3 installations.
     # Turbo itself appeared in Matplotlib 3.3, so fall back to the widely
@@ -484,7 +499,7 @@ def main():
 
     # Also produce a single contact sheet for papers and presentations.
     print("[5/5] Rendering evolution contact sheet", flush=True)
-    if len(selected_indices) >= 5:
+    if len(selected_indices) >= 5 or len(selected_indices) == 3:
         columns = 3
     elif len(selected_indices) >= 2:
         columns = 2

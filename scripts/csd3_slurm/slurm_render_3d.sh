@@ -64,6 +64,7 @@
 #   PAPER_DPI=300                   publication raster resolution
 #   OVERVIEW_ONLY=1                 skip final/individual PNGs (PAPER default)
 #   PAPER_PNG_ONLY=1                do not write the rasterized PDF
+#   BLAST_SUMMARY=1                 2x3 rho/Bmag paper figure (PAPER default)
 #
 # Example with custom rendering parameters:
 #
@@ -75,6 +76,12 @@
 #
 #   sbatch -A YOUR_CSD3_CPU_ACCOUNT \
 #     --export=ALL,INPUT_DIR=outputs/imtg3d_gpu_n128_hlld_JOBID,CASE=imtg,PLOT_FIELDS=Bmag,PAPER=1 \
+#     scripts/csd3_slurm/slurm_render_3d.sh
+#
+# Final blast figure (rho top row, Bmag perturbation bottom row):
+#
+#   sbatch -A YOUR_CSD3_CPU_ACCOUNT \
+#     --export=ALL,INPUT_DIR=outputs/blast3d_gpu_n128_hlld_JOBID,CASE=blast,PAPER=1 \
 #     scripts/csd3_slurm/slurm_render_3d.sh
 #
 # A comma-separated PLOT_FIELDS value also works when exported by the shell
@@ -93,7 +100,8 @@ SUBMIT_DIR="${SLURM_SUBMIT_DIR:-$(pwd)}"
 WORKDIR="${WORKDIR:-${SUBMIT_DIR}}"
 cd "${WORKDIR}"
 
-if [[ ! -f visualization/plot_blast3d_volume.py ]]; then
+if [[ ! -f visualization/plot_blast3d_volume.py ||
+      ! -f visualization/plot_blast3d_paper.py ]]; then
     echo "[ERROR] Submit from the MHD repository root or set WORKDIR."
     exit 1
 fi
@@ -135,16 +143,27 @@ fi
 
 case "${CASE}" in
     blast|blast_athena)
-        PLOT_FIELDS="${PLOT_FIELDS:-rho,pressure,Bmag}"
+        # Three times are enough to communicate expansion. Bmag is rendered
+        # as a perturbation from the non-zero far-field |B0|.
+        PLOT_FIELDS="${PLOT_FIELDS:-rho,Bmag}"
         DEFAULT_PLOT_STRIDE=1
+        DEFAULT_PNG_FRAMES=3
+        DEFAULT_MIN_TIME=0.02
+        DEFAULT_PRESSURE_FRACTION=0.03
         ;;
     blast_extreme)
-        PLOT_FIELDS="${PLOT_FIELDS:-rho,pressure,Bmag}"
+        PLOT_FIELDS="${PLOT_FIELDS:-rho,Bmag}"
         DEFAULT_PLOT_STRIDE=1
+        DEFAULT_PNG_FRAMES=3
+        DEFAULT_MIN_TIME=""
+        DEFAULT_PRESSURE_FRACTION=0.03
         ;;
     imtg)
         PLOT_FIELDS="${PLOT_FIELDS:-rho,current,Bmag}"
         DEFAULT_PLOT_STRIDE=2
+        DEFAULT_PNG_FRAMES=6
+        DEFAULT_MIN_TIME=""
+        DEFAULT_PRESSURE_FRACTION=0.10
         ;;
     *)
         echo "[ERROR] CASE must be blast, blast_athena, blast_extreme, or imtg."
@@ -157,19 +176,21 @@ esac
 PLOT_FIELDS="${PLOT_FIELDS//+/,}"
 
 PYTHON_BIN="${PYTHON_BIN:-python3}"
-PNG_FRAMES="${PNG_FRAMES:-6}"
+PNG_FRAMES="${PNG_FRAMES:-${DEFAULT_PNG_FRAMES}}"
 PLOT_STRIDE="${PLOT_STRIDE:-${DEFAULT_PLOT_STRIDE}}"
 RHO_FRACTION="${RHO_FRACTION:-0.10}"
-PRESSURE_FRACTION="${PRESSURE_FRACTION:-0.10}"
+PRESSURE_FRACTION="${PRESSURE_FRACTION:-${DEFAULT_PRESSURE_FRACTION}}"
 CURRENT_FRACTION="${CURRENT_FRACTION:-0.12}"
 BMAG_FRACTION="${BMAG_FRACTION:-0.15}"
 FRACTION="${FRACTION:-0.18}"
 LEVEL="${LEVEL:-}"
+MIN_TIME="${MIN_TIME:-${DEFAULT_MIN_TIME}}"
 MAX_TIME="${MAX_TIME:-}"
 PAPER="${PAPER:-0}"
 PAPER_DPI="${PAPER_DPI:-300}"
 OVERVIEW_ONLY="${OVERVIEW_ONLY:-${PAPER}}"
 PAPER_PNG_ONLY="${PAPER_PNG_ONLY:-0}"
+BLAST_SUMMARY="${BLAST_SUMMARY:-${PAPER}}"
 
 if ! command -v "${PYTHON_BIN}" >/dev/null 2>&1; then
     echo "[ERROR] Python executable not found: ${PYTHON_BIN}"
@@ -198,7 +219,45 @@ echo "PNG frames    : ${PNG_FRAMES}"
 echo "Plot stride   : ${PLOT_STRIDE}"
 echo "Paper layout  : ${PAPER}"
 echo "Overview only : ${OVERVIEW_ONLY}"
+echo "Blast summary : ${BLAST_SUMMARY}"
 echo "Python        : $(command -v "${PYTHON_BIN}")"
+
+if [[ "${BLAST_SUMMARY}" == "1" &&
+      ( "${CASE}" == "blast" || "${CASE}" == "blast_athena" ||
+        "${CASE}" == "blast_extreme" ) ]]; then
+    SUMMARY_MIN_TIME="${MIN_TIME:-0.0}"
+    SUMMARY_ARGS=(
+        --input "${INPUT_DIR}"
+        --min-time "${SUMMARY_MIN_TIME}"
+        --panels "${PNG_FRAMES}"
+        --stride "${PLOT_STRIDE}"
+        --rho-fraction "${RHO_FRACTION}"
+        --bmag-fraction "${BMAG_FRACTION}"
+        --dpi "${PAPER_DPI}"
+    )
+    if [[ -n "${MAX_TIME}" ]]; then
+        SUMMARY_ARGS+=(--max-time "${MAX_TIME}")
+    fi
+    if [[ "${PAPER_PNG_ONLY}" == "1" ]]; then
+        SUMMARY_ARGS+=(--png-only)
+    fi
+    echo
+    echo "===== BLAST 2x${PNG_FRAMES} PAPER SUMMARY ====="
+    printf "Command: %q -u visualization/plot_blast3d_paper.py" "${PYTHON_BIN}"
+    printf " %q" "${SUMMARY_ARGS[@]}"
+    printf "\n"
+    if command -v srun >/dev/null 2>&1 && [[ -n "${SLURM_JOB_ID:-}" ]]; then
+        srun --ntasks=1 --cpus-per-task="${SLURM_CPUS_PER_TASK:-4}" \
+            "${PYTHON_BIN}" -u visualization/plot_blast3d_paper.py \
+            "${SUMMARY_ARGS[@]}"
+    else
+        "${PYTHON_BIN}" -u visualization/plot_blast3d_paper.py \
+            "${SUMMARY_ARGS[@]}"
+    fi
+    echo "===== RENDER COMPLETE ====="
+    echo "Results: ${WORKDIR}/${INPUT_DIR}"
+    exit 0
+fi
 
 IFS=',' read -r -a RENDER_FIELDS <<< "${PLOT_FIELDS}"
 RENDER_TOTAL="${#RENDER_FIELDS[@]}"
@@ -232,6 +291,9 @@ for RENDER_FIELD in "${RENDER_FIELDS[@]}"; do
     fi
     if [[ -n "${MAX_TIME}" ]]; then
         PLOT_ARGS+=(--max-time "${MAX_TIME}")
+    fi
+    if [[ -n "${MIN_TIME}" ]]; then
+        PLOT_ARGS+=(--min-time "${MIN_TIME}")
     fi
     if [[ "${PAPER}" == "1" ]]; then
         PLOT_ARGS+=(--paper --paper-dpi "${PAPER_DPI}")
