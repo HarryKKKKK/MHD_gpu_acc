@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#SBATCH -J mhd_launch_sweep
+#SBATCH -J euler_launch_sweep
 #SBATCH -A MPHIL-NIKIFORAKIS-HK597-SL2-GPU
 #SBATCH -p ampere
 #SBATCH -N 1
@@ -14,38 +14,37 @@ set -euo pipefail
 
 # Compile-time launch-configuration sweep for advance_x/advance_y.
 #
-# Defaults run two coordinate sweeps:
-#   x phase: vary x while y stays at 16x8/LB=0
-#   y phase: vary y while x stays at 16x8/LB=3
+# Defaults run the focused Euler Y-kernel sweep suggested by the NCU profile:
+#   y phase: compare 16x8 and 32x4 with LB=0 and LB=5,
+#            while x stays at 16x8/LB=3.
 #
 # Example:
 #   sbatch scripts/csd3_slurm/sweep_gpu_launch.sh
 #
 # Smaller smoke test:
-#   SWEEP_PHASE=x X_BLOCK_SHAPES="16x8 32x4" X_LAUNCH_BOUNDS="2 3" \
 #   REPEATS=2 WARMUP_STEPS=20 BENCHMARK_STEPS=50 \
 #   sbatch scripts/csd3_slurm/sweep_gpu_launch.sh
 
-N="${N:-8}"
-CASE="${CASE:-orszag_tang}"
-SOLVER="${SOLVER:-hlld}"
-SWEEP_PHASE="${SWEEP_PHASE:-both}"
+N="${N:-4}"
+CASE="${CASE:-blast_wave}"
+SOLVER="${SOLVER:-hllc}"
+SWEEP_PHASE="${SWEEP_PHASE:-y}"
 REPEATS="${REPEATS:-5}"
-WARMUP_STEPS="${WARMUP_STEPS:-200}"
-BENCHMARK_STEPS="${BENCHMARK_STEPS:-500}"
+WARMUP_STEPS="${WARMUP_STEPS:-50}"
+BENCHMARK_STEPS="${BENCHMARK_STEPS:-200}"
 RUN_COMBINED_WINNER="${RUN_COMBINED_WINNER:-1}"
 
 X_BLOCK_SHAPES="${X_BLOCK_SHAPES:-16x8 32x4 8x16}"
-Y_BLOCK_SHAPES="${Y_BLOCK_SHAPES:-16x8 32x4 8x16}"
+Y_BLOCK_SHAPES="${Y_BLOCK_SHAPES:-16x8 32x4}"
 X_LAUNCH_BOUNDS="${X_LAUNCH_BOUNDS:-0 2 3}"
-Y_LAUNCH_BOUNDS="${Y_LAUNCH_BOUNDS:-0 2 3}"
+Y_LAUNCH_BOUNDS="${Y_LAUNCH_BOUNDS:-0 5}"
 
 FIXED_X_SHAPE="${FIXED_X_SHAPE:-16x8}"
 FIXED_X_LB="${FIXED_X_LB:-3}"
 FIXED_Y_SHAPE="${FIXED_Y_SHAPE:-16x8}"
-FIXED_Y_LB="${FIXED_Y_LB:-0}"
+FIXED_Y_LB="${FIXED_Y_LB:-5}"
 
-TUNE_NVCC_FLAGS="${TUNE_NVCC_FLAGS:--Xptxas=-v}"
+TUNE_NVCC_FLAGS="${TUNE_NVCC_FLAGS:--lineinfo -Xptxas=-v}"
 
 SLURM_JOB_ID="${SLURM_JOB_ID:-manual}"
 SLURM_SUBMIT_DIR="${SLURM_SUBMIT_DIR:-$(pwd)}"
@@ -177,15 +176,15 @@ run_configuration() {
     local build_dir="${TUNING_REL}/build/${tag}"
     local bin_dir="${TUNING_REL}/bin/${tag}"
     local bin="${WORKDIR}/${bin_dir}/main_gpu"
-    local build_log="${TUNING_ROOT}/build_logs/${tag}.log"
+    local build_log="${TUNING_ROOT}/build_logs/${tag}.txt"
 
     local flags="${TUNE_NVCC_FLAGS}"
-    flags+=" -DMHD_ADVANCE_X_BLOCK_X=${x_bx}"
-    flags+=" -DMHD_ADVANCE_X_BLOCK_Y=${x_by}"
-    flags+=" -DMHD_ADVANCE_Y_BLOCK_X=${y_bx}"
-    flags+=" -DMHD_ADVANCE_Y_BLOCK_Y=${y_by}"
-    flags+=" -DMHD_ADVANCE_X_MIN_BLOCKS_PER_SM=${x_lb}"
-    flags+=" -DMHD_ADVANCE_Y_MIN_BLOCKS_PER_SM=${y_lb}"
+    flags+=" -DEULER_ADVANCE_X_BLOCK_X=${x_bx}"
+    flags+=" -DEULER_ADVANCE_X_BLOCK_Y=${x_by}"
+    flags+=" -DEULER_ADVANCE_Y_BLOCK_X=${y_bx}"
+    flags+=" -DEULER_ADVANCE_Y_BLOCK_Y=${y_by}"
+    flags+=" -DEULER_ADVANCE_X_MIN_BLOCKS_PER_SM=${x_lb}"
+    flags+=" -DEULER_ADVANCE_Y_MIN_BLOCKS_PER_SM=${y_lb}"
 
     echo ""
     echo "===== BUILD ${tag} ====="
@@ -211,7 +210,7 @@ run_configuration() {
     local measured_steps=""
 
     for ((repeat = 1; repeat <= REPEATS; ++repeat)); do
-        local run_log="${TUNING_ROOT}/run_logs/${tag}_r${repeat}.log"
+        local run_log="${TUNING_ROOT}/run_logs/${tag}_r${repeat}.txt"
         echo "===== RUN ${tag} repeat ${repeat}/${REPEATS} ====="
 
         set +e

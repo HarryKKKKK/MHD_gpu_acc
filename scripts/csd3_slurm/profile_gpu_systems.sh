@@ -175,7 +175,7 @@ make -j "${MAKE_JOBS}" gpu \
     BIN_DIR="${BIN_ROOT}" \
     CUDA_ARCH="${CUDA_ARCH}" \
     NVCC_EXTRA_FLAGS="${PROFILE_NVCC_FLAGS}" \
-    2>&1 | tee "${RESULT_DIR}/build.log"
+    2>&1 | tee "${RESULT_DIR}/build.txt"
 
 if [ ! -x "${APP}" ]; then
     echo "[ERROR] Build did not produce ${APP}."
@@ -195,7 +195,7 @@ echo "repeat,measured_steps,wall_ms,ms_per_step,x_ms_per_step,y_ms_per_step,stat
     > "${BASELINE_CSV}"
 
 for ((repeat=1; repeat<=BASELINE_REPEATS; ++repeat)); do
-    log="${RESULT_DIR}/baseline_${repeat}.log"
+    log="${RESULT_DIR}/baseline_${repeat}.txt"
     echo "----- baseline ${repeat}/${BASELINE_REPEATS} -----"
     "${APP}" "${COMMON_ARGS[@]}" \
         --warmup-steps "${BASELINE_WARMUP}" \
@@ -245,7 +245,7 @@ nsys profile \
     "${APP}" "${COMMON_ARGS[@]}" \
         --warmup-steps "${NSYS_WARMUP}" \
         --benchmark-steps "${NSYS_STEPS}" \
-    2>&1 | tee "${RESULT_DIR}/nsys_console.log"
+    2>&1 | tee "${RESULT_DIR}/nsys_console.txt"
 
 NSYS_REPORT=""
 for candidate in "${NSYS_BASE}.nsys-rep" "${NSYS_BASE}.qdrep"; do
@@ -286,7 +286,7 @@ for axis in x y; do
         "${APP}" "${COMMON_ARGS[@]}" \
             --warmup-steps "${NCU_WARMUP}" \
             --benchmark-steps "${NCU_STEPS}" \
-        2>&1 | tee "${RESULT_DIR}/ncu_advance_${axis}_console.log"
+        2>&1 | tee "${RESULT_DIR}/ncu_advance_${axis}_console.txt"
     ncu_status=${PIPESTATUS[0]}
     set -e
 

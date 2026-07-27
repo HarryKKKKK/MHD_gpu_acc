@@ -27,7 +27,7 @@
 #endif
 
 #ifndef EULER_ADVANCE_Y_MIN_BLOCKS_PER_SM
-#define EULER_ADVANCE_Y_MIN_BLOCKS_PER_SM 0
+#define EULER_ADVANCE_Y_MIN_BLOCKS_PER_SM 5
 #endif
 
 struct GpuLaunchConfig {
