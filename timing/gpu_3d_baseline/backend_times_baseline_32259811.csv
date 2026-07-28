@@ -1,0 +1,3 @@
+case,backend,resolution,workers,elapsed_s
+blast,gpu_baseline,128,1,2.38356482699999983e+00
+imtg,gpu_baseline,128,1,5.56798005799999984e+01

@@ -1,0 +1,4 @@
+# commit_message: UPDATE: correct cases
+arch,case,solver,nx,ny,nz,total_cells,total_steps,final_time,gpu_seconds,wall_seconds,process_real_seconds,max_rss_kb,git_branch,git_commit,cuda_arch
+gpu3d_baseline,blast,hlld,128,128,128,2097152,281,1.00000000000000006e-01,2.38355761718749992e+00,2.38356482699999983e+00,3.23,10012,debug_cpu,5657ae6,-arch=sm_80
+gpu3d_baseline,imtg,hlld,128,128,128,2097152,6420,5.80947501931112598e+00,5.56800937499999975e+01,5.56798005799999984e+01,57.06,10048,debug_cpu,5657ae6,-arch=sm_80
