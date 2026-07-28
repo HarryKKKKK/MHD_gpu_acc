@@ -19,10 +19,14 @@ mkdir -p logs validation
 
 module load cuda/12.2
 
-read -r -a CASES <<< "${CASES_STR:-orszag_tang rotor}"
+read -r -a CASES <<< "${CASES_STR:-blast imtg}"
 read -r -a SOLVERS <<< "${SOLVERS_STR:-hlld}"
-read -r -a RESOLUTIONS <<< "${RESOLUTIONS_STR:-64}"
+read -r -a RESOLUTIONS <<< "${RESOLUTIONS_STR:-128}"
 MAX_STEPS="${MAX_STEPS:-0}"
+BLAST_T_END="${BLAST_T_END:-0.10}"
+IMTG_T_END="${IMTG_T_END:-5.809475019311126}"
+CFL="${CFL:-0.20}"
+SNAPSHOTS="${SNAPSHOTS:-5}"
 
 GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)
 GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
@@ -44,9 +48,16 @@ make gpu_3d_baseline
 # complete two steps and exercise their different x/y boundary conditions.
 for case_name in "${CASES[@]}"; do
     echo "===== SMOKE: ${case_name} ====="
+    if [[ "${case_name}" == "imtg" ]]; then
+        case_t_end="${IMTG_T_END}"
+    else
+        case_t_end="${BLAST_T_END}"
+    fi
     ./bin/main_gpu_3d_baseline \
         --case "$case_name" --solver hlld \
-        --resolution 16 --max-steps 2 --no-out
+        --resolution 16 --t-end "${case_t_end}" --cfl "${CFL}" \
+        --snapshots "${SNAPSHOTS}" \
+        --max-steps 2 --no-out
 done
 
 SUMMARY="validation/gpu_3d_baseline_${SLURM_JOB_ID}.csv"
@@ -56,10 +67,17 @@ for resolution in "${RESOLUTIONS[@]}"; do
     for case_name in "${CASES[@]}"; do
         for solver in "${SOLVERS[@]}"; do
             echo "===== RUN: case=${case_name} solver=${solver} N=${resolution} ====="
+            if [[ "${case_name}" == "imtg" ]]; then
+                case_t_end="${IMTG_T_END}"
+            else
+                case_t_end="${BLAST_T_END}"
+            fi
             temp_log=$(mktemp)
             ./bin/main_gpu_3d_baseline \
                 --case "$case_name" --solver "$solver" \
-                --resolution "$resolution" --max-steps "$MAX_STEPS" --no-out \
+                --resolution "$resolution" --t-end "${case_t_end}" \
+                --cfl "${CFL}" --snapshots "${SNAPSHOTS}" \
+                --max-steps "$MAX_STEPS" --no-out \
                 2>&1 | tee "$temp_log"
 
             nx=$(awk -F ':' '/\[GPU3D\] nx/{gsub(/[ \t]/,"",$2);print $2;exit}' "$temp_log")

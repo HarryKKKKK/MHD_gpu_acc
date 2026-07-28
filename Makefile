@@ -85,7 +85,6 @@ GPU_OBJS := \
 
 GPU_3D_BASELINE_OBJS := \
 	$(GPU_3D_BASELINE_BUILD_DIR)/main_gpu_3d_baseline.o \
-	$(GPU_3D_BASELINE_BUILD_DIR)/test_cases.o \
 	$(GPU_3D_BASELINE_BUILD_DIR)/solver3d_gpu.o \
 	$(GPU_3D_BASELINE_BUILD_DIR)/boundary3d_gpu.o
 
@@ -256,10 +255,6 @@ $(GPU_3D_BASELINE_BUILD_DIR)/main_gpu_3d_baseline.o: $(GPU_3D_BASELINE_MAIN)
 	@mkdir -p $(dir $@)
 	$(NVCC) $(NVCCFLAGS) -c $< -o $@
 
-$(GPU_3D_BASELINE_BUILD_DIR)/test_cases.o: src/test_cases.cpp
-	@mkdir -p $(dir $@)
-	$(NVCC) $(NVCCFLAGS) -x c++ -c $< -o $@
-
 $(GPU_3D_BASELINE_BUILD_DIR)/solver3d_gpu.o: src/gpu/solver3d_gpu.cu
 	@mkdir -p $(dir $@)
 	$(NVCC) $(NVCCFLAGS) -c $< -o $@
@@ -289,7 +284,7 @@ run_gpu: $(GPU_TARGET)
 
 .PHONY: run_gpu_3d_baseline
 run_gpu_3d_baseline: $(GPU_3D_BASELINE_TARGET)
-	$(GPU_3D_BASELINE_TARGET) --case orszag_tang --solver hlld --resolution 32 --max-steps 2 --no-out
+	$(GPU_3D_BASELINE_TARGET) --case blast --solver hlld --resolution 32 --max-steps 2 --no-out
 
 .PHONY: run_mpi
 run_mpi: $(MPI_TARGET)

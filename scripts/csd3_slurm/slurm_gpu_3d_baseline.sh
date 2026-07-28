@@ -18,7 +18,7 @@
 #   sbatch scripts/csd3_slurm/slurm_gpu_3d_baseline.sh
 #
 # Example report sweep:
-#   export RESOLUTIONS_STR="64 96 128" SOLVERS_STR="hlld"
+#   export RESOLUTIONS_STR="64 128" SOLVERS_STR="hlld"
 #   sbatch --export=ALL,RESOLUTIONS_STR,SOLVERS_STR \
 #     scripts/csd3_slurm/slurm_gpu_3d_baseline.sh
 
@@ -62,10 +62,14 @@ for tool in nvcc nvidia-smi make; do
     fi
 done
 
-read -r -a CASES <<< "${CASES_STR:-orszag_tang rotor}"
+read -r -a CASES <<< "${CASES_STR:-blast imtg}"
 read -r -a SOLVERS <<< "${SOLVERS_STR:-hlld}"
-read -r -a RESOLUTIONS <<< "${RESOLUTIONS_STR:-64}"
+read -r -a RESOLUTIONS <<< "${RESOLUTIONS_STR:-128}"
 MAX_STEPS="${MAX_STEPS:-0}"
+BLAST_T_END="${BLAST_T_END:-0.10}"
+IMTG_T_END="${IMTG_T_END:-5.809475019311126}"
+CFL="${CFL:-0.20}"
+SNAPSHOTS="${SNAPSHOTS:-5}"
 SMOKE_RESOLUTION="${SMOKE_RESOLUTION:-16}"
 SMOKE_STEPS="${SMOKE_STEPS:-2}"
 MAKE_JOBS="${MAKE_JOBS:-8}"
@@ -77,8 +81,8 @@ if (( ${#CASES[@]} == 0 || ${#SOLVERS[@]} == 0 ||
 fi
 
 for case_name in "${CASES[@]}"; do
-    if [[ "${case_name}" != "orszag_tang" && "${case_name}" != "rotor" ]]; then
-        echo "[ERROR] Unsupported case '${case_name}'. Use orszag_tang or rotor."
+    if [[ "${case_name}" != "blast" && "${case_name}" != "imtg" ]]; then
+        echo "[ERROR] Unsupported case '${case_name}'. Use blast or imtg."
         exit 2
     fi
 done
@@ -130,6 +134,10 @@ echo "Cases               : ${CASES[*]}"
 echo "Solvers             : ${SOLVERS[*]}"
 echo "Resolutions         : ${RESOLUTIONS[*]}"
 echo "Maximum steps       : ${MAX_STEPS} (0 = case t_end)"
+echo "Blast t_end         : ${BLAST_T_END}"
+echo "IMTG t_end          : ${IMTG_T_END}"
+echo "CFL                 : ${CFL}"
+echo "Target intervals    : ${SNAPSHOTS}"
 echo "Build root          : ${BUILD_ROOT}"
 echo "Binary root         : ${BIN_ROOT}"
 echo
@@ -150,24 +158,35 @@ fi
 echo "===== TWO-CASE SMOKE GATE ====="
 for case_name in "${CASES[@]}"; do
     echo "----- ${case_name}: ${SMOKE_RESOLUTION}^3, ${SMOKE_STEPS} steps -----"
+    if [[ "${case_name}" == "imtg" ]]; then
+        smoke_t_end="${IMTG_T_END}"
+    else
+        smoke_t_end="${BLAST_T_END}"
+    fi
     srun --ntasks=1 "${BIN}" \
         --case "${case_name}" \
         --solver hlld \
         --resolution "${SMOKE_RESOLUTION}" \
+        --t-end "${smoke_t_end}" \
+        --cfl "${CFL}" \
+        --snapshots "${SNAPSHOTS}" \
         --max-steps "${SMOKE_STEPS}" \
         --no-out
 done
 
 SUMMARY="timing/gpu_3d_baseline/csd3_gpu3d_baseline_${JOB_ID}.csv"
+COMPARE_CSV="timing/gpu_3d_baseline/backend_times_baseline_${JOB_ID}.csv"
 {
     echo "# commit_message: ${GIT_COMMIT_MSG}"
     echo "arch,case,solver,nx,ny,nz,total_cells,total_steps,final_time,gpu_seconds,wall_seconds,process_real_seconds,max_rss_kb,git_branch,git_commit,cuda_arch"
 } > "${SUMMARY}"
+echo "case,backend,resolution,workers,elapsed_s" > "${COMPARE_CSV}"
 
 run_and_record() {
     local case_name="$1"
     local solver="$2"
     local resolution="$3"
+    local t_end="$4"
     local temp_log
     local temp_time
     local run_status
@@ -184,6 +203,9 @@ run_and_record() {
         --case "${case_name}"
         --solver "${solver}"
         --resolution "${resolution}"
+        --t-end "${t_end}"
+        --cfl "${CFL}"
+        --snapshots "${SNAPSHOTS}"
         --max-steps "${MAX_STEPS}"
         --no-out
     )
@@ -225,13 +247,19 @@ run_and_record() {
     rss="$(awk -F '=' '/^max_rss_kb=/{print $2;exit}' "${temp_time}")"
 
     echo "gpu3d_baseline,${case_name},${solver},${nx},${ny},${nz},${cells},${steps},${final_time},${gpu_seconds},${wall_seconds},${process_real:-unknown},${rss:-unknown},${GIT_BRANCH},${GIT_COMMIT},${CUDA_ARCH_FLAG}" >> "${SUMMARY}"
+    echo "${case_name},gpu_baseline,${resolution},1,${wall_seconds}" >> "${COMPARE_CSV}"
     rm -f "${temp_log}" "${temp_time}"
 }
 
 for resolution in "${RESOLUTIONS[@]}"; do
     for case_name in "${CASES[@]}"; do
+        if [[ "${case_name}" == "imtg" ]]; then
+            case_t_end="${IMTG_T_END}"
+        else
+            case_t_end="${BLAST_T_END}"
+        fi
         for solver in "${SOLVERS[@]}"; do
-            run_and_record "${case_name}" "${solver}" "${resolution}"
+            run_and_record "${case_name}" "${solver}" "${resolution}" "${case_t_end}"
         done
     done
 done
@@ -240,5 +268,9 @@ echo
 echo "===== SUMMARY CSV ====="
 cat "${SUMMARY}"
 echo
+echo "===== TABLE-COMPATIBLE CSV ====="
+cat "${COMPARE_CSV}"
+echo
 echo "Saved summary: ${WORKDIR}/${SUMMARY}"
+echo "Saved comparison rows: ${WORKDIR}/${COMPARE_CSV}"
 echo "End: $(date --iso-8601=seconds)"
