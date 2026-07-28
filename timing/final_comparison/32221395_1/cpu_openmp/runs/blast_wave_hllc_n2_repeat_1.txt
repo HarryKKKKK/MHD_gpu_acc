@@ -1,0 +1,17 @@
+=== Compressible Euler Solver ===
+  Case      : blast_wave
+  Scale (n) : 2
+  Solver    : HLLC
+  Grid      : 1000 x 1000
+  Domain    : [0,1] x [0,1]
+  t_end     : 0.2
+  gamma     : 1.4
+
+  step       t         dt
+  ----  ----------  ----------
+     1     0.00003   3.381e-05
+  2810     0.10004   4.333e-05
+  4766     0.20000   3.158e-05
+
+  Done: 4766 steps in 3.320e+01 s  (1.436e+02 steps/s)
+[TIMING] n=2 nx=1000 ny=1000 steps=4766 elapsed_s=33.1996 steps_per_s=143.56 Mcell_updates_s=143.6

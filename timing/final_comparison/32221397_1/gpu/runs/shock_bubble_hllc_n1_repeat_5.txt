@@ -1,0 +1,35 @@
+=== Compressible Euler GPU Solver ===
+  Case   : shock_bubble
+  n      : 1
+  Gamma  : 1.4
+  Solver : HLLC
+[GPU] nx: 500
+[GPU] ny: 197
+[GPU] total_cells: 98500
+[GPU] advance_x launch: 16x8, min_blocks_per_sm=3
+[GPU] advance_y launch: 16x8, min_blocks_per_sm=5
+  [snap] t006  t_phys=4.943593e-05 s
+  [snap] t012  t_phys=8.651288e-05 s
+  [step    500]  t=9.0493e-05  dt=1.7298e-07  wall=0.0s
+  [snap] t018  t_phys=1.235898e-04 s
+  [step   1000]  t=1.7655e-04  dt=1.7091e-07  wall=0.1s
+  [snap] t030  t_phys=1.977437e-04 s
+  [step   1500]  t=2.6143e-04  dt=1.6978e-07  wall=0.1s
+  [snap] t046  t_phys=2.966156e-04 s
+  [step   2000]  t=3.4637e-04  dt=1.7072e-07  wall=0.2s
+  [snap] t062  t_phys=3.954874e-04 s
+  [step   2500]  t=4.3218e-04  dt=1.7316e-07  wall=0.2s
+  [snap] t078  t_phys=4.943593e-04 s
+  [step   3000]  t=5.2106e-04  dt=1.7960e-07  wall=0.3s
+  [step   3500]  t=6.0859e-04  dt=1.7036e-07  wall=0.3s
+  [step   4000]  t=6.9256e-04  dt=1.6669e-07  wall=0.4s
+  [step   4500]  t=7.7584e-04  dt=1.6616e-07  wall=0.4s
+  [snap] t126  t_phys=7.909749e-04 s
+  [step   5000]  t=8.5815e-04  dt=1.6356e-07  wall=0.5s
+  [step   5500]  t=9.3961e-04  dt=1.6252e-07  wall=0.5s
+  [step   6000]  t=1.0209e-03  dt=1.6267e-07  wall=0.6s
+  [step   6500]  t=1.1025e-03  dt=1.6408e-07  wall=0.6s
+  [step   7000]  t=1.1852e-03  dt=1.6655e-07  wall=0.7s
+  [snap] t190  t_phys=1.186462e-03 s
+[GPU] Total steps= 7008
+  Elapsed : 6.803961e-01 s  (1.029988e+04 steps/s)

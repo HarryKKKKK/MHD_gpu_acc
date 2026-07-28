@@ -1,0 +1,25 @@
+=== Compressible Euler Solver ===
+  Case      : shock_bubble
+  Scale (n) : 1
+  Solver    : HLL
+  Grid      : 500 x 197
+  Domain    : [0,0.225] x [0,0.089]
+  t_end     : 0.00118646
+  gamma     : 1.4
+
+  step       t         dt
+  ----  ----------  ----------
+     1     0.00000   2.211e-07
+  [snap] t006  t_phys=4.943593e-05 s
+  [snap] t012  t_phys=8.651288e-05 s
+  [snap] t018  t_phys=1.235898e-04 s
+  [snap] t030  t_phys=1.977437e-04 s
+  [snap] t046  t_phys=2.966156e-04 s
+  [snap] t062  t_phys=3.954874e-04 s
+  [snap] t078  t_phys=4.943593e-04 s
+  [snap] t126  t_phys=7.909749e-04 s
+  6431     0.00119   5.601e-09
+  [snap] t190  t_phys=1.186462e-03 s
+
+  Done: 6431 steps in 4.501273e+00 s  (1.428707e+03 steps/s)
+[TIMING] n=1 nx=500 ny=197 steps=6431 elapsed_s=4.5013 steps_per_s=1428.71 Mcell_updates_s=140.7

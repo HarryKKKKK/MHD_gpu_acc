@@ -1,0 +1,139 @@
+=== Compressible Euler GPU Solver ===
+  Case   : shock_bubble
+  n      : 8
+  Gamma  : 1.4
+  Solver : HLLC
+[GPU] nx: 4000
+[GPU] ny: 1576
+[GPU] total_cells: 6304000
+[GPU] advance_x launch: 16x8, min_blocks_per_sm=3
+[GPU] advance_y launch: 16x8, min_blocks_per_sm=5
+  [step    500]  t=1.3578e-05  dt=2.2403e-08  wall=1.2s
+  [step   1000]  t=2.4494e-05  dt=2.0871e-08  wall=2.3s
+  [step   1500]  t=3.5118e-05  dt=2.1393e-08  wall=3.5s
+  [step   2000]  t=4.5831e-05  dt=2.1488e-08  wall=4.7s
+  [snap] t006  t_phys=4.943593e-05 s
+  [step   2500]  t=5.6616e-05  dt=2.1707e-08  wall=5.8s
+  [step   3000]  t=6.7487e-05  dt=2.1710e-08  wall=7.0s
+  [step   3500]  t=7.8311e-05  dt=2.1590e-08  wall=8.1s
+  [snap] t012  t_phys=8.651288e-05 s
+  [step   4000]  t=8.9071e-05  dt=2.1490e-08  wall=9.3s
+  [step   4500]  t=9.9801e-05  dt=2.1446e-08  wall=10.5s
+  [step   5000]  t=1.1057e-04  dt=2.1826e-08  wall=11.6s
+  [step   5500]  t=1.2129e-04  dt=2.1369e-08  wall=12.8s
+  [snap] t018  t_phys=1.235898e-04 s
+  [step   6000]  t=1.3194e-04  dt=2.1264e-08  wall=13.9s
+  [step   6500]  t=1.4255e-04  dt=2.1155e-08  wall=15.1s
+  [step   7000]  t=1.5310e-04  dt=2.1042e-08  wall=16.2s
+  [step   7500]  t=1.6359e-04  dt=2.0938e-08  wall=17.4s
+  [step   8000]  t=1.7404e-04  dt=2.0878e-08  wall=18.6s
+  [step   8500]  t=1.8447e-04  dt=2.0777e-08  wall=19.7s
+  [step   9000]  t=1.9486e-04  dt=2.0745e-08  wall=20.9s
+  [snap] t030  t_phys=1.977437e-04 s
+  [step   9500]  t=2.0520e-04  dt=2.0697e-08  wall=22.0s
+  [step  10000]  t=2.1554e-04  dt=2.0661e-08  wall=23.2s
+  [step  10500]  t=2.2586e-04  dt=2.0640e-08  wall=24.3s
+  [step  11000]  t=2.3618e-04  dt=2.0633e-08  wall=25.5s
+  [step  11500]  t=2.4650e-04  dt=2.0624e-08  wall=26.6s
+  [step  12000]  t=2.5681e-04  dt=2.0631e-08  wall=27.8s
+  [step  12500]  t=2.6713e-04  dt=2.0641e-08  wall=28.9s
+  [step  13000]  t=2.7745e-04  dt=2.0659e-08  wall=30.0s
+  [step  13500]  t=2.8779e-04  dt=2.0680e-08  wall=31.2s
+  [snap] t046  t_phys=2.966156e-04 s
+  [step  14000]  t=2.9813e-04  dt=2.0703e-08  wall=32.3s
+  [step  14500]  t=3.0848e-04  dt=2.0729e-08  wall=33.5s
+  [step  15000]  t=3.1886e-04  dt=2.0757e-08  wall=34.6s
+  [step  15500]  t=3.2923e-04  dt=2.0660e-08  wall=35.8s
+  [step  16000]  t=3.3950e-04  dt=2.0435e-08  wall=36.9s
+  [step  16500]  t=3.4967e-04  dt=2.0270e-08  wall=38.0s
+  [step  17000]  t=3.5978e-04  dt=2.0171e-08  wall=39.2s
+  [step  17500]  t=3.6986e-04  dt=2.0176e-08  wall=40.3s
+  [step  18000]  t=3.7998e-04  dt=2.0302e-08  wall=41.5s
+  [step  18500]  t=3.9012e-04  dt=2.0138e-08  wall=42.6s
+  [snap] t062  t_phys=3.954874e-04 s
+  [step  19000]  t=4.0012e-04  dt=1.9915e-08  wall=43.7s
+  [step  19500]  t=4.1005e-04  dt=1.9835e-08  wall=44.9s
+  [step  20000]  t=4.1995e-04  dt=1.9785e-08  wall=46.0s
+  [step  20500]  t=4.2983e-04  dt=1.9682e-08  wall=47.1s
+  [step  21000]  t=4.3961e-04  dt=1.9514e-08  wall=48.3s
+  [step  21500]  t=4.4934e-04  dt=1.9362e-08  wall=49.4s
+  [step  22000]  t=4.5898e-04  dt=1.9216e-08  wall=50.5s
+  [step  22500]  t=4.6855e-04  dt=1.9052e-08  wall=51.6s
+  [step  23000]  t=4.7806e-04  dt=1.9019e-08  wall=52.8s
+  [step  23500]  t=4.8759e-04  dt=1.9142e-08  wall=53.9s
+  [snap] t078  t_phys=4.943593e-04 s
+  [step  24000]  t=4.9720e-04  dt=1.9317e-08  wall=55.0s
+  [step  24500]  t=5.0675e-04  dt=1.8945e-08  wall=56.1s
+  [step  25000]  t=5.1618e-04  dt=1.8785e-08  wall=57.3s
+  [step  25500]  t=5.2558e-04  dt=1.8856e-08  wall=58.4s
+  [step  26000]  t=5.3504e-04  dt=1.9013e-08  wall=59.5s
+  [step  26500]  t=5.4460e-04  dt=1.9230e-08  wall=60.6s
+  [step  27000]  t=5.5428e-04  dt=1.9420e-08  wall=61.8s
+  [step  27500]  t=5.6393e-04  dt=1.9186e-08  wall=62.9s
+  [step  28000]  t=5.7347e-04  dt=1.9000e-08  wall=64.0s
+  [step  28500]  t=5.8297e-04  dt=1.9021e-08  wall=65.1s
+  [step  29000]  t=5.9252e-04  dt=1.9216e-08  wall=66.2s
+  [step  29500]  t=6.0220e-04  dt=1.9529e-08  wall=67.4s
+  [step  30000]  t=6.1192e-04  dt=1.9295e-08  wall=68.5s
+  [step  30500]  t=6.2152e-04  dt=1.9144e-08  wall=69.6s
+  [step  31000]  t=6.3112e-04  dt=1.9284e-08  wall=70.7s
+  [step  31500]  t=6.4085e-04  dt=1.9649e-08  wall=71.9s
+  [step  32000]  t=6.5071e-04  dt=1.9757e-08  wall=73.0s
+  [step  32500]  t=6.6059e-04  dt=1.9767e-08  wall=74.1s
+  [step  33000]  t=6.7049e-04  dt=1.9839e-08  wall=75.2s
+  [step  33500]  t=6.8044e-04  dt=1.9975e-08  wall=76.3s
+  [step  34000]  t=6.9046e-04  dt=2.0015e-08  wall=77.5s
+  [step  34500]  t=7.0049e-04  dt=2.0185e-08  wall=78.6s
+  [step  35000]  t=7.1061e-04  dt=2.0235e-08  wall=79.7s
+  [step  35500]  t=7.2073e-04  dt=2.0251e-08  wall=80.8s
+  [step  36000]  t=7.3087e-04  dt=2.0323e-08  wall=82.0s
+  [step  36500]  t=7.4106e-04  dt=2.0339e-08  wall=83.1s
+  [step  37000]  t=7.5119e-04  dt=2.0237e-08  wall=84.2s
+  [step  37500]  t=7.6132e-04  dt=2.0301e-08  wall=85.3s
+  [step  38000]  t=7.7148e-04  dt=2.0329e-08  wall=86.4s
+  [step  38500]  t=7.8160e-04  dt=2.0173e-08  wall=87.6s
+  [snap] t126  t_phys=7.909749e-04 s
+  [step  39000]  t=7.9166e-04  dt=2.0126e-08  wall=88.7s
+  [step  39500]  t=8.0172e-04  dt=2.0081e-08  wall=89.8s
+  [step  40000]  t=8.1172e-04  dt=1.9947e-08  wall=90.9s
+  [step  40500]  t=8.2167e-04  dt=1.9819e-08  wall=92.1s
+  [step  41000]  t=8.3155e-04  dt=1.9705e-08  wall=93.2s
+  [step  41500]  t=8.4138e-04  dt=1.9634e-08  wall=94.3s
+  [step  42000]  t=8.5118e-04  dt=1.9591e-08  wall=95.4s
+  [step  42500]  t=8.6097e-04  dt=1.9560e-08  wall=96.5s
+  [step  43000]  t=8.7075e-04  dt=1.9556e-08  wall=97.7s
+  [step  43500]  t=8.8053e-04  dt=1.9585e-08  wall=98.8s
+  [step  44000]  t=8.9034e-04  dt=1.9647e-08  wall=99.9s
+  [step  44500]  t=9.0018e-04  dt=1.9703e-08  wall=101.0s
+  [step  45000]  t=9.1004e-04  dt=1.9742e-08  wall=102.2s
+  [step  45500]  t=9.1992e-04  dt=1.9782e-08  wall=103.3s
+  [step  46000]  t=9.2982e-04  dt=1.9831e-08  wall=104.4s
+  [step  46500]  t=9.3975e-04  dt=1.9891e-08  wall=105.5s
+  [step  47000]  t=9.4972e-04  dt=1.9965e-08  wall=106.6s
+  [step  47500]  t=9.5967e-04  dt=1.9797e-08  wall=107.8s
+  [step  48000]  t=9.6954e-04  dt=1.9696e-08  wall=108.9s
+  [step  48500]  t=9.7934e-04  dt=1.9507e-08  wall=110.0s
+  [step  49000]  t=9.8906e-04  dt=1.9362e-08  wall=111.1s
+  [step  49500]  t=9.9872e-04  dt=1.9275e-08  wall=112.3s
+  [step  50000]  t=1.0083e-03  dt=1.9247e-08  wall=113.4s
+  [step  50500]  t=1.0180e-03  dt=1.9288e-08  wall=114.5s
+  [step  51000]  t=1.0276e-03  dt=1.9073e-08  wall=115.6s
+  [step  51500]  t=1.0371e-03  dt=1.9191e-08  wall=116.7s
+  [step  52000]  t=1.0468e-03  dt=1.9440e-08  wall=117.9s
+  [step  52500]  t=1.0565e-03  dt=1.9467e-08  wall=119.0s
+  [step  53000]  t=1.0662e-03  dt=1.9437e-08  wall=120.1s
+  [step  53500]  t=1.0759e-03  dt=1.9380e-08  wall=121.2s
+  [step  54000]  t=1.0856e-03  dt=1.9390e-08  wall=122.4s
+  [step  54500]  t=1.0953e-03  dt=1.9388e-08  wall=123.5s
+  [step  55000]  t=1.1050e-03  dt=1.9411e-08  wall=124.6s
+  [step  55500]  t=1.1147e-03  dt=1.9403e-08  wall=125.7s
+  [step  56000]  t=1.1244e-03  dt=1.9213e-08  wall=126.8s
+  [step  56500]  t=1.1340e-03  dt=1.9293e-08  wall=128.0s
+  [step  57000]  t=1.1437e-03  dt=1.9323e-08  wall=129.1s
+  [step  57500]  t=1.1533e-03  dt=1.9289e-08  wall=130.2s
+  [step  58000]  t=1.1629e-03  dt=1.9256e-08  wall=131.3s
+  [step  58500]  t=1.1726e-03  dt=1.9252e-08  wall=132.5s
+  [step  59000]  t=1.1822e-03  dt=1.9269e-08  wall=133.6s
+  [snap] t190  t_phys=1.186462e-03 s
+[GPU] Total steps= 59222
+  Elapsed : 1.340727e+02 s  (4.417156e+02 steps/s)

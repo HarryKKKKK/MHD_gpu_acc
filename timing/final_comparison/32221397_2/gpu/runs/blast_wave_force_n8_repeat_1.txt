@@ -1,0 +1,50 @@
+=== Compressible Euler GPU Solver ===
+  Case   : blast_wave
+  n      : 8
+  Gamma  : 1.4
+  Solver : FORCE
+[GPU] nx: 4000
+[GPU] ny: 4000
+[GPU] total_cells: 16000000
+[GPU] advance_x launch: 16x8, min_blocks_per_sm=3
+[GPU] advance_y launch: 16x8, min_blocks_per_sm=5
+  [step    500]  t=2.9375e-03  dt=5.7718e-06  wall=2.7s
+  [step   1000]  t=5.7802e-03  dt=5.6060e-06  wall=5.3s
+  [step   1500]  t=8.5547e-03  dt=5.5098e-06  wall=8.0s
+  [step   2000]  t=1.1320e-02  dt=5.6016e-06  wall=10.7s
+  [step   2500]  t=1.4297e-02  dt=6.6186e-06  wall=13.4s
+  [step   3000]  t=1.7770e-02  dt=7.1327e-06  wall=16.0s
+  [step   3500]  t=2.1451e-02  dt=7.6265e-06  wall=18.7s
+  [step   4000]  t=2.5080e-02  dt=4.9053e-06  wall=21.4s
+  [step   4500]  t=2.9178e-02  dt=9.0627e-06  wall=24.0s
+  [step   5000]  t=3.3887e-02  dt=9.7548e-06  wall=26.7s
+  [step   5500]  t=3.8838e-02  dt=9.7773e-06  wall=29.4s
+  [step   6000]  t=4.3610e-02  dt=9.3588e-06  wall=32.1s
+  [step   6500]  t=4.8238e-02  dt=9.1814e-06  wall=34.7s
+  [step   7000]  t=5.2817e-02  dt=9.1544e-06  wall=37.4s
+  [step   7500]  t=5.7437e-02  dt=9.4148e-06  wall=40.1s
+  [step   8000]  t=6.2266e-02  dt=9.9206e-06  wall=42.8s
+  [step   8500]  t=6.7387e-02  dt=1.0559e-05  wall=45.4s
+  [step   9000]  t=7.2749e-02  dt=1.0894e-05  wall=48.1s
+  [step   9500]  t=7.8285e-02  dt=1.1250e-05  wall=50.8s
+  [step  10000]  t=8.4001e-02  dt=1.1618e-05  wall=53.5s
+  [step  10500]  t=8.9903e-02  dt=1.1987e-05  wall=56.2s
+  [step  11000]  t=9.5697e-02  dt=1.0944e-05  wall=58.8s
+  [step  11500]  t=1.0049e-01  dt=8.8644e-06  wall=61.5s
+  [step  12000]  t=1.0575e-01  dt=1.1141e-05  wall=64.2s
+  [step  12500]  t=1.1142e-01  dt=1.1467e-05  wall=66.9s
+  [step  13000]  t=1.1718e-01  dt=1.1559e-05  wall=69.5s
+  [step  13500]  t=1.2297e-01  dt=1.1586e-05  wall=72.2s
+  [step  14000]  t=1.2876e-01  dt=1.1612e-05  wall=74.9s
+  [step  14500]  t=1.3459e-01  dt=1.1678e-05  wall=77.5s
+  [step  15000]  t=1.4045e-01  dt=1.1786e-05  wall=80.2s
+  [step  15500]  t=1.4638e-01  dt=1.1959e-05  wall=82.9s
+  [step  16000]  t=1.5255e-01  dt=1.2748e-05  wall=85.6s
+  [step  16500]  t=1.5908e-01  dt=1.3292e-05  wall=88.2s
+  [step  17000]  t=1.6579e-01  dt=1.3536e-05  wall=90.9s
+  [step  17500]  t=1.7262e-01  dt=1.3750e-05  wall=93.6s
+  [step  18000]  t=1.7954e-01  dt=1.3947e-05  wall=96.3s
+  [step  18500]  t=1.8655e-01  dt=1.4059e-05  wall=98.9s
+  [step  19000]  t=1.9358e-01  dt=1.4048e-05  wall=101.6s
+[GPU] Total steps= 19459
+  Elapsed : 104.1 s  (187.0 steps/s)

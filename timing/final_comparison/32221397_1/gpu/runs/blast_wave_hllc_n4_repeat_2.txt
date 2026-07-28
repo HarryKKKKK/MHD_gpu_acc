@@ -1,0 +1,31 @@
+=== Compressible Euler GPU Solver ===
+  Case   : blast_wave
+  n      : 4
+  Gamma  : 1.4
+  Solver : HLLC
+[GPU] nx: 2000
+[GPU] ny: 2000
+[GPU] total_cells: 4000000
+[GPU] advance_x launch: 16x8, min_blocks_per_sm=3
+[GPU] advance_y launch: 16x8, min_blocks_per_sm=5
+  [step    500]  t=5.7580e-03  dt=1.1200e-05  wall=0.8s
+  [step   1000]  t=1.1291e-02  dt=1.1173e-05  wall=1.5s
+  [step   1500]  t=1.7719e-02  dt=1.4299e-05  wall=2.3s
+  [step   2000]  t=2.5102e-02  dt=1.0760e-05  wall=3.0s
+  [step   2500]  t=3.3965e-02  dt=1.9753e-05  wall=3.8s
+  [step   3000]  t=4.3711e-02  dt=1.8758e-05  wall=4.5s
+  [step   3500]  t=5.2936e-02  dt=1.8343e-05  wall=5.3s
+  [step   4000]  t=6.2431e-02  dt=1.9968e-05  wall=6.0s
+  [step   4500]  t=7.2981e-02  dt=2.1926e-05  wall=6.7s
+  [step   5000]  t=8.4313e-02  dt=2.3413e-05  wall=7.5s
+  [step   5500]  t=9.6169e-02  dt=2.2485e-05  wall=8.2s
+  [step   6000]  t=1.0649e-01  dt=2.2873e-05  wall=8.9s
+  [step   6500]  t=1.1811e-01  dt=2.3352e-05  wall=9.7s
+  [step   7000]  t=1.2979e-01  dt=2.3400e-05  wall=10.4s
+  [step   7500]  t=1.4156e-01  dt=2.3736e-05  wall=11.1s
+  [step   8000]  t=1.5381e-01  dt=2.5802e-05  wall=11.9s
+  [step   8500]  t=1.6689e-01  dt=2.6333e-05  wall=12.6s
+  [step   9000]  t=1.8010e-01  dt=2.6500e-05  wall=13.3s
+  [step   9500]  t=1.9336e-01  dt=2.6492e-05  wall=14.1s
+[GPU] Total steps= 9751
+  Elapsed : 14.4 s  (675.8 steps/s)
