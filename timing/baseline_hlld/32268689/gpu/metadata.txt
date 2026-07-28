@@ -1,0 +1,51 @@
+job_id=32268689
+hostname=gpu-q-30
+start_utc=2026-07-28T11:37:22+00:00
+workdir=/rds/user/hk597/hpc-work/MHD_gpu_acc
+git_branch=debug_cpu
+git_commit=256d5c09f37a7250d41ad0b1f6103557569509c9
+git_status_begin
+
+git_status_end
+cases=orszag_tang rotor
+solver=hlld
+scales=1
+small_n_repeats=1
+large_n_repeats=1
+build_variant=baseline_current_commit_no_extra_flags
+gpu_name=NVIDIA A100-SXM4-80GB
+compute_capability=8.0
+cuda_arch_flag=-arch=sm_80
+nvcc_extra_flags=
+nvcc_begin
+nvcc: NVIDIA (R) Cuda compiler driver
+Copyright (c) 2005-2021 NVIDIA Corporation
+Built on Wed_Jun__2_19:15:15_PDT_2021
+Cuda compilation tools, release 11.4, V11.4.48
+Build cuda_11.4.r11.4/compiler.30033411_0
+nvcc_end
+nvidia_smi_begin
+Tue Jul 28 12:37:22 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 595.71.05              Driver Version: 595.71.05      CUDA Version: 13.2     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA A100-SXM4-80GB          On  |   00000000:C1:00.0 Off |                    0 |
+| N/A   33C    P0             69W /  500W |       0MiB /  81920MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+nvidia_smi_end
+build_wall_seconds=10.755476992
+end_utc=2026-07-28T11:37:37+00:00
+failed_runs=0

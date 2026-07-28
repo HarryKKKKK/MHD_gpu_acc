@@ -1,0 +1,3 @@
+backend,case,solver,n,repeat,repeats_requested,nx,ny,total_cells,steps,app_elapsed_s,wall_seconds,user_seconds,sys_seconds,max_rss_kb,start_utc,end_utc,exit_status,hostname,git_branch,git_commit
+gpu,orszag_tang,hlld,1,1,1,192,192,36864,1280,2.694642e-01,0.761916928,0.28,0.44,134840,2026-07-28T11:37:35,158563506+00:00,2026-07-28T11:37:35,926371211+00:00,0,gpu-q-30,debug_cpu,256d5c09f37a7250d41ad0b1f6103557569509c9
+gpu,rotor,hlld,1,1,1,400,400,160000,561,0.2,0.751088640,0.26,0.45,153132,2026-07-28T11:37:36,559385717+00:00,2026-07-28T11:37:37,317115105+00:00,0,gpu-q-30,debug_cpu,256d5c09f37a7250d41ad0b1f6103557569509c9
