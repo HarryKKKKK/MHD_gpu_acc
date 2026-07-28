@@ -1,0 +1,3 @@
+case,backend,solver,resolution,nx,ny,nz,total_cells,workers,total_steps,final_time,gpu_seconds,elapsed_s,process_real_seconds,max_rss_kb,git_branch,git_commit,cuda_arch
+blast,gpu_baseline,hlld,128,128,128,2097152,1,281,0.1,2.3835576171875,2.383564827,3.23,10012,debug_cpu,5657ae6,sm_80
+imtg,gpu_baseline,hlld,128,128,128,2097152,1,6420,5.809475019311126,55.68009375,55.67980058,57.06,10048,debug_cpu,5657ae6,sm_80
