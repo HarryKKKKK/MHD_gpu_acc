@@ -47,6 +47,7 @@ MPICXXFLAGS_OMP := $(MPICXXFLAGS_BASE) $(OMPFLAGS)
 BUILD_DIR := build
 CPU_BUILD_DIR := $(BUILD_DIR)/cpu
 GPU_BUILD_DIR := $(BUILD_DIR)/gpu
+GPU_3D_BASELINE_BUILD_DIR := $(BUILD_DIR)/gpu_3d_baseline
 MPI_BUILD_DIR := $(BUILD_DIR)/mpi
 MPI_OMP_BUILD_DIR := $(BUILD_DIR)/mpi_omp
 BIN_DIR := bin
@@ -54,11 +55,13 @@ BIN_DIR := bin
 CPU_TARGET := $(BIN_DIR)/main_cpu
 CPU_SERIAL_TARGET := $(BIN_DIR)/main_cpu_serial
 GPU_TARGET := $(BIN_DIR)/main_gpu
+GPU_3D_BASELINE_TARGET := $(BIN_DIR)/main_gpu_3d_baseline
 MPI_TARGET := $(BIN_DIR)/main_mpi
 MPI_OMP_TARGET := $(BIN_DIR)/main_mpi_omp
 
 CPU_MAIN := scripts/cpu/main_cpu.cpp
 GPU_MAIN := scripts/gpu/main_gpu.cu
+GPU_3D_BASELINE_MAIN := scripts/gpu/main_gpu_3d_baseline.cu
 MPI_MAIN := scripts/cpu/main_mpi.cpp
 
 CPU_OBJS := \
@@ -79,6 +82,12 @@ GPU_OBJS := \
 	$(GPU_BUILD_DIR)/init.o \
 	$(GPU_BUILD_DIR)/solver_gpu.o \
 	$(GPU_BUILD_DIR)/boundary_gpu.o
+
+GPU_3D_BASELINE_OBJS := \
+	$(GPU_3D_BASELINE_BUILD_DIR)/main_gpu_3d_baseline.o \
+	$(GPU_3D_BASELINE_BUILD_DIR)/test_cases.o \
+	$(GPU_3D_BASELINE_BUILD_DIR)/solver3d_gpu.o \
+	$(GPU_3D_BASELINE_BUILD_DIR)/boundary3d_gpu.o
 
 # Pure MPI: do not link solver_cpu.o
 MPI_OBJS := \
@@ -234,6 +243,32 @@ $(GPU_BUILD_DIR)/boundary_gpu.o: src/gpu/boundary_gpu.cu
 	$(NVCC) $(NVCCFLAGS) -c $< -o $@
 
 # =========================
+# Unoptimised 3D GPU baseline
+# =========================
+.PHONY: gpu_3d_baseline
+gpu_3d_baseline: $(GPU_3D_BASELINE_TARGET)
+
+$(GPU_3D_BASELINE_TARGET): $(GPU_3D_BASELINE_OBJS)
+	@mkdir -p $(BIN_DIR)
+	$(NVCC) $(NVCCFLAGS) $(GPU_3D_BASELINE_OBJS) -o $@ -lstdc++fs
+
+$(GPU_3D_BASELINE_BUILD_DIR)/main_gpu_3d_baseline.o: $(GPU_3D_BASELINE_MAIN)
+	@mkdir -p $(dir $@)
+	$(NVCC) $(NVCCFLAGS) -c $< -o $@
+
+$(GPU_3D_BASELINE_BUILD_DIR)/test_cases.o: src/test_cases.cpp
+	@mkdir -p $(dir $@)
+	$(NVCC) $(NVCCFLAGS) -x c++ -c $< -o $@
+
+$(GPU_3D_BASELINE_BUILD_DIR)/solver3d_gpu.o: src/gpu/solver3d_gpu.cu
+	@mkdir -p $(dir $@)
+	$(NVCC) $(NVCCFLAGS) -c $< -o $@
+
+$(GPU_3D_BASELINE_BUILD_DIR)/boundary3d_gpu.o: src/gpu/boundary3d_gpu.cu
+	@mkdir -p $(dir $@)
+	$(NVCC) $(NVCCFLAGS) -c $< -o $@
+
+# =========================
 # Run helpers
 # =========================
 .PHONY: run_cpu
@@ -251,6 +286,10 @@ run_cpu_omp: $(CPU_TARGET)
 .PHONY: run_gpu
 run_gpu: $(GPU_TARGET)
 	$(GPU_TARGET)
+
+.PHONY: run_gpu_3d_baseline
+run_gpu_3d_baseline: $(GPU_3D_BASELINE_TARGET)
+	$(GPU_3D_BASELINE_TARGET) --case orszag_tang --solver hlld --resolution 32 --max-steps 2 --no-out
 
 .PHONY: run_mpi
 run_mpi: $(MPI_TARGET)
