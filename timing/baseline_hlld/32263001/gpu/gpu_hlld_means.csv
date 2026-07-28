@@ -1,0 +1,9 @@
+backend,case,solver,n,runs_successful,runs_requested,mean_app_elapsed_s,mean_wall_seconds
+gpu,orszag_tang,hlld,1,0,3,unknown,unknown
+gpu,rotor,hlld,1,0,3,unknown,unknown
+gpu,orszag_tang,hlld,2,0,3,unknown,unknown
+gpu,rotor,hlld,2,0,3,unknown,unknown
+gpu,orszag_tang,hlld,4,0,1,unknown,unknown
+gpu,rotor,hlld,4,0,1,unknown,unknown
+gpu,orszag_tang,hlld,8,0,1,unknown,unknown
+gpu,rotor,hlld,8,0,1,unknown,unknown
