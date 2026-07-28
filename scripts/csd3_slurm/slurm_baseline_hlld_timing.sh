@@ -22,6 +22,10 @@
 # Optional:
 #   sbatch --export=ALL,SMALL_N_REPEATS=5 \
 #     scripts/csd3_slurm/slurm_baseline_hlld_timing.sh
+#
+# Quick numerical step-count check before the complete sweep:
+#   sbatch --export=ALL,SCALES_STR=1,SMALL_N_REPEATS=1 \
+#     scripts/csd3_slurm/slurm_baseline_hlld_timing.sh
 
 set -euo pipefail
 
@@ -64,8 +68,8 @@ for tool in nvcc nvidia-smi make /usr/bin/time; do
     fi
 done
 
-CASES=(orszag_tang rotor)
-SCALES=(1 2 4 8)
+read -r -a CASES <<< "${CASES_STR:-orszag_tang rotor}"
+read -r -a SCALES <<< "${SCALES_STR:-1 2 4 8}"
 SOLVER="hlld"
 SMALL_N_REPEATS="${SMALL_N_REPEATS:-3}"
 LARGE_N_REPEATS="${LARGE_N_REPEATS:-1}"

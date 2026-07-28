@@ -16,8 +16,6 @@
 
 namespace {
 
-constexpr double kRhoFloor   = 1.0e-12;
-constexpr double kPFloor     = 1.0e-12;
 constexpr int    kDtBlockSize = 256;
 
 constexpr int PAD_X = 1;
@@ -37,40 +35,40 @@ __device__ inline int clamp_i(int x, int lo, int hi) {
 }
 
 __device__ inline double minmod_scalar(double a, double b) {
-    if (a * b <= 0.0) return 0.0;
-    return (a > 0.0) ? fmin(a, b) : fmax(a, b);
+    const double abs_a = fabs(a);
+    const double abs_b = fabs(b);
+    const double limited = fmin(abs_a, abs_b);
+    const double signed_limited = (a > 0.0) ? limited : -limited;
+    constexpr double eps = 1.0e-12;
+    return (abs_b < eps || a*b <= 0.0) ? 0.0 : signed_limited;
 }
 
-__device__ inline Primitive minmod_primitive(const Primitive& a, const Primitive& b) {
-    return Primitive(
-        minmod_scalar(a.rho, b.rho),
-        minmod_scalar(a.u,   b.u),
-        minmod_scalar(a.v,   b.v),
-        minmod_scalar(a.w,   b.w),
-        minmod_scalar(a.Bx,  b.Bx),
-        minmod_scalar(a.By,  b.By),
-        minmod_scalar(a.Bz,  b.Bz),
-        minmod_scalar(a.p,   b.p),
-        minmod_scalar(a.psi, b.psi)
+// Keep the numerical reconstruction consistent with 3D_task.  This is a
+// numerical-baseline choice, not a GPU optimisation: slopes are limited in
+// the nine conserved variables before the Hancock predictor.
+__device__ inline Conserved minmod_conserved(
+    const Conserved& L, const Conserved& C, const Conserved& R
+) {
+    return Conserved(
+        minmod_scalar(C.rho  - L.rho,  R.rho  - C.rho),
+        minmod_scalar(C.rhou - L.rhou, R.rhou - C.rhou),
+        minmod_scalar(C.rhov - L.rhov, R.rhov - C.rhov),
+        minmod_scalar(C.rhow - L.rhow, R.rhow - C.rhow),
+        minmod_scalar(C.Bx   - L.Bx,   R.Bx   - C.Bx),
+        minmod_scalar(C.By   - L.By,   R.By   - C.By),
+        minmod_scalar(C.Bz   - L.Bz,   R.Bz   - C.Bz),
+        minmod_scalar(C.E    - L.E,    R.E    - C.E),
+        minmod_scalar(C.psi  - L.psi,  R.psi  - C.psi)
     );
 }
 
-__device__ inline bool is_physical(const Primitive& V) {
-    return V.rho > kRhoFloor && V.p > kPFloor
-        && isfinite(V.rho)  && isfinite(V.p)
-        && isfinite(V.u)    && isfinite(V.v)    && isfinite(V.w)
-        && isfinite(V.Bx)   && isfinite(V.By)   && isfinite(V.Bz)
-        && isfinite(V.psi);
-}
-
-__device__ inline Primitive enforce_physical_primitive(const Primitive& cand, const Primitive& fb) {
-    if (is_physical(cand)) return cand;
-    return fb;
-}
-
-__device__ inline Conserved enforce_physical_conserved(const Conserved& cand, const Conserved& fb) {
-    if (is_physical(phys::cons_to_prim(cand))) return cand;
-    return fb;
+// Conservative positivity check used by 3D_task.  If either predicted face
+// state is invalid, both faces fall back to the cell average (first order).
+__device__ inline bool positive_conserved(const Conserved& U) {
+    const double msq = U.rhou*U.rhou + U.rhov*U.rhov + U.rhow*U.rhow;
+    const double mag = 0.5 * (U.Bx*U.Bx + U.By*U.By + U.Bz*U.Bz);
+    const double lhs = U.rho * (U.E - mag) - 0.5 * msq;
+    return U.rho > 0.0 && lhs > 0.0;
 }
 
 __device__ inline Conserved gload(const ConstGrid2DGPUView& U, int i, int j) {
@@ -135,27 +133,25 @@ __device__ inline void reconstruct_cell_muscl_hancock(
     double dt_over_d, Direction dir,
     Conserved& UL_star, Conserved& UR_star
 ) {
-    const Primitive Wm = phys::cons_to_prim(Um);
-    const Primitive Wc = phys::cons_to_prim(Uc);
-    const Primitive Wp = phys::cons_to_prim(Up);
+    const Conserved slope = minmod_conserved(Um, Uc, Up);
+    const Conserved half_slope = 0.5 * slope;
+    const Conserved UL = Uc - half_slope;
+    const Conserved UR = Uc + half_slope;
 
-    const Primitive slope = minmod_primitive(Wc - Wm, Wp - Wc);
+    // Use the current GLM cleaning speed in the predictor, as 3D_task does.
+    const double ch = phys::get_ch_glm();
+    const Conserved FL = (dir == Direction::X) ? phys::flux_x(UL, ch)
+                                               : phys::flux_y(UL, ch);
+    const Conserved FR = (dir == Direction::X) ? phys::flux_x(UR, ch)
+                                               : phys::flux_y(UR, ch);
+    const Conserved base = Uc + 0.5 * dt_over_d * (FL - FR);
 
-    const Primitive WL = enforce_physical_primitive(Wc - 0.5 * slope, Wc);
-    const Primitive WR = enforce_physical_primitive(Wc + 0.5 * slope, Wc);
-
-    const Conserved UL = phys::prim_to_cons(WL);
-    const Conserved UR = phys::prim_to_cons(WR);
-
-    // ch=0 here intentionally (matches predictor step in solver_cpu.cpp)
-    const Conserved FL = (dir == Direction::X) ? phys::flux_x(UL, 0.0)
-                                               : phys::flux_y(UL, 0.0);
-    const Conserved FR = (dir == Direction::X) ? phys::flux_x(UR, 0.0)
-                                               : phys::flux_y(UR, 0.0);
-    const Conserved half = 0.5 * dt_over_d * (FR - FL);
-
-    UL_star = enforce_physical_conserved(UL - half, UL);
-    UR_star = enforce_physical_conserved(UR - half, UR);
+    UL_star = base - half_slope;
+    UR_star = base + half_slope;
+    if (!positive_conserved(UL_star) || !positive_conserved(UR_star)) {
+        UL_star = Uc;
+        UR_star = Uc;
+    }
 }
 
 template <int BLOCK_SIZE>
@@ -337,7 +333,7 @@ __global__ void advance_x_kernel(
     gstore(Uout,
            Uin.i_begin() + local_i,
            Uin.j_begin() + local_j,
-           enforce_physical_conserved(Unew_c, Uc));
+           Unew_c);
 }
 
 __global__ void advance_y_kernel(
@@ -446,7 +442,7 @@ __global__ void advance_y_kernel(
     gstore(Uout,
            Uin.i_begin() + local_i,
            Uin.j_begin() + local_j,
-           enforce_physical_conserved(Unew_c, Uc));
+           Unew_c);
 }
 
 } // anonymous namespace
