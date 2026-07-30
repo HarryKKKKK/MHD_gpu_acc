@@ -233,7 +233,9 @@ __global__ void apply_psi_damping_kernel(Grid2DGPUView grid, double factor) {
     grid.psi[idx] *= factor;
 }
 
-__global__ void advance_x_kernel(
+// Missing direct combination in the Chapter 3 factorial comparison:
+// Variant B's 16x8 tile with Variant A's two-block launch target.
+__global__ __launch_bounds__(128, 2) void advance_x_kernel(
     ConstGrid2DGPUView Uin,
     Grid2DGPUView      Uout,
     double             dt,
@@ -340,7 +342,7 @@ __global__ void advance_x_kernel(
            enforce_physical_conserved(Unew_c, Uc));
 }
 
-__global__ void advance_y_kernel(
+__global__ __launch_bounds__(128, 2) void advance_y_kernel(
     ConstGrid2DGPUView Uin,
     Grid2DGPUView      Uout,
     double             dt,
