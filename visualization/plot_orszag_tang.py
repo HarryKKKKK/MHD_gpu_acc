@@ -153,12 +153,10 @@ def main():
 
     fig2, ax = plt.subplots(figsize=(7, 4))
 
-    stride = max(1, NX // 48)   # ~48 markers across [0,1]
-    ax.plot(x_norm[::stride], p_cut[::stride],
-            "rs", markersize=4, markerfacecolor="none", markeredgewidth=0.8,
-            label=rf"{args.label} PLM  $192^2$  (this work)", zorder=3)
-
-    ax.plot(x_norm, p_cut, "r-", linewidth=0.6, alpha=0.5, zorder=2)
+    # Plot all 192 cell-centre samples without connecting them.
+    ax.plot(x_norm, p_cut, linestyle="none", marker="o", color="red",
+            markersize=2.0, markerfacecolor="none", markeredgewidth=0.55,
+            label=rf"{args.label} PLM  $192^2$  (192 cells)", zorder=3)
 
     if ref_data is not None:
         ax.plot(ref_data[:, 0], ref_data[:, 1],

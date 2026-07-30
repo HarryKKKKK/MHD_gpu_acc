@@ -166,11 +166,23 @@ mkdir -p logs
 sbatch scripts/csd3_slurm/slurm_compare_3d_backends.sh
 ```
 
-The default comparison uses `64^3`, eight OpenMP threads, eight MPI ranks and
-one GPU. Set `RESOLUTION=128` for the larger comparison. Results are written
-under `timing/compare3d_JOBID`, including raw logs, `backend_times.csv`, and
-`gpu_speedup_summary.csv`. The summary reports `T_CPU/T_GPU`, GPU time as a
-percentage of CPU time, and the corresponding percentage of time saved.
+The default comparison reserves one complete CSD3 Ampere node and uses its 128
+physical CPU cores: `OMP_THREADS=128`, `MPI_RANKS=128`, and
+`RESOLUTION=256`. All four A100s are reserved because CSD3 normally assigns
+only 32 host CPU cores per requested GPU, although the measured GPU backend
+uses one A100. The pure-MPI implementation decomposes only in `z`, so each
+rank requires at least two planes. Consequently, a `128^3` comparison must
+use `MPI_RANKS=64`:
+
+```bash
+sbatch --export=ALL,RESOLUTION=128,MPI_RANKS=64 \
+  scripts/csd3_slurm/slurm_compare_3d_backends.sh
+```
+
+Results are written under `timing/compare3d_JOBID`, including raw logs,
+`backend_times.csv`, and `gpu_speedup_summary.csv`. The summary reports
+`T_CPU/T_GPU`, GPU time as a percentage of CPU time, and the corresponding
+percentage of time saved.
 
 For a quick smoke test:
 

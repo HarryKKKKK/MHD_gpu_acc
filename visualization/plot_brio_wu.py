@@ -59,8 +59,10 @@ def main():
     axes = axes.ravel()
 
     for ax, (data, ylabel) in zip(axes, panels):
-        ax.plot(x, data, "k-", lw=0.9)
-        ax.axvline(0.5, color="gray", lw=0.6, ls="--", alpha=0.6)
+        # Show every finite-volume cell value explicitly.  Connecting the
+        # samples would imply a continuous reconstruction that is not stored.
+        ax.plot(x, data, linestyle="none", marker=".", color="black",
+                markersize=1.8)
         ax.set_ylabel(ylabel, fontsize=12)
         ax.set_xlim(X_MIN, X_MAX)
         for spine in ax.spines.values():

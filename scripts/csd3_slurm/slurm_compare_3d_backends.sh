@@ -3,10 +3,13 @@
 #SBATCH -A MPHIL-NIKIFORAKIS-HK597-SL2-GPU
 #SBATCH -p ampere
 #SBATCH -N 1
-#SBATCH --ntasks=8
+# Reserve all four GPUs so CSD3 assigns all 128 physical CPU cores on the
+# Ampere node. A one-GPU allocation normally receives only 32 CPU cores.
+#SBATCH --ntasks=128
 #SBATCH --cpus-per-task=1
-#SBATCH --gres=gpu:1
-#SBATCH --mem=64G
+#SBATCH --gres=gpu:4
+#SBATCH --exclusive
+#SBATCH --mem=0
 #SBATCH -t 12:00:00
 #SBATCH -o logs/%x_%j.out
 #SBATCH -e logs/%x_%j.err
@@ -17,35 +20,37 @@
 # so the reported elapsed times measure the solver rather than filesystem I/O.
 #
 # Resource comparison:
-#   OpenMP : OMP_THREADS CPU cores (default 8)
-#   MPI    : MPI_RANKS ranks x 1 CPU core (default 8)
-#   GPU    : one Ampere GPU
+#   OpenMP : OMP_THREADS CPU cores (default: all 128 allocated cores)
+#   MPI    : MPI_RANKS ranks x 1 CPU core (default: all 128 allocated cores)
+#   GPU    : one A100 is measured; the complete node is reserved so that the
+#            CPU backends can use all 128 cores without sharing the node.
 #
-# Default pre-run (64^3):
+# Full-node comparison (default 256^3):
 #
 #   mkdir -p logs
 #   sbatch scripts/csd3_slurm/slurm_compare_3d_backends.sh
 #
-# Final 128^3 comparison:
+# At 128^3 the z-slab MPI implementation can use at most 64 ranks:
 #
-#   sbatch --export=ALL,RESOLUTION=128 \
+#   sbatch --export=ALL,RESOLUTION=128,MPI_RANKS=64 \
 #     scripts/csd3_slurm/slurm_compare_3d_backends.sh
 #
 # Short smoke test:
 #
-#   sbatch --export=ALL,RESOLUTION=32,BLAST_T_END=0.02,IMTG_T_END=0.25 \
+#   sbatch --export=ALL,RESOLUTION=32,MPI_RANKS=16,BLAST_T_END=0.02,IMTG_T_END=0.25 \
 #     scripts/csd3_slurm/slurm_compare_3d_backends.sh
 #
 # Common overrides:
-#   RESOLUTION=64
-#   OMP_THREADS=8
-#   MPI_RANKS=8                 RESOLUTION must be divisible by MPI_RANKS
+#   RESOLUTION=256
+#   OMP_THREADS=128
+#   MPI_RANKS=128               RESOLUTION must be divisible by MPI_RANKS,
+#                               with at least 2 z planes per rank
 #   SOLVER=hlld
 #   CFL=0.20
 #   SNAPSHOTS=5                 timestep target intervals; no files are written
 #   BLAST_T_END=0.10
 #   IMTG_T_END=5.809475019311126
-#   MAKE_JOBS=8
+#   MAKE_JOBS=32
 #   RESULT_DIR=timing/compare3d_JOBID
 #
 # Results:
@@ -95,15 +100,23 @@ for tool in g++ mpicxx mpirun nvcc nvidia-smi make awk; do
     fi
 done
 
-RESOLUTION="${RESOLUTION:-64}"
-OMP_THREADS="${OMP_THREADS:-8}"
-MPI_RANKS="${MPI_RANKS:-8}"
+# SLURM_CPUS_ON_NODE is the physical-core count assigned to this one-node job.
+# Fall back to the task layout for manual/syntax-test execution.
+ALLOCATED_CPUS="${SLURM_CPUS_ON_NODE:-$(( ${SLURM_NTASKS:-128} * ${SLURM_CPUS_PER_TASK:-1} ))}"
+if ! [[ "${ALLOCATED_CPUS}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "[ERROR] Cannot determine allocated CPU count: ${ALLOCATED_CPUS}"
+    exit 2
+fi
+
+RESOLUTION="${RESOLUTION:-256}"
+OMP_THREADS="${OMP_THREADS:-${ALLOCATED_CPUS}}"
+MPI_RANKS="${MPI_RANKS:-${ALLOCATED_CPUS}}"
 SOLVER="${SOLVER:-hlld}"
 CFL="${CFL:-0.20}"
 SNAPSHOTS="${SNAPSHOTS:-5}"
 BLAST_T_END="${BLAST_T_END:-0.10}"
 IMTG_T_END="${IMTG_T_END:-5.809475019311126}"
-MAKE_JOBS="${MAKE_JOBS:-8}"
+MAKE_JOBS="${MAKE_JOBS:-32}"
 RESULT_DIR="${RESULT_DIR:-timing/compare3d_${JOB_ID}}"
 BUILD_ROOT="${BUILD_ROOT:-build/csd3_compare3d_${JOB_ID}}"
 BIN_ROOT="${BIN_ROOT:-bin/csd3_compare3d_${JOB_ID}}"
@@ -127,7 +140,6 @@ if (( RESOLUTION / MPI_RANKS < 2 )); then
     echo "[ERROR] Each MPI rank needs at least two active z planes."
     exit 2
 fi
-ALLOCATED_CPUS=$(( ${SLURM_NTASKS:-8} * ${SLURM_CPUS_PER_TASK:-1} ))
 if (( OMP_THREADS > ALLOCATED_CPUS || MPI_RANKS > ALLOCATED_CPUS )); then
     echo "[ERROR] Requested OMP_THREADS/MPI_RANKS exceeds ${ALLOCATED_CPUS} allocated CPUs."
     exit 2
@@ -161,6 +173,7 @@ echo "Job ID       : ${JOB_ID}"
 echo "Host         : $(hostname)"
 echo "Start        : $(date --iso-8601=seconds)"
 echo "GPU          : ${GPU_NAME}"
+echo "Node CPUs    : ${ALLOCATED_CPUS} allocated physical cores"
 echo "Resolution   : ${RESOLUTION}^3"
 echo "OMP threads  : ${OMP_THREADS}"
 echo "MPI ranks    : ${MPI_RANKS}"
@@ -228,7 +241,7 @@ run_case() {
     echo
     echo "===== CASE ${case_name}: MPI (${MPI_RANKS} ranks) ====="
     OMP_NUM_THREADS=1 \
-        mpirun -np "${MPI_RANKS}" --bind-to core \
+        mpirun -np "${MPI_RANKS}" --map-by core --bind-to core \
         "${MPI_BIN}" "${common_args[@]}" 2>&1 | tee "${mpi_log}"
 
     echo
