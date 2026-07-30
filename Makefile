@@ -5,16 +5,17 @@ MPICXX := mpicxx
 # =========================
 # Common flags
 # =========================
-# -ffp-contract=off / --fmad=false: forbid fusing a*b+c into a single
-# rounding (FMA) on either side. nvcc contracts FMAs by default; g++ may
-# too under some standard modes. Left on, host and device round the exact
-# same riemann.hpp formula (hllc_flux/hlld_flux) differently, and that
-# 1-ULP difference is enough for CPU and GPU runs to diverge once the
-# solver reaches a chaotic/turbulent regime (see debug_cpu branch: HLLD
-# vs orszag_tang). Forcing strict per-operation rounding on both sides
-# removes this whole class of CPU/GPU non-reproducibility.
+# -ffp-contract=off / --fmad=false forbids fusing a*b+c into a single
+# rounding.  The production default remains strict, while FMAD=true is
+# available for the controlled Chapter 3 GPU timing experiment.
+FMAD ?= false
+ifneq ($(FMAD),false)
+ifneq ($(FMAD),true)
+$(error FMAD must be either true or false)
+endif
+endif
 CXXFLAGS_BASE     := -std=c++17 -O3 -Wall -Wextra -pedantic -Ihead -ffp-contract=off
-NVCCFLAGS_BASE    := -std=c++17 -O3 -Ihead -Xcompiler="-Wall -Wextra" --fmad=false
+NVCCFLAGS_BASE    := -std=c++17 -O3 -Ihead -Xcompiler="-Wall -Wextra" --fmad=$(FMAD)
 # -lineinfo for source-level correlation in `ncu`; empty by default so it
 # never affects normal builds. Override on the command line, e.g.:
 #   make gpu NVCC_EXTRA_FLAGS=-lineinfo
